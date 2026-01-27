@@ -1,0 +1,16 @@
+# Project configuration (human-readable, v0)
+# Keep this simple. The page JSONs carry the real truth.
+
+[project]
+name = "pasajeros_a_indias"
+title = "Pasajeros a Indias (PARES / AGI) — Corpus"
+source = "PARES"
+language_source = "es"
+language_target = "en"
+
+[render]
+default_layer = "es_normalized"
+
+[ids]
+# stable id prefix for this project
+prefix = "pares_pasajeros"

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Rescript Viewer (Demo)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 0; }
+    header { padding: 12px 16px; border-bottom: 1px solid #ddd; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .stage-wrap { padding: 16px; }
+    .stage {
+      position: relative;
+      display: inline-block;
+      transform-origin: top left;
+      border: 1px solid #ddd;
+      background: #fff;
+    }
+    .bg { display: block; }
+    .overlay {
+      position: absolute;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+    }
+    .zone {
+      position: absolute;
+      white-space: pre-wrap;
+      line-height: 1.15;
+      pointer-events: auto;
+      cursor: default;
+      background: rgba(255,255,255,0.0);
+      border: 1px solid rgba(0,0,0,0.0);
+      padding: 1px 2px;
+      box-sizing: border-box;
+    }
+    .zone:hover { border-color: rgba(0,0,0,0.25); background: rgba(255,255,255,0.7); }
+    .hint { color: #666; font-size: 12px; }
+    .pill { padding: 2px 8px; border-radius: 999px; background: #f3f3f3; border: 1px solid #e1e1e1; font-size: 12px; }
+  </style>
+</head>
+<body>
+<header>
+  <div style="font-weight: 700;">Rescript Viewer</div>
+  <div class="controls">
+    <label>Layer:
+      <select id="layer">
+        <option value="es_diplomatic">Spanish (diplomatic)</option>
+        <option value="es_normalized" selected>Spanish (normalized)</option>
+        <option value="en_literal">English (literal)</option>
+        <option value="en_interpreted">English (interpreted)</option>
+      </select>
+    </label>
+    <label>Zoom:
+      <input id="zoom" type="range" min="0.5" max="2.5" step="0.1" value="1.0"/>
+      <span class="pill" id="zoomLabel">1.0×</span>
+    </label>
+    <label><input id="showBoxes" type="checkbox"/> show boxes</label>
+    <span class="hint">Hover lines to inspect placement.</span>
+  </div>
+</header>
+
+<div class="stage-wrap">
+  <div id="stage" class="stage"></div>
+</div>
+
+<script>
+  // Embed demo page JSON directly (so it works from file://).
+  const PAGE = {"schema_version": "rescript.page.v1", "created_at": "2026-01-27T00:21:13Z", "page_id": "pares_pasajeros_demo_p0001", "doc_id": "pares_pasajeros_demo", "source": {"name": "PARES", "collection": "Pasajeros a Indias (demo)", "source_doc_ref": "DEMO_ONLY", "provenance_note": "Placeholder page used to validate renderers. Replace with real PARES images/metadata."}, "image": {"path": "projects/pasajeros_a_indias/images/sample_page.png", "width_px": 1400, "height_px": 2000, "sha256": "bdfccc284cf2b8e5c575fdfcc92858318cf9d43234cb5c3f3ebf640d448420f8"}, "reading_direction": "ltr", "coordinate_space": "norm01", "zones": [{"zone_id": "l0001", "type": "line", "order": 10, "bbox_norm": [0.1, 0.2, 0.8, 0.045], "baseline_norm": [[0.1, 0.235], [0.9, 0.235]], "text": {"es_diplomatic": "En la çiudad de Seuilla, a 12 de Mayo de 1603.", "es_normalized": "En la ciudad de Sevilla, a 12 de mayo de 1603.", "en_literal": "In the city of Seville, on 12 May 1603.", "en_interpreted": "Seville, 12 May 1603 (record date)."}, "confidence": {"transcription": 0.95, "normalization": 0.92, "translation": 0.9}, "notes": [{"type": "spelling", "from": "Seuilla", "to": "Sevilla"}, {"type": "spelling", "from": "çiudad", "to": "ciudad"}]}, {"zone_id": "l0002", "type": "line", "order": 20, "bbox_norm": [0.1, 0.28, 0.8, 0.045], "baseline_norm": [[0.1, 0.315], [0.9, 0.315]], "text": {"es_diplomatic": "Pedro Hernández, natural de Toledo, passa a la Nueva España.", "es_normalized": "Pedro Hernández, natural de Toledo, pasa a la Nueva España.", "en_literal": "Pedro Hernández, native of Toledo, passes to New Spain.", "en_interpreted": "Pedro Hernández (from Toledo) authorized to travel to New Spain."}, "confidence": {"transcription": 0.93, "normalization": 0.91, "translation": 0.89}, "notes": [{"type": "orthography", "from": "passa", "to": "pasa"}]}, {"zone_id": "l0003", "type": "marginalia", "order": 30, "bbox_norm": [0.05, 0.28, 0.04, 0.1], "baseline_norm": null, "text": {"es_diplomatic": "No. 47", "es_normalized": "N.º 47", "en_literal": "No. 47", "en_interpreted": "Entry number 47."}, "confidence": {"transcription": 0.98, "normalization": 0.98, "translation": 0.98}, "notes": []}], "claims": [{"claim_id": "c0001", "type": "date_recorded", "value": "1603-05-12", "span": {"zone_id": "l0001", "char_start": 28, "char_end": 43}, "confidence": 0.93}, {"claim_id": "c0002", "type": "person_name", "value": "Pedro Hernández", "span": {"zone_id": "l0002", "char_start": 0, "char_end": 15}, "confidence": 0.92}, {"claim_id": "c0003", "type": "origin_place", "value": "Toledo", "span": {"zone_id": "l0002", "char_start": 28, "char_end": 34}, "confidence": 0.88}, {"claim_id": "c0004", "type": "destination_place", "value": "Nueva España", "span": {"zone_id": "l0002", "char_start": 49, "char_end": 60}, "confidence": 0.88}], "pipeline": {"assumed_components": {"layout": "any (manual/ML)", "transcription": "LLM/HTR", "normalization": "LLM", "translation": "LLM", "extraction": "LLM/rules"}, "model_versions": {}, "notes": "This demo page is synthetic; in real pages, store actual model versions + prompts or settings."}};
+  const stage = document.getElementById('stage');
+  const layerSel = document.getElementById('layer');
+  const zoom = document.getElementById('zoom');
+  const zoomLabel = document.getElementById('zoomLabel');
+  const showBoxes = document.getElementById('showBoxes');
+
+  function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+
+  function render() {
+    stage.innerHTML = '';
+    const img = new Image();
+    img.className = 'bg';
+    img.src = '../../../../' + PAGE.image.path.replace(/^\/+/, '');
+    img.onload = () => {
+      stage.style.width = img.naturalWidth + 'px';
+      stage.style.height = img.naturalHeight + 'px';
+    };
+    stage.appendChild(img);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    stage.appendChild(overlay);
+
+    const layer = layerSel.value;
+    const show = showBoxes.checked;
+
+    for (const z of PAGE.zones) {
+      const [x,y,w,h] = z.bbox_norm;
+      const div = document.createElement('div');
+      div.className = 'zone';
+      div.style.left = (clamp01(x)*100) + '%';
+      div.style.top = (clamp01(y)*100) + '%';
+      div.style.width = (clamp01(w)*100) + '%';
+      div.style.height = (clamp01(h)*100) + '%';
+      div.style.borderColor = show ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0)';
+      div.style.background = show ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.0)';
+      div.textContent = (z.text && z.text[layer]) ? z.text[layer] : '';
+      div.title = `${z.zone_id} • ${z.type} • conf T:${z.confidence?.transcription ?? 'n/a'}`;
+      overlay.appendChild(div);
+    }
+    updateZoom();
+  }
+
+  function updateZoom() {
+    const z = parseFloat(zoom.value);
+    stage.style.transform = `scale(${z})`;
+    zoomLabel.textContent = z.toFixed(1) + '×';
+  }
+
+  layerSel.addEventListener('change', render);
+  showBoxes.addEventListener('change', render);
+  zoom.addEventListener('input', updateZoom);
+
+  render();
+</script>
+</body>
+</html>
