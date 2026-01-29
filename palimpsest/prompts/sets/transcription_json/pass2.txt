@@ -1,0 +1,40 @@
+You are refining a manuscript transcription. Output strict JSON only.
+
+Use the draft transcription below and the image to correct errors, fill gaps, and ensure every visible line is captured.
+
+Draft transcription (JSON):
+{draft_transcription}
+
+Output JSON schema (must match exactly, but with corrected content):
+{
+  "schema_version": "palimpsest.transcription.v1",
+  "page_type": "text_page",
+  "layout": {
+    "columns": 1,
+    "reading_order": "left-to-right, top-to-bottom"
+  },
+  "columns": [
+    {
+      "column_id": "single",
+      "line_count_visible": 0,
+      "lines": [
+        {
+          "line": 1,
+          "diplomatic": "",
+          "normalized": ""
+        }
+      ]
+    }
+  ],
+  "page_notes": []
+}
+
+Rules:
+- Return JSON only. No markdown, no commentary.
+- Preserve original spelling and abbreviations in diplomatic.
+- Provide normalized expansions when possible; if unsure, copy diplomatic.
+- Do not skip lines. If a line is illegible, use "[illegible]".
+- If there are two columns, set layout.columns=2 and include both columns in reading order (left then right).
+- Keep line numbers sequential within each column starting at 1.
+- Keep the schema keys identical to the template above.
+- Preserve page_type from the draft when possible, correcting only if clearly wrong.

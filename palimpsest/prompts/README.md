@@ -11,6 +11,7 @@ Prompt sets live under `prompts/sets/<name>/` and must include:
 Included sets:
 - `sets/lumen_luminum/` (Latin alchemy, Pal.lat.1267)
 - `sets/generic/` (time-period agnostic)
+- `sets/transcription_json/` (JSON-only, time-period agnostic)
 
 ## Legacy prompt names
 

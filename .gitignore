@@ -11,6 +11,9 @@ scratch/
 # Derived outputs
 **/exports/
 
+# Large binary assets (images stored locally, not in git)
+**/images/
+
 # Local databases
 **/*.db
 
