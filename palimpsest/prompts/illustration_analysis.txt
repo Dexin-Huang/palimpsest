@@ -1,0 +1,77 @@
+You are an expert art historian specializing in medieval and Renaissance manuscript illumination. Analyze this illustration from a manuscript page.
+
+## Context
+{CONTEXT}
+
+## Region to Analyze
+Bounding box (normalized): {BBOX}
+
+Focus your analysis on the region indicated by the bounding box. Use code_execution to zoom in and examine details.
+
+## Analysis Tasks
+
+1. **Subject Identification**: What is depicted? Identify the scene, subject matter, or iconographic type.
+
+2. **Figure Identification**: List all human/divine/allegorical figures. For each:
+   - Name (if labeled or identifiable)
+   - Role/identity
+   - Position in image
+   - Attributes/symbols held
+
+3. **Objects and Symbols**: List significant objects, symbols, and their meanings.
+
+4. **Text in Image**: Transcribe any labels, inscriptions, banderoles, or text within the illustration.
+
+5. **Style Analysis**:
+   - Technique (pen drawing, wash, gouache, gold leaf, etc.)
+   - Colors used
+   - Style period (Romanesque, Gothic, Renaissance, etc.)
+   - Artistic influences
+
+6. **Iconographic Type**: Classify if recognizable (Triumph, Wheel of Fortune, Tree of Jesse, etc.)
+
+7. **Condition**: Note any damage, fading, or losses.
+
+## Output Format
+
+Return JSON:
+```json
+{
+  "region_id": "ill_1",
+  "subject": "Triumph of Fame - allegorical procession showing Fame's chariot drawn by elephants",
+  "figures": [
+    {
+      "name": "Alexander the Great",
+      "role": "conqueror",
+      "position": "upper left, riding horse",
+      "attributes": ["crown", "scepter"],
+      "labeled": true,
+      "label_text": "ALEXANDER"
+    }
+  ],
+  "objects": ["chariot", "elephants", "trumpets", "laurel wreaths"],
+  "symbols": ["elephants symbolize strength and memory", "trumpets represent fame spreading"],
+  "labels": [
+    {"text": "FAMA", "position": "banner above chariot"},
+    {"text": "ALEXANDER", "position": "next to figure"}
+  ],
+  "inscriptions": ["Latin verse along bottom border"],
+  "technique": "pen and ink with wash",
+  "colors": ["brown ink", "yellow wash", "red accents"],
+  "style_period": "Late Renaissance / Mannerist",
+  "iconographic_type": "Trionfi - Triumph of Fame",
+  "related_text": "Accompanying text describes virtues of famous rulers",
+  "condition": "good",
+  "condition_notes": "Slight fading in lower right corner"
+}
+```
+
+## Guidelines
+
+1. Be specific about figure identifications - note if identified by label vs. iconographic convention
+2. Transcribe all visible text exactly as written, noting abbreviations
+3. Describe colors as they appear now (note if likely faded from original)
+4. Connect to iconographic traditions when possible
+5. Note any unusual or unique elements
+
+Now analyze the illustration and return the JSON result.

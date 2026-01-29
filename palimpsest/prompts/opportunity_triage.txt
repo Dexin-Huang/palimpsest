@@ -1,0 +1,22 @@
+﻿# Opportunity triage (metadata-only)
+
+You are scoring a manuscript opportunity using ONLY catalog/manifest metadata.
+Goal: prioritize under-seen, under-studied items that have not had real attention.
+
+Return JSON ONLY with these fields:
+{
+  "interesting": true|false,
+  "interest_score": 0-10,
+  "under_seen_score": 0-10,
+  "reasons": ["short bullets"],
+  "recommendation": "queue | skip | review"
+}
+
+Rubric guidance (use judgment, be concise):
+- Prefer newly digitized or recently surfaced items (first_seen_at is recent)
+- Prefer sparse or vague cataloging (unknown author/title, question marks, "miscellany")
+- Prefer unusual content areas (science, technical, occult, vernacular)
+- Penalize common liturgical/biblical items unless unusual
+- Higher scores should be genuinely under-seen, not just famous
+
+Do NOT use the image. Use only the metadata provided.

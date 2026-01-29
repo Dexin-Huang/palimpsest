@@ -1,0 +1,45 @@
+```
+PAGE: [folio number unknown]
+TYPE: Procession
+
+CENTRAL ALLEGORY:
+This is not a typical triumph scene with a chariot. Instead, it depicts a procession of historical figures. Alexander the Great is the most prominent figure, riding a horse in the center.
+
+LABELED FIGURES:
+1. "panpertas" → Unknown (likely a misspelling of "Paupertas," meaning Poverty) → Figure on the far left, possibly female, holding a staff or spear.
+2. "murot" → Unknown → Figure next to "panpertas," possibly male, wearing a crown.
+3. "Semiraming" → Semiramis → Figure next to "murot," possibly female, wearing a crown and elaborate dress.
+4. "Hector" → Hector → Figure next to "Semiraming," male, holding a spear and shield.
+5. "pentasila" → Penthesilea → Figure next to "Hector," possibly female, holding a shield.
+6. "Cyrus" → Cyrus the Great → Figure next to "Penthesilea," possibly male, wearing a crown and holding a staff.
+7. "Alexander magnus" → Alexander the Great → Mounted warrior in the center, wearing a crown and cape.
+8. "Scipio" → Scipio Africanus → Figure next to Alexander's horse, possibly male, wearing armor and holding a spear.
+9. "Julius Cesar" → Julius Caesar → Figure next to "Scipio," male, wearing armor and holding a shield.
+10. "Hanibal" → Hannibal → Figure next to "Julius Cesar," male, wearing armor and holding a sword.
+11. "Zenobia" → Zenobia → Figure next to "Hanibal," possibly female, wearing a turban-like headdress.
+12. "Tamerlanes" → Tamerlane (Timur) → Figure next to "Zenobia," male, wearing a turban and holding a sword.
+13. "mazometer" → Mahomet (Muhammad) → Figure on the far right, male, wearing a large turban and holding a sword.
+
+UNLABELED FIGURES:
+- Several soldiers/attendants are interspersed throughout the procession, carrying spears and shields.
+
+MYTHOLOGICAL BEINGS:
+- None apparent.
+
+SETTING:
+The background is a simple landscape with a suggestion of buildings or a city in the distance.
+
+NOTES:
+- The drawing is executed in pen and ink.
+- The skill level is moderate; the figures are somewhat stylized and lack detailed anatomical accuracy.
+- There is some damage to the page, including stains and creases.
+- The text labels are written in a clear, legible hand.
+
+SIGNIFICANCE:
+- This drawing belongs to the tradition of Petrarchan Trionfi, specifically the Triumph of Fame, which often includes processions of famous historical figures.
+- The inclusion of figures like Semiramis, Penthesilea, and Zenobia suggests an interest in female historical figures, which is notable.
+- The presence of both classical figures (Alexander, Caesar, Hannibal, Scipio) and figures from later periods (Tamerlane, Muhammad) indicates a broad understanding of historical fame.
+- The inclusion of Muhammad is interesting and potentially controversial, depending on the context and intended audience of the manuscript.
+- The misspelling of "Paupertas" as "panpertas" suggests a possible lack of familiarity with Latin or a simple error in transcription.
+- The selection of figures suggests a focus on military and political power.
+```

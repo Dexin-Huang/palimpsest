@@ -1,0 +1,82 @@
+You are an expert manuscript analyst specializing in medieval and early modern documents. Analyze this manuscript page image and segment it into distinct regions.
+
+Page ID: {PAGE_ID}
+
+## Task
+
+Identify and classify all distinct regions on this page. Use your code_execution capability to zoom into areas if needed for accurate boundary detection.
+
+## Region Types
+
+Classify each region as one of:
+- text_block: Main text area (may contain multiple lines)
+- text_line: Individual line of text
+- initial: Decorated or enlarged initial letter
+- rubric: Red header or title text
+- marginalia: Notes in margins
+- illustration: Drawings, paintings, diagrams
+- diagram: Technical diagrams, charts
+- table: Tabular data
+- decoration: Non-textual decorative elements
+- colophon: Scribal signature or closing
+- catchword: Page-turn guide word
+- signature: Quire signature marks
+- folio_number: Page numbering
+- stamp: Archival or library stamps
+- damage: Damaged or illegible areas
+- blank: Empty areas
+
+## Output Format
+
+Return JSON with this structure:
+```json
+{
+  "layout": {
+    "columns": 1,
+    "column_widths": [1.0],
+    "column_gap": 0.0,
+    "margin_top": 0.05,
+    "margin_bottom": 0.05,
+    "margin_inner": 0.08,
+    "margin_outer": 0.12,
+    "has_ruling": false,
+    "ruling_type": null,
+    "page_type": "text"
+  },
+  "regions": [
+    {
+      "region_id": "r1",
+      "region_type": "text_block",
+      "bbox_norm": [0.1, 0.1, 0.8, 0.8],
+      "confidence": 0.95,
+      "reading_order": 1,
+      "column": 1,
+      "estimated_lines": 25,
+      "has_decoration": false,
+      "ink_colors": ["black"],
+      "script_style": "Gothic textualis",
+      "subject_hint": null,
+      "contains_text": true
+    }
+  ]
+}
+```
+
+## Bounding Box Format
+
+bbox_norm is [x, y, width, height] where all values are normalized 0-1:
+- x: left edge position (0 = left margin, 1 = right margin)
+- y: top edge position (0 = top, 1 = bottom)
+- width: region width as fraction of page
+- height: region height as fraction of page
+
+## Guidelines
+
+1. Be precise with bounding boxes - they should tightly fit the content
+2. Assign reading_order based on how the text would be read (left to right, top to bottom, respecting columns)
+3. Note ink colors if non-black (red for rubrics, blue for initials, etc.)
+4. Identify script style if recognizable (Gothic, Humanist, Carolingian, etc.)
+5. For illustrations, provide a brief subject_hint
+6. Mark regions that contain both image and text (labeled diagrams) with contains_text: true
+
+Now analyze the page and return the JSON segmentation result.

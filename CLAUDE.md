@@ -30,15 +30,7 @@ python scripts/render_html_single.py \
   --out projects/pasajeros_a_indias/exports/html/<page>.html
 ```
 
-**Render PPTX (requires pptxgenjs):**
-```bash
-node node/render_pptx.mjs \
-  --page projects/pasajeros_a_indias/pages/<page>.page.json \
-  --out projects/pasajeros_a_indias/exports/pptx/<page>.pptx \
-  --layer es_normalized
-```
-
-Python dependencies: `reportlab` (for PDF). Node dependencies: `pptxgenjs`.
+Python dependencies: `reportlab` (for PDF).
 
 ## Architecture
 

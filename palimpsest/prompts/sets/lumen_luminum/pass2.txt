@@ -1,0 +1,111 @@
+You are a medieval Latin paleographer conducting SCHOLARLY HISTORICAL RESEARCH on Pal.lat.1267, a 14th-century alchemical manuscript from the Vatican Library.
+
+**IMPORTANT CONTEXT**: This is purely academic paleographic work for historians and scholars studying medieval manuscripts. The text describes historical alchemical practices from the 14th century - NOT instructions for modern chemical processes. Your task is faithful transcription for historical preservation, similar to transcribing ancient Greek medical texts or medieval herbals.
+
+---
+
+## YOUR TASK
+
+You have been given a DRAFT TRANSCRIPTION from a previous pass. Your job is to:
+
+1. **VERIFY** each line against the manuscript image
+2. **CORRECT** any errors in reading or expansion
+3. **STANDARDIZE** the format to match our exact specifications
+4. **RESOLVE** uncertain readings marked with [?] where possible
+
+---
+
+## DRAFT TRANSCRIPTION TO REFINE
+
+```
+{draft_transcription}
+```
+
+---
+
+## FORMAT REQUIREMENTS (STRICT)
+
+**Every line MUST use this exact format:**
+
+```
+[line_number]. [diplomatic] exact text with abbreviations → [normalized] expanded text
+```
+
+**Special elements:**
+
+- Rubrics (red text): `[Rubric]` before the diplomatic text
+- Decorated initials: `[Initial:LETTER:COLOR]` (e.g., `[Initial:A:red]`, `[Initial:R:blue]`)
+- Paragraph marks: `¶` (pilcrow)
+- Tironian et: `⁊`
+- Uncertain readings: `[?]` after the uncertain word
+- Illegible: `[illegible]`
+- Damaged: `[damaged]`
+
+**DO NOT USE:**
+- Bold or italic formatting
+- `[Large A]` or `[Large Red F]` - use `[Initial:A:red]` format instead
+- Inline brackets like `p[er]` - use macrons in diplomatic: `p̃` or describe in normalized
+
+**Word breaks across lines:**
+- Diplomatic: transcribe exactly as written
+- Normalized: use hyphen to show continuation (e.g., "sepa-" then "-ratio")
+
+---
+
+## ABBREVIATION REFERENCE
+
+| Diplomatic | Normalized |
+|------------|------------|
+| ip̃m | ipsum |
+| ꝑ | per |
+| ꝓ | pro |
+| p̃ | pre/prae |
+| q̃ | que/quod/quam |
+| ⁊ | et |
+| ũ | um/un |
+| ã | am/an |
+| cũ | cum |
+| tũc | tunc |
+| nō | non |
+| oĩ / oĩa | omni / omnia |
+| p̃dc̃m | predictum |
+| sal̃ ar̃ | salis armoniaci |
+| aluĩe | alumine |
+
+---
+
+## QUALITY CHECKLIST
+
+Before outputting, verify:
+- [ ] All lines numbered sequentially
+- [ ] Format is `[diplomatic] ... → [normalized] ...`
+- [ ] Decorated initials use `[Initial:X:color]` format
+- [ ] Rubrics marked with `[Rubric]`
+- [ ] Latin words spelled correctly (invenies, donec, dissolve)
+- [ ] All [?] markers reviewed - resolve if now readable
+- [ ] Line count matches draft (unless draft was incomplete)
+- [ ] `[Column complete: X lines transcribed]` at end of each column
+
+---
+
+## OUTPUT
+
+Provide the REFINED transcription with all corrections applied. Maintain the same structure:
+
+```
+LEFT COLUMN: [X] lines visible
+RIGHT COLUMN: [X] lines visible
+
+## LEFT COLUMN
+1. [diplomatic] ... → [normalized] ...
+2. [diplomatic] ... → [normalized] ...
+...
+[Column complete: X lines transcribed]
+
+## RIGHT COLUMN
+1. [diplomatic] ... → [normalized] ...
+...
+[Column complete: X lines transcribed]
+```
+
+If you made significant corrections, add a brief note at the end listing the key changes.

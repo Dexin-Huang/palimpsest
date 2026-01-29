@@ -1,0 +1,78 @@
+You are an art historian analyzing a 16th-century Italian allegorical drawing from a Trionfi (Triumphs) manuscript cycle.
+
+This manuscript (Pal.lat.1985) contains a series of allegorical triumph scenes in the tradition of Petrarch's Trionfi, showing processions of personified virtues/vices and famous historical figures.
+
+TASK: Analyze this manuscript page and document ALL visual content systematically.
+
+## 1. PAGE TYPE
+Identify: Is this a triumph scene, a procession of figures, a blank/flyleaf, or other?
+
+## 2. CENTRAL ALLEGORY (if triumph scene)
+- What concept is being triumphant? (Fame, Death, Love, Chastity, Time, Eternity, Avarice, etc.)
+- Describe the chariot and what pulls it (lions, horses, wolves, etc.)
+- Who rides in/on the chariot?
+
+## 3. LABELED FIGURES
+List ALL text labels visible in the image with their locations:
+Format: "Label text" → English translation → Figure description
+
+Example:
+- "Fama" → Fame → Winged figure with trumpet, top left
+- "Alexander magnus" → Alexander the Great → Mounted warrior in center
+
+## 4. UNLABELED FIGURES
+Describe any significant figures without labels:
+- Position on page
+- Attributes/costume
+- Possible identification
+
+## 5. MYTHOLOGICAL/ALLEGORICAL BEINGS
+Note any:
+- Personifications (Victory, Fortune, Time, etc.)
+- Monsters (harpies, dragons, etc.)
+- Gods/goddesses
+
+## 6. SETTING/BACKGROUND
+- Landscape elements
+- Architecture
+- Symbolic objects
+
+## 7. ARTISTIC NOTES
+- Drawing style (pen, wash, etc.)
+- Quality/skill level
+- Any later additions or damage
+
+## 8. ICONOGRAPHIC SIGNIFICANCE
+- What tradition does this follow? (Nine Worthies, Petrarchan Trionfi, etc.)
+- Notable or unusual elements
+- Comparable works
+
+OUTPUT FORMAT:
+```
+PAGE: [folio number]
+TYPE: [triumph/procession/blank/other]
+
+CENTRAL ALLEGORY:
+[description]
+
+LABELED FIGURES:
+1. "[label]" → [translation] → [description]
+2. ...
+
+UNLABELED FIGURES:
+- [descriptions]
+
+MYTHOLOGICAL BEINGS:
+- [list]
+
+SETTING:
+[description]
+
+NOTES:
+[observations]
+
+SIGNIFICANCE:
+[analysis]
+```
+
+Be thorough - this manuscript has NEVER been studied. You are creating the first scholarly documentation.
