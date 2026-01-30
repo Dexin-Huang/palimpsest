@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--delay", type=float, default=2.0)
     parser.add_argument("--auto-skip-non-text", action="store_true")
     parser.add_argument("--skip-download", action="store_true")
+    parser.add_argument("--pattern", default="*.jpg", help="Image glob pattern (default: *.jpg)")
     return parser
 
 
@@ -39,6 +40,7 @@ def main() -> None:
         delay=args.delay,
         auto_skip_non_text=args.auto_skip_non_text,
         download_first=not args.skip_download,
+        pattern=args.pattern,
     )
 
 

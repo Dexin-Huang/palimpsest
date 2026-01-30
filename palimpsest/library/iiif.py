@@ -110,8 +110,17 @@ def build_page_list(manifest_url: str, size: int | str = "max") -> dict:
     if not canvases:
         raise ValueError("No canvases found in manifest")
     pages: list[dict] = []
+    used: set[str] = set()
     for idx, canvas in enumerate(canvases):
         filename = derive_filename(idx, canvas.get("label", ""))
+        if filename in used:
+            filename = f"page_{idx:04d}.jpg"
+        counter = 1
+        while filename in used:
+            stem = filename.replace(".jpg", "")
+            filename = f"{stem}_{counter}.jpg"
+            counter += 1
+        used.add(filename)
         pages.append(
             {
                 "page_id": filename.replace(".jpg", ""),

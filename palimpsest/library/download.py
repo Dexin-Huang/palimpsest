@@ -74,6 +74,21 @@ def download_pages(
         filename = page.get("filename") or f"{page_id}.jpg"
         out_path = images_dir / filename
 
+        if not url:
+            failed += 1
+            _append_jsonl(
+                log_path,
+                {
+                    "timestamp": _timestamp(),
+                    "page_id": page_id,
+                    "filename": filename,
+                    "url": url,
+                    "status": "failed",
+                    "error": "missing_url",
+                },
+            )
+            continue
+
         if out_path.exists() and not overwrite:
             size = out_path.stat().st_size
             sha = _hash_file(out_path)
@@ -126,11 +141,13 @@ def download_pages(
 
             time.sleep(delay)
 
+    status = "downloaded" if failed == 0 else "downloaded_partial"
     update_metadata(
         doc_dir,
         {
-            "status": "downloaded",
+            "status": status,
             "downloaded_count": downloaded,
+            "skipped_count": skipped,
             "page_count": total,
         },
     )

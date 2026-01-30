@@ -18,6 +18,7 @@ def run_document(
     delay: float = 2.0,
     auto_skip_non_text: bool = False,
     download_first: bool = True,
+    pattern: str = "*.jpg",
 ) -> None:
     if download_first:
         download_pages(doc_dir=doc_dir, overwrite=False)
@@ -35,6 +36,11 @@ def run_document(
         delay=delay,
         auto_skip_non_text=auto_skip_non_text,
     )
-    run_batch(image_dir=images_dir, out_dir=out_dir, pattern="*.jpg", run_config=run_config)
-
-    update_metadata(doc_dir, {"status": "assembled"})
+    results = run_batch(image_dir=images_dir, out_dir=out_dir, pattern=pattern, run_config=run_config)
+    if pass_mode == "pass1":
+        complete = sum(1 for r in results if r.get("status") in ("complete", "pass1_complete"))
+    else:
+        complete = sum(1 for r in results if r.get("status") == "complete")
+    failed = len(results) - complete
+    status = "assembled" if failed == 0 else "transcription_failed"
+    update_metadata(doc_dir, {"status": status, "failed_pages": failed, "processed_pages": len(results)})
