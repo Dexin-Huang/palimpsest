@@ -5,6 +5,7 @@ from pathlib import Path
 from palimpsest.transcription import PromptConfig, RunConfig, run_batch
 
 from .download import download_pages
+from .io import read_json
 from .metadata import update_metadata
 
 
@@ -51,5 +52,19 @@ def run_document(
     else:
         complete = sum(1 for r in results if r.get("status") == "complete")
     failed = len(results) - complete
-    status = "assembled" if failed == 0 else "transcription_failed"
-    update_metadata(doc_dir, {"status": status, "failed_pages": failed, "processed_pages": len(results)})
+
+    status = "transcription_failed" if failed else ("pass1_complete" if pass_mode == "pass1" else "assembled")
+    updates = {"status": status, "failed_pages": failed, "processed_pages": len(results)}
+
+    if status == "assembled":
+        book_index = doc_dir / "exports" / "book" / "book_index.json"
+        if not book_index.exists():
+            updates["status"] = "assembled_missing"
+        else:
+            index = read_json(book_index)
+            missing_final = index.get("missing_final", [])
+            updates["missing_final_count"] = len(missing_final)
+            if missing_final:
+                updates["status"] = "assembled_partial"
+
+    update_metadata(doc_dir, updates)
