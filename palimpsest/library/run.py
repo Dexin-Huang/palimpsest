@@ -36,7 +36,16 @@ def run_document(
         delay=delay,
         auto_skip_non_text=auto_skip_non_text,
     )
-    results = run_batch(image_dir=images_dir, out_dir=out_dir, pattern=pattern, run_config=run_config)
+    try:
+        results = run_batch(image_dir=images_dir, out_dir=out_dir, pattern=pattern, run_config=run_config)
+    except Exception as exc:
+        update_metadata(doc_dir, {"status": "transcription_failed", "error": str(exc)})
+        raise
+
+    if not results:
+        update_metadata(doc_dir, {"status": "no_pages", "failed_pages": 0, "processed_pages": 0})
+        return
+
     if pass_mode == "pass1":
         complete = sum(1 for r in results if r.get("status") in ("complete", "pass1_complete"))
     else:
