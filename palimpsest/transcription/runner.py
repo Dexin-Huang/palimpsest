@@ -15,7 +15,7 @@ from palimpsest.pipeline.ocr import extract_agentic_vision_response
 
 from .config import RunConfig
 from .flags import load_page_flags
-from .io import atomic_write_text, hash_text, validate_json_file, validate_json_text
+from .io import atomic_write_text, hash_text, strip_json_fences, validate_json_file, validate_json_text
 from .runlog import RunLogger, build_status_snapshot, get_git_commit, start_run
 from .trace import save_trace
 
@@ -141,8 +141,8 @@ def transcribe_pass1(
         tools=[types.Tool(code_execution={})],
         temperature=0.1,
     )
-    if output_format == "json":
-        config.response_mime_type = "application/json"
+    # Note: response_mime_type is not supported with code_execution (Agentic Vision).
+    # We rely on the prompt to return JSON and validate it downstream.
 
     return client.models.generate_content(
         model=model,
@@ -167,8 +167,8 @@ def transcribe_pass2(
         tools=[types.Tool(code_execution={})],
         temperature=0.1,
     )
-    if output_format == "json":
-        config.response_mime_type = "application/json"
+    # Note: response_mime_type is not supported with code_execution (Agentic Vision).
+    # We rely on the prompt to return JSON and validate it downstream.
 
     return client.models.generate_content(
         model=model,
@@ -196,7 +196,7 @@ def _attempt_pass(
         try:
             response = call_fn()
             agentic = extract_agentic_vision_response(response)
-            text = agentic.text or ""
+            text = strip_json_fences(agentic.text or "")
             trace_fn(agentic, response, text)
             return text
         except Exception as exc:

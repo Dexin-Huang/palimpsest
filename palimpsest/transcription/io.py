@@ -43,3 +43,16 @@ def validate_json_file(path: Path) -> Optional[str]:
         return None
     except Exception as exc:
         return str(exc)
+
+
+def strip_json_fences(text: str) -> str:
+    """Remove surrounding Markdown code fences if present."""
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return text
+    lines = stripped.splitlines()
+    if lines and lines[0].lstrip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].lstrip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()

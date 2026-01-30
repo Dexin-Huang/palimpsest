@@ -13,8 +13,9 @@ PAGE_RE = re.compile(r"^page_(\d+)$", re.IGNORECASE)
 
 def _strip_final_suffix(path: Path) -> str:
     stem = path.stem
-    if stem.endswith("_final"):
-        return stem[:-6]
+    for suffix in ("_final", "_pass1"):
+        if stem.endswith(suffix):
+            return stem[: -len(suffix)]
     return stem
 
 
