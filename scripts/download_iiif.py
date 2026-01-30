@@ -11,151 +11,11 @@ Usage:
 Supports IIIF Presentation API 2.x and 3.0 manifests.
 """
 import argparse
-import json
-import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlparse, urljoin
 
-import requests
-
-
-def get_manifest(url: str) -> dict:
-    """Fetch and parse IIIF manifest."""
-    print(f"Fetching manifest: {url}")
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def extract_canvases_v2(manifest: dict) -> list:
-    """Extract canvas info from IIIF 2.x manifest."""
-    canvases = []
-    for sequence in manifest.get("sequences", []):
-        for canvas in sequence.get("canvases", []):
-            # Get image resource
-            for image in canvas.get("images", []):
-                resource = image.get("resource", {})
-                service = resource.get("service", {})
-
-                # Get base IIIF image URL
-                image_id = service.get("@id", "")
-                if not image_id:
-                    # Try direct resource URL
-                    image_id = resource.get("@id", "")
-
-                if image_id:
-                    canvases.append({
-                        "id": canvas.get("@id", ""),
-                        "label": canvas.get("label", ""),
-                        "image_service": image_id,
-                        "width": resource.get("width", canvas.get("width")),
-                        "height": resource.get("height", canvas.get("height")),
-                    })
-                    break  # One image per canvas
-    return canvases
-
-
-def extract_canvases_v3(manifest: dict) -> list:
-    """Extract canvas info from IIIF 3.0 manifest."""
-    canvases = []
-    for item in manifest.get("items", []):
-        if item.get("type") != "Canvas":
-            continue
-
-        for anno_page in item.get("items", []):
-            for anno in anno_page.get("items", []):
-                body = anno.get("body", {})
-                if isinstance(body, list):
-                    body = body[0] if body else {}
-
-                service = body.get("service", [])
-                if isinstance(service, list) and service:
-                    service = service[0]
-
-                image_id = ""
-                if isinstance(service, dict):
-                    image_id = service.get("id", service.get("@id", ""))
-                if not image_id:
-                    image_id = body.get("id", "")
-
-                if image_id:
-                    # Get label
-                    label = item.get("label", {})
-                    if isinstance(label, dict):
-                        # IIIF 3.0 label format: {"en": ["Folio 1r"]}
-                        for vals in label.values():
-                            if vals:
-                                label = vals[0] if isinstance(vals, list) else vals
-                                break
-                        else:
-                            label = ""
-
-                    canvases.append({
-                        "id": item.get("id", ""),
-                        "label": label,
-                        "image_service": image_id,
-                        "width": item.get("width"),
-                        "height": item.get("height"),
-                    })
-                    break
-    return canvases
-
-
-def extract_canvases(manifest: dict) -> list:
-    """Extract canvas info from IIIF manifest (auto-detect version)."""
-    # Check for IIIF 3.0 context
-    context = manifest.get("@context", "")
-    if isinstance(context, list):
-        context = " ".join(str(c) for c in context)
-
-    if "iiif.io/api/presentation/3" in str(context) or "items" in manifest:
-        return extract_canvases_v3(manifest)
-    else:
-        return extract_canvases_v2(manifest)
-
-
-def build_image_url(service_url: str, size: int | str) -> str:
-    """Build IIIF image URL for download.
-
-    Constructs URL in format: {service}/full/{size},/0/default.jpg
-
-    Args:
-        service_url: IIIF image service URL
-        size: Width in pixels, or "max"/"full" for maximum resolution
-    """
-    # Ensure no trailing slash
-    base = service_url.rstrip("/")
-
-    # Handle "max" or "full" for maximum resolution
-    if isinstance(size, str) and size.lower() in ("max", "full"):
-        size_param = "max"
-    else:
-        size_param = f"{size},"
-
-    # If it's already a full image URL, try to modify it
-    if "/full/" in base:
-        # Replace size parameter
-        return re.sub(r"/full/[^/]+/", f"/full/{size_param}/", base)
-
-    # Build standard IIIF image URL
-    return f"{base}/full/{size_param}/0/default.jpg"
-
-
-def derive_filename(index: int, label: str) -> str:
-    """Derive filename from canvas index and label."""
-    # Try to extract folio number from label
-    if label:
-        # Match patterns like "f. 1r", "Folio 1v", "1r", etc.
-        m = re.search(r"(?:f(?:ol(?:io)?)?\.?\s*)?(\d+)\s*([rv])?", str(label), re.I)
-        if m:
-            num = int(m.group(1))
-            side = (m.group(2) or "r").lower()
-            return f"f{num:03d}{side}.jpg"
-
-    # Fallback to simple numbering
-    return f"page_{index:04d}.jpg"
+from palimpsest.library.iiif import build_image_url, derive_filename, extract_canvases, fetch_manifest
 
 
 def download_manifest(
@@ -180,7 +40,8 @@ def download_manifest(
         List of downloaded file paths
     """
     # Fetch manifest
-    manifest = get_manifest(manifest_url)
+    print(f"Fetching manifest: {manifest_url}")
+    manifest = fetch_manifest(manifest_url)
 
     # Extract canvas info
     canvases = extract_canvases(manifest)
