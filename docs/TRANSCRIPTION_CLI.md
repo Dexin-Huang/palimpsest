@@ -8,19 +8,19 @@ This CLI runs the two-pass transcription pipeline and produces:
 
 ## Examples
 
-Single page:
+Single page (defaults to transcription_json prompt set if none provided):
 ```
-python scripts/transcribe_manuscript.py \
-  --image projects/vatican_alchemy/images/pal_lat_1267_max/f001r.jpg \
-  --out-dir projects/vatican_alchemy/exports/transcriptions_full \
+python -m palimpsest transcribe run \
+  --image library/vatican_pal_lat_1267/images/f001r.jpg \
+  --out-dir library/vatican_pal_lat_1267/exports/transcriptions_full \
   --prompt-set transcription_json
 ```
 
 Batch:
 ```
-python scripts/transcribe_manuscript.py \
-  --image-dir projects/vatican_alchemy/images/pal_lat_1267_max \
-  --out-dir projects/vatican_alchemy/exports/transcriptions_full \
+python -m palimpsest transcribe run \
+  --image-dir library/vatican_pal_lat_1267/images \
+  --out-dir library/vatican_pal_lat_1267/exports/transcriptions_full \
   --prompt-set transcription_json \
   --pattern "*.jpg" \
   --workers 10 \
@@ -43,11 +43,19 @@ After any run, inspect:
 The JSON prompts now require `page_type` (e.g., `text_page`, `cover`, `blank`, `ownership`, `binding`, `illustration_only`).
 If `--auto-skip-non-text` is set, pass2 will be skipped for non-text page types.
 
+## Model selection
+
+The default model is read from `.env`:
+```
+PALIMPSEST_MODEL_VISION=gemini-3-flash-preview
+```
+Override with `--model` if needed.
+
 ## Orchestrator
 
 For multi-process sharding or two-phase runs, use:
 ```
-python scripts/run_transcription.py \
+python -m palimpsest transcribe shards \
   --image-dir ... \
   --out-dir ... \
   --prompt-set transcription_json \

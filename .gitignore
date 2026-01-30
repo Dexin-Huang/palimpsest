@@ -8,14 +8,24 @@ __pycache__/
 # Scratch / temp
 scratch/
 
-# Derived outputs
+# Derived outputs (keep library exports tracked)
 **/exports/
+!library/**/exports/
+!library/**/exports/**
 
 # Large binary assets (images stored locally, not in git)
 **/images/
 
 # Local databases
 **/*.db
+
+# Discovery cache
+discovery/manifests/
+discovery/detail_*.html
+
+# Library derived artifacts
+library/**/images/
+library/**/runs/
 
 # Windows device file
 nul

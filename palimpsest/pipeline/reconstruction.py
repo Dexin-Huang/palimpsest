@@ -22,11 +22,12 @@ from google import genai
 from google.genai import types
 
 from palimpsest.models import Page, Zone
+from palimpsest.config import DEFAULT_MODEL_RECON, DEFAULT_MODEL_VISION
 
 
 # Models
-RECONSTRUCTION_MODEL = "gemini-3-pro-image-preview"
-VISION_MODEL = "gemini-3-flash-preview"
+RECONSTRUCTION_MODEL = DEFAULT_MODEL_RECON
+VISION_MODEL = DEFAULT_MODEL_VISION
 
 # Prompt directory
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"

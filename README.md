@@ -1,151 +1,83 @@
-# Rescript Scaffold (PARES → Pasajeros a Indias)
+# Palimpsest
 
-This repository is a **minimal, elegant scaffold** for building a reconstructed historical corpus from scanned pages.
+Palimpsest is a library-first factory for turning digitized manuscripts into
+clean, searchable outputs with full provenance.
 
-Design goal: **reconstruct a “universe snapshot”** (people, places, movements, permissions, commodities) from high-volume archival material, with full provenance and deterministic exports.
+Core idea: a stable per-page JSON is the canonical truth. Everything else is
+derived (books, HTML viewers, overlays).
 
----
+## Modules
 
-## Core idea (the only idea you need)
+1) Discovery / Opportunities
+   - Crawl metadata, score "interestingness", and maintain a master list.
 
-Canonical truth lives in **one file per page**:
+2) Processing / Transcription
+   - Download full-res images, run a two-pass transcription, assemble a book.
 
-- Scan image (immutable)
-- Geometry (where text is on the page)
-- Text layers (diplomatic → normalized → translation)
-- Claims (structured extractions with confidence + spans)
+3) Recreation (future)
+   - Generate restored pages and scanlation-style overlays.
 
-Everything else is derived:
-- HTML overlay viewer
-- Searchable PDF
-- PPTX “editable facsimile”
-- TEI / PAGE XML / ALTO exports (optional)
+## Quickstart (Golden Path)
 
----
+1) Crawl a range and append to master list:
+```
+python scripts/palimpsest.py discovery run --collection Pal.lat --range 1200-1400 --limit 200 --output discovery/registry/pal_lat_1200-1400_inventory.jsonl
+```
 
-## Folder layout
+2) Filter interesting candidates (metadata-only pass):
+```
+python scripts/palimpsest.py discovery filter \
+  --input discovery/registry/pal_lat_1200-1400_inventory.jsonl \
+  --output discovery/registry/pal_lat_1200-1400_interesting.jsonl
+```
+
+3) Create a library record from a manifest:
+```
+python scripts/palimpsest.py library intake \
+  --doc-id vatican_pal_lat_1267 \
+  --manifest https://digi.vatlib.it/iiif/MSS_Pal.lat.1267/manifest.json
+```
+
+4) Run the full pipeline (download -> transcribe -> assemble):
+```
+python scripts/palimpsest.py library run --doc-id vatican_pal_lat_1267
+```
+
+Single entrypoint:
+```
+python -m palimpsest <command> ...
+```
+
+All files in `scripts/` are thin wrappers around the unified CLI.
+
+Defaults: transcription uses the `transcription_json` prompt set unless overridden.
+
+## Layout (Library First)
 
 ```
-projects/
-  pasajeros_a_indias/
-    raw/                  # downloads + source manifests, untouched
-    images/               # page images (source scans)
-    pages/                # canonical *.page.json (one per page)
-    claims/               # optional: claims.jsonl at doc/corpus level
-    entities/             # optional: canonicalized people/places/ships
-    index/                # optional: search index / embeddings
+library/
+  <doc_id>/
+    metadata.json
+    page_list.json
+    images/
     exports/
-      html/               # human QA & browsing
-      pdf/                # searchable facsimiles
-      pptx/               # editable facsimiles
-schemas/
-scripts/
-web/
-node/
+      transcriptions_full/
+      book/
 ```
 
----
+## Configuration
 
-## The canonical object: a Page
+Create a local `.env` (see `.env.example`):
 
-See:
-- `schemas/page_schema_v1.md`
-- `projects/pasajeros_a_indias/pages/pares_pasajeros_demo_p0001.page.json`
+- `GEMINI_API_KEY`
+- `PALIMPSEST_MODEL_VISION` (default: gemini-3-flash-preview)
+- `PALIMPSEST_MODEL_TRIAGE` (optional)
+- `PALIMPSEST_MODEL_RECON` (optional)
 
-The demo uses normalized coordinates (`bbox_norm`) so renderers can place text correctly on:
-- web (pixels)
-- pdf (points)
-- ppt (inches)
+## Docs
 
----
-
-## System pipeline (abstracting the “LLM part”)
-
-1) **Ingest**
-   - Download images + metadata into `raw/` and `images/`.
-
-2) **Layout**
-   - Produce zones (lines/headers/marginalia) with bounding boxes.
-   - Store in `pages/*.page.json` under `zones[]`.
-
-3) **Text layers**
-   - Fill `text.es_diplomatic`, `text.es_normalized`, translations, etc.
-
-4) **Claims**
-   - Extract structured facts as `claims[]` referencing spans in zones.
-   - This is how you turn documents into a world model.
-
-5) **Canon / Universe snapshot**
-   - Merge claims into corpus-level `entities/` and `events/`.
-   - Build a time-sliced snapshot.
-
-6) **Publish**
-   - Render HTML/PDF/PPTX
-   - Build indexes
-
----
-
-## Outputs (what you can regenerate forever)
-
-### HTML overlay (fastest QA)
-Open a viewer that shows:
-- scan as background
-- positioned text overlays (toggle Spanish/English layers)
-
-### PDF
-- background scan
-- invisible selectable text overlay (searchable)
-
-### PPTX
-- each page becomes a slide
-- scan as background
-- each zone becomes an editable text box
-- optional: add a second “translation layer” as hidden/alt slide
-
----
-
-## Universe reconstruction strategy (how you “rebuild the world”)
-
-Store extractions as *claims*, not “truth”:
-- claims are local, page-scoped, with provenance + confidence
-- later you canonicalize into *entities* and *events*
-
-Recommended corpus-level tables:
-- `entities/persons.jsonl`
-- `entities/places.jsonl`
-- `entities/ships.jsonl`
-- `events/events.jsonl` (each with `date`, `place`, `participants`, `source_spans`)
-
-This lets you answer questions like:
-- “Who left Seville for New Spain in 1603?”
-- “Which origins dominate by decade?”
-- “Which families travel together?”
-- “How do routes change across wars/epidemics?”
-
----
-
-## Next step (when you start using real PARES pages)
-
-Add a `raw/source_manifest.jsonl` for downloaded PARES records:
-- `source_doc_url`
-- `archive_signature`
-- `title`
-- `date_range`
-- list of page image URLs
-
-Then write an `ingest_pares.py` that converts each page into:
-- `images/<page_id>.jpg`
-- `pages/<page_id>.page.json` with geometry placeholders
-
----
-
-## Demo files included
-
-- Placeholder scan: `projects/pasajeros_a_indias/images/sample_page.png`
-- Demo canonical page JSON:
-  - `projects/pasajeros_a_indias/pages/pares_pasajeros_demo_p0001.page.json`
-
-Render scripts are provided as templates in:
-- `scripts/`
-- `web/`
-- `node/`
+- `docs/VISION.md` - system vision and data model
+- `docs/FACTORY.md` - module summary
+- `docs/TRANSCRIPTION_CLI.md` - transcription CLI usage
+- `docs/DISCOVERY_SYSTEM.md` - discovery tools and workflow
+- `docs/PHILOSOPHY.md` - repository philosophy and guardrails

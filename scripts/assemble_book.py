@@ -1,23 +1,10 @@
-import argparse
-from pathlib import Path
+#!/usr/bin/env python3
+"""Wrapper for book assembly (use palimpsest CLI)."""
 
-from palimpsest.book import assemble_book
+import sys
 
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Assemble book-level outputs from page JSON")
-    parser.add_argument(
-        "--transcriptions-dir",
-        required=True,
-        help="Directory containing *_final.json files",
-    )
-    args = parser.parse_args()
-
-    index = assemble_book(Path(args.transcriptions_dir))
-    print(f"Assembled {index['total_pages']} pages")
-    if index.get("missing_final"):
-        print(f"Missing final pages: {len(index['missing_final'])}")
+from palimpsest.commands.book import main
 
 
 if __name__ == "__main__":
-    main()
+    main(["book", "assemble", *sys.argv[1:]])

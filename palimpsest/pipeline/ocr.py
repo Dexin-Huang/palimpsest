@@ -16,7 +16,6 @@ Key configuration:
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -24,6 +23,7 @@ from typing import List, Optional
 from google import genai
 from google.genai import types
 
+from palimpsest.config import DEFAULT_MODEL_VISION
 from palimpsest.models import Confidence, Page, TextLayers, Zone, ZoneStyle
 from palimpsest.models.page import (
     Claim,
@@ -37,7 +37,7 @@ from palimpsest.models.page import (
 
 
 # Default model with Agentic Vision
-DEFAULT_MODEL = "gemini-3-flash-preview"
+DEFAULT_MODEL = DEFAULT_MODEL_VISION
 
 # Prompt directory
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -95,93 +95,6 @@ def get_mime_type(path: Path) -> str:
     return mime_types.get(suffix, "image/jpeg")
 
 
-@dataclass
-class AgenticVisionResponse:
-    """Parsed response from Gemini with Agentic Vision (code_execution enabled).
-
-    When code_execution is enabled, Gemini returns a multi-part response:
-    - executable_code: Python code the model executed to crop/zoom
-    - code_execution_result: Output from running the code
-    - inline_data: Images (cropped regions) the model created
-    - text: The actual analysis/transcription text
-
-    The response.text property returns only the text parts concatenated,
-    which is usually what you want for transcription.
-    """
-
-    text: str
-    code_blocks: List[dict]  # [{'language': str, 'code': str}]
-    code_results: List[dict]  # [{'outcome': str, 'output': str}]
-    images: List[dict]  # [{'mime_type': str, 'data': bytes}]
-    raw_response: object
-
-
-def extract_agentic_vision_response(response) -> AgenticVisionResponse:
-    """Extract all content from a Gemini response with code_execution enabled.
-
-    This is useful when you need access to the code blocks or cropped images
-    that the model generated during analysis. For simple transcription,
-    just use response.text instead.
-
-    Args:
-        response: The raw response from client.models.generate_content()
-
-    Returns:
-        AgenticVisionResponse with all extracted parts
-    """
-    text_parts = []
-    code_blocks = []
-    code_results = []
-    images = []
-
-    if hasattr(response, "candidates"):
-        for candidate in response.candidates:
-            if hasattr(candidate, "content") and hasattr(candidate.content, "parts"):
-                for part in candidate.content.parts:
-                    # Text parts
-                    if hasattr(part, "text") and part.text:
-                        text_parts.append(part.text)
-
-                    # Code blocks
-                    if hasattr(part, "executable_code") and part.executable_code:
-                        code = part.executable_code
-                        code_blocks.append(
-                            {
-                                "language": str(getattr(code, "language", "unknown")),
-                                "code": getattr(code, "code", ""),
-                            }
-                        )
-
-                    # Code execution results
-                    if (
-                        hasattr(part, "code_execution_result")
-                        and part.code_execution_result
-                    ):
-                        result = part.code_execution_result
-                        code_results.append(
-                            {
-                                "outcome": str(getattr(result, "outcome", "unknown")),
-                                "output": getattr(result, "output", ""),
-                            }
-                        )
-
-                    # Inline images (cropped regions)
-                    if hasattr(part, "inline_data") and part.inline_data:
-                        data = part.inline_data
-                        images.append(
-                            {
-                                "mime_type": getattr(data, "mime_type", "unknown"),
-                                "data": getattr(data, "data", b""),
-                            }
-                        )
-
-    return AgenticVisionResponse(
-        text="\n\n".join(text_parts),
-        code_blocks=code_blocks,
-        code_results=code_results,
-        images=images,
-        raw_response=response,
-    )
 
 
 def transcribe_image(

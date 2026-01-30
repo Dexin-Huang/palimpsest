@@ -1,19 +1,11 @@
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-env_path = PROJECT_ROOT / ".env"
-if env_path.exists():
-    load_dotenv(env_path)
+from palimpsest.config import DEFAULT_MODEL_VISION
 
 from .prompts import load_prompt_pair
 
-import os
-
-DEFAULT_MODEL = os.getenv("PALIMPSEST_MODEL", "gemini-3-flash-preview")
+DEFAULT_MODEL = DEFAULT_MODEL_VISION
 
 
 @dataclass(frozen=True)

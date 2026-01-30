@@ -109,7 +109,7 @@ Outputs:
 ---
 
 ## Library-First Folder Layout
-Replace `projects/` with a stable `library/` root:
+Stable `library/` root:
 
 ```
 library/
@@ -211,7 +211,7 @@ Page ID rules (current decision):
 
 One-command example (current):
 ```
-python scripts/library_run.py --doc-id <doc_id>
+python -m palimpsest library run --doc-id <doc_id>
 ```
 Behavior: downloads images, runs transcription, assembles book.
 
@@ -228,7 +228,7 @@ Logging + audit:
 
 Config + prompts:
 - `.env` controls model and API key
-- `PALIMPSEST_MODEL=gemini-3-flash-preview`
+- `PALIMPSEST_MODEL_VISION=gemini-3-flash-preview`
 - Prompts in `palimpsest/prompts/sets/transcription_json/`
 
 ---

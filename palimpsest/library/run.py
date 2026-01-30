@@ -7,6 +7,7 @@ from palimpsest.transcription import PromptConfig, RunConfig, run_batch
 from .download import download_pages
 from .io import read_json
 from .metadata import update_metadata
+from .sync import sync_master_for_doc
 
 
 def run_document(
@@ -20,6 +21,7 @@ def run_document(
     auto_skip_non_text: bool = False,
     download_first: bool = True,
     pattern: str = "*.jpg",
+    master_path: Path | None = None,
 ) -> None:
     if download_first:
         download_pages(doc_dir=doc_dir, overwrite=False)
@@ -68,3 +70,5 @@ def run_document(
                 updates["status"] = "assembled_partial"
 
     update_metadata(doc_dir, updates)
+    if master_path:
+        sync_master_for_doc(doc_dir, master_path)

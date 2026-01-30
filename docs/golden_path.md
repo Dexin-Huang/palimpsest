@@ -177,5 +177,7 @@ response2 = client.models.generate_content(
 
 ```bash
 export GEMINI_API_KEY="your-api-key-here"
+export PALIMPSEST_MODEL_VISION="gemini-3-flash-preview"
+export PALIMPSEST_MODEL_RECON="gemini-3-pro-image-preview"
 pip install google-genai
 ```

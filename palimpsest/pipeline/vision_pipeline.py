@@ -24,15 +24,16 @@ from palimpsest.models import Page, Zone, TextLayers, ZoneStyle, Confidence
 from palimpsest.models.page import (
     Claim, ImageInfo, Layout, Margins, PipelineInfo, SourceInfo, Span
 )
+from palimpsest.config import DEFAULT_MODEL_VISION
 from .segmentation import (
     SegmentationResult, SegmentedRegion, RegionType,
     LayoutAnalysis, IllustrationAnalysis
 )
-from .ocr import extract_agentic_vision_response
+from palimpsest.vision.agentic import extract_agentic_vision_response
 
 
 # Default models
-DEFAULT_VISION_MODEL = "gemini-3-flash-preview"
+DEFAULT_VISION_MODEL = DEFAULT_MODEL_VISION
 
 # Prompt directory
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -170,7 +171,7 @@ class VisionPipeline:
             return Path(self.config.trace_dir)
         if image_path:
             try:
-                # projects/<proj>/images/<file> -> projects/<proj>/exports/agentic
+                # library/<doc>/images/<file> -> library/<doc>/exports/agentic
                 project_dir = image_path.parents[1]
                 return project_dir / "exports" / "agentic"
             except Exception:

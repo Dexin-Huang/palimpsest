@@ -1,67 +1,68 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for coding agents working in this repo.
 
-## Project Overview
+## Project overview
 
-Palimpsest (Rescript) is a scaffold for processing scanned historical documents into structured, searchable data. The primary use case is Spanish colonial archives ("Pasajeros a Indias" - passenger records to the Americas).
+Palimpsest is a library-first pipeline for discovering, transcribing, and
+assembling digitized manuscripts. The current canonical path is:
 
-## Commands
+Discovery -> Library intake -> Download -> Transcribe -> Assemble.
 
-All scripts run from repo root.
+## Core commands
 
-**Validate a page JSON:**
-```bash
-python scripts/validate_page.py --page projects/pasajeros_a_indias/pages/<page>.page.json
+Discovery (crawl + master sync):
+```
+python -m palimpsest discovery run --collection Pal.lat --range 1200-1400 --limit 200 --output discovery/registry/pal_lat_1200-1400_inventory.jsonl
 ```
 
-**Render searchable PDF:**
-```bash
-python scripts/render_pdf_overlay.py \
-  --page projects/pasajeros_a_indias/pages/<page>.page.json \
-  --out projects/pasajeros_a_indias/exports/pdf/<page>.pdf \
-  --layer es_normalized
+Filter interesting candidates:
+```
+python -m palimpsest discovery filter \
+  --input discovery/registry/pal_lat_1200-1400_inventory.jsonl \
+  --output discovery/registry/pal_lat_1200-1400_interesting.jsonl
 ```
 
-**Render HTML viewer:**
-```bash
-python scripts/render_html_single.py \
-  --page projects/pasajeros_a_indias/pages/<page>.page.json \
-  --out projects/pasajeros_a_indias/exports/html/<page>.html
+Create a library record:
+```
+python -m palimpsest library intake --doc-id vatican_pal_lat_1267 \
+  --manifest https://digi.vatlib.it/iiif/MSS_Pal.lat.1267/manifest.json
 ```
 
-Python dependencies: `reportlab` (for PDF).
+Download images:
+```
+python -m palimpsest library download --doc-id vatican_pal_lat_1267
+```
 
-## Architecture
+Run full pipeline:
+```
+python -m palimpsest library run --doc-id vatican_pal_lat_1267
+```
 
-**Single source of truth**: `*.page.json` files in `projects/<project>/pages/`. Everything else (HTML/PDF/PPTX) is derived from these.
-
-**Coordinate system**: All geometry uses normalized coordinates (`bbox_norm: [x, y, w, h]`) where values are 0-1 fractions of image dimensions. This allows rendering at any scale.
-
-**Text layers** in each zone:
-- `es_diplomatic` - exact transcription preserving original spelling
-- `es_normalized` - modernized Spanish spelling
-- `en_literal` - direct English translation
-- `en_interpreted` - contextual English interpretation
-
-**Claims**: Structured extractions (person names, places, dates) with `span` references back to source text zones. Claims are local/page-scoped assertions, later canonicalized into corpus-level entities.
-
-**Pipeline stages**: ingest → layout → transcription → normalization → translation → claim extraction → export
-
-## Key Schema (rescript.page.v1)
-
-Required fields: `schema_version`, `page_id`, `doc_id`, `image` (path, width_px, height_px), `zones[]`
-
-Each zone requires: `zone_id`, `type` (line|marginalia|header|stamp|table_cell|illustration|unknown), `order`, `bbox_norm`, `text`
-
-## Project Structure Convention
+## Transcription CLI (direct)
 
 ```
-projects/<name>/
-  raw/       # source downloads (immutable)
-  images/    # page scans
-  pages/     # canonical *.page.json
-  claims/    # optional corpus-level claims.jsonl
-  entities/  # canonicalized persons/places/ships
-  exports/   # html/, pdf/, pptx/
+python -m palimpsest transcribe run \
+  --image-dir <images_dir> \
+  --out-dir <exports/transcriptions_full> \
+  --prompt-set transcription_json \
+  --workers 10 \
+  --skip-existing
+```
+
+## Configuration
+
+Use `.env` for model selection:
+- `PALIMPSEST_MODEL_VISION`
+- `PALIMPSEST_MODEL_TRIAGE`
+- `PALIMPSEST_MODEL_RECON`
+
+## Repo structure
+
+```
+library/           # canonical outputs for each document
+discovery/         # master lists, manifest cache, registries
+palimpsest/        # core Python package
+scripts/           # CLI entry points
+docs/              # system documentation
 ```

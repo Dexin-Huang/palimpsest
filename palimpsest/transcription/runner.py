@@ -7,11 +7,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-from palimpsest.pipeline.ocr import extract_agentic_vision_response
+from palimpsest.config import DEFAULT_MEDIA_RESOLUTION, DEFAULT_THINKING_LEVEL
+from palimpsest.vision.agentic import extract_agentic_vision_response
 
 from .config import RunConfig
 from .flags import load_page_flags
@@ -20,11 +20,37 @@ from .runlog import RunLogger, build_status_snapshot, get_git_commit, start_run
 from .trace import save_trace
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ENV_PATH = PROJECT_ROOT / ".env"
-if ENV_PATH.exists():
-    load_dotenv(ENV_PATH)
 
 BACKOFF_BASE = 2
+
+
+def _resolve_thinking_level() -> str | None:
+    level = (DEFAULT_THINKING_LEVEL or "").strip().lower()
+    if level in ("minimal", "low", "medium", "high"):
+        return level
+    return None
+
+
+def _resolve_media_resolution():
+    level = (DEFAULT_MEDIA_RESOLUTION or "").strip().upper()
+    if not level:
+        return None
+    attr = f"MEDIA_RESOLUTION_{level}"
+    return getattr(types.MediaResolution, attr, None)
+
+
+def _build_genai_config() -> types.GenerateContentConfig:
+    kwargs = {
+        "tools": [types.Tool(code_execution={})],
+        "temperature": 0.1,
+    }
+    thinking_level = _resolve_thinking_level()
+    if thinking_level:
+        kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=thinking_level)
+    media_resolution = _resolve_media_resolution()
+    if media_resolution:
+        kwargs["media_resolution"] = media_resolution
+    return types.GenerateContentConfig(**kwargs)
 
 
 @dataclass
@@ -137,10 +163,7 @@ def transcribe_pass1(
     image_bytes = image_path.read_bytes()
     image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
 
-    config = types.GenerateContentConfig(
-        tools=[types.Tool(code_execution={})],
-        temperature=0.1,
-    )
+    config = _build_genai_config()
     # Note: response_mime_type is not supported with code_execution (Agentic Vision).
     # We rely on the prompt to return JSON and validate it downstream.
 
@@ -163,10 +186,7 @@ def transcribe_pass2(
     image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
     prompt = refine_prompt_template.replace("{draft_transcription}", draft)
 
-    config = types.GenerateContentConfig(
-        tools=[types.Tool(code_execution={})],
-        temperature=0.1,
-    )
+    config = _build_genai_config()
     # Note: response_mime_type is not supported with code_execution (Agentic Vision).
     # We rely on the prompt to return JSON and validate it downstream.
 
