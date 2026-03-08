@@ -9,7 +9,7 @@ The main mistake to avoid is using one model for everything.
 - `triage / scouting`: `gemini-3.1-flash-lite-preview`
 - `page reading`: `gemini-3-flash-preview`
 - `witness extraction`: `gemini-3-flash-preview`
-- `reconstruction / image editing`: image-generation or image-editing models only
+- `reconstruction / image editing`: `gemini-3.1-flash-image-preview`
 
 Reason:
 

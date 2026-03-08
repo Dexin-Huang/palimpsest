@@ -7,7 +7,7 @@
 | Task | Model | Model ID |
 |------|-------|----------|
 | **Image Analysis** (OCR, transcription, annotation) | Gemini 3 Flash + Agentic Vision | `gemini-3-flash-preview` |
-| **Image Generation** (reconstructions, visualizations) | Nano Banana Pro | `gemini-3-pro-image-preview` |
+| **Image Generation** (reconstructions, visualizations) | Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` |
 
 ---
 
@@ -111,7 +111,7 @@ def generate_reconstruction(prompt: str, reference_image: Path = None) -> bytes:
     contents.append(prompt)
 
     response = client.models.generate_content(
-        model="gemini-3-pro-image-preview",
+        model="gemini-3.1-flash-image-preview",
         contents=contents,
         config=types.GenerateContentConfig(
             image_config=types.ImageConfig(
@@ -131,7 +131,7 @@ def generate_reconstruction(prompt: str, reference_image: Path = None) -> bytes:
 
 ```python
 response = client.models.generate_content(
-    model="gemini-3-pro-image-preview",
+    model="gemini-3.1-flash-image-preview",
     contents="Create an infographic about medieval alchemy symbols",
     config=types.GenerateContentConfig(
         tools=[{"google_search": {}}],  # Enable grounding
@@ -148,13 +148,13 @@ response = client.models.generate_content(
 ```python
 # Initial generation
 response1 = client.models.generate_content(
-    model="gemini-3-pro-image-preview",
+    model="gemini-3.1-flash-image-preview",
     contents="Reconstruct this faded manuscript text in clearer form"
 )
 
 # Refinement
 response2 = client.models.generate_content(
-    model="gemini-3-pro-image-preview",
+    model="gemini-3.1-flash-image-preview",
     contents=[
         response1.candidates[0].content,
         "Make the rubric (red text) more visible"
@@ -178,6 +178,6 @@ response2 = client.models.generate_content(
 ```bash
 export GEMINI_API_KEY="your-api-key-here"
 export PALIMPSEST_MODEL_VISION="gemini-3-flash-preview"
-export PALIMPSEST_MODEL_RECON="gemini-3-pro-image-preview"
+export PALIMPSEST_MODEL_RECON="gemini-3.1-flash-image-preview"
 pip install google-genai
 ```

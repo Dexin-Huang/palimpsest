@@ -61,7 +61,7 @@ Use `.env` for model selection:
 - `PALIMPSEST_MODEL_TRIAGE`
 - `PALIMPSEST_MODEL_VISION`
 - `PALIMPSEST_MODEL_READING`
-- `PALIMPSEST_MODEL_RECON`
+- `PALIMPSEST_MODEL_RECON` (default: `gemini-3.1-flash-image-preview`)
 
 Use `*-image-preview` models for reconstruction/image-generation lanes, not the main transcription lane.
 
