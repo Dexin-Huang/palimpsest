@@ -1,0 +1,33 @@
+Please produce a cross-page scholarly synthesis for the attached manuscript materials.
+
+You are being given multiple page witnesses or page memos from the same textual unit.
+Your job is to use that broader local context to build translation and interpretation.
+
+Return markdown with exactly these sections:
+
+## Working Translation
+- Provide a concise modern English rendering of the relevant passage or section.
+- Use the surrounding pages to resolve local ambiguities where possible.
+- If a reading remains uncertain, say so.
+
+## Section Reading
+- Explain what this group of pages is doing.
+- Focus on argument, narrative movement, or procedure across the pages.
+- Distinguish clearly between direct evidence and inference.
+- If you infer authorship, date, controversy, school, or intended audience, mark it explicitly as `Probable inference`.
+
+## People Texts And Terms
+- List the named people, texts, schools, places, or technical terms that matter for understanding this section.
+- Keep each gloss short and evidence-bound.
+- If an item is inferred rather than explicitly visible in the supplied pages, prefix it with `Probable:`.
+
+## Open Questions
+- List unresolved points that still require more folios, better images, or external checking.
+
+Rules:
+- Use the supplied page context; do not invent missing witness text.
+- Prefer local cross-page evidence over broad generic background.
+- Keep translation and interpretation grounded in the witness pages.
+- If a page memo seems overconfident, correct it rather than copying it forward.
+- Do not add a long introductory paragraph before the required sections.
+- Do not state authorship, exact date, controversy, or provenance as fact unless the supplied pages directly support it.

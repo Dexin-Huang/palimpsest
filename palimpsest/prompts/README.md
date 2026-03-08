@@ -22,5 +22,11 @@ Example: `lumen_luminum.txt` + `lumen_luminum_refine.txt`
 
 ## Other prompts
 
-Other task-specific prompts (segmentation, illustration analysis, reconstruction)
-remain in the root `prompts/` directory.
+Other task-specific prompts remain in the root `prompts/` directory.
+
+Reading / interpretation prompts:
+- `page_witness_focused.txt` - default witness-heavy page memo prompt
+- `section_synthesis_focused.txt` - multi-page translation and interpretation prompt
+
+Current design rule:
+- prefer deterministic page preparation over prompt-heavy region/workspace orchestration

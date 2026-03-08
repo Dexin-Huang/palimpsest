@@ -1,0 +1,34 @@
+Please produce a witness-focused page memo for the attached manuscript page.
+
+The goal is to preserve what is visibly on this single page.
+Do not turn this into a broad historical essay.
+
+Return markdown with exactly these sections:
+
+## Witness Transcription
+- Transcribe the visible page as faithfully as possible.
+- Preserve line breaks.
+- If the page has multiple columns, keep them separate with short labels such as `Left Column` and `Right Column`.
+- Include marginalia, page numbers, and short inline notes when they are visibly part of the page.
+- When a reading is uncertain, use bracketed slash guesses such as `[////]` or `[////////]` instead of saying `illegible`.
+
+## Page Structure
+- Describe only the visible structure of the page.
+- Keep this short.
+- Mention columns, numbered lemmas, marginal notes, diagrams, running headers, or other obvious layout features.
+
+## Visible Names And Terms
+- List only names, works, page references, or technical terms that are explicitly visible on the page.
+- Give a very short gloss only when it helps disambiguate the visible text.
+- If an item is only probable, prefix it with `Probable:`.
+
+## Uncertainties
+- List doubtful readings, unresolved names, unclear abbreviations, or places where adjacent pages would help.
+- Include any probable identifications that are not directly stated on the page.
+
+Rules:
+- Be evidence-bound. Do not invent lines or references that are not visible.
+- Keep witness text and commentary separate.
+- Do not provide a full translation or a broad thematic interpretation.
+- Do not identify the exact source work, chapter, controversy, or author unless the page itself names it or the identification is directly supported by visible evidence on the page.
+- If a reading is only probable, say so.
