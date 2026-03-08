@@ -113,6 +113,7 @@ Curated source-adapter lane:
 ```
 python -m palimpsest discovery sources list
 python -m palimpsest discovery sources scrape --source idp --collection chinese_magic --limit 5
+python -m palimpsest discovery sources scrape --source gallica --collection chinese_divination --limit 5
 python -m palimpsest discovery sources scrape --source idp --collection stein_dunhuang_chinese --max-pages 2 --output discovery/idp_stein_dunhuang.jsonl
 python -m palimpsest discovery sources ingest --source idp --collection chinese_daoism --limit 5 --triage
 python -m palimpsest discovery scout --repository IDP --min-score 8 --limit 12 --with-web-search

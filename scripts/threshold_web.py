@@ -11,10 +11,17 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import urllib.parse
 import webbrowser
 import threading
+from pathlib import Path
 
 # Global image storage
 original_gray = None
 image_path = None
+
+
+def default_image_path() -> str | None:
+    for candidate in Path("library").glob("*/images/*.jpg"):
+        return str(candidate)
+    return None
 
 def process_image(thresh_val, mode, block_size, c_offset, invert):
     global original_gray
@@ -218,7 +225,10 @@ def main(img_path):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        img = r"D:\Projects\palimpsest\library\vat_reg_lat_1515\images\f001r.jpg"
+        img = default_image_path()
+        if not img:
+            print("Usage: python scripts/threshold_web.py <image_path>")
+            sys.exit(1)
     else:
         img = sys.argv[1]
     main(img)

@@ -5,9 +5,16 @@ Drag sliders to find the optimal black/white cutoff to eliminate bleed-through.
 import cv2
 import numpy as np
 import sys
+from pathlib import Path
 
 def nothing(x):
     pass
+
+
+def default_image_path() -> str | None:
+    for candidate in Path("library").glob("*/images/*.jpg"):
+        return str(candidate)
+    return None
 
 def main(image_path):
     # Load image
@@ -86,8 +93,10 @@ def main(image_path):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        # Default to f001r
-        image_path = r"D:\Projects\palimpsest\library\vat_reg_lat_1515\images\f001r.jpg"
+        image_path = default_image_path()
+        if not image_path:
+            print("Usage: python scripts/threshold_tool.py <image_path>")
+            sys.exit(1)
     else:
         image_path = sys.argv[1]
 

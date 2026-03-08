@@ -155,6 +155,21 @@ Weakness:
 
 This is why IDP is a good thematic source but not yet the cleanest autonomous one.
 
+### `gallica`
+
+- `automation_fit = 4`
+- `north_star_fit = 4`
+
+Why:
+- public SRU search
+- public ARK identifiers
+- public IIIF manifests
+- easier bulk scripting than many museum object portals
+
+Weakness:
+- richer metadata means less of the "shelfmark-thin mystery" effect
+- queries still need care to avoid collapsing into printed books
+
 ## Source Expansion Rule
 
 Do not add a new source adapter just because the repository is impressive.

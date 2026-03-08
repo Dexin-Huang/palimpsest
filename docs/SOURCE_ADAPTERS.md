@@ -119,11 +119,13 @@ Interpretation belongs later in:
 ## Current Implementation
 
 Current adapters:
+- `GallicaSourceAdapter`
 - `VaticanSourceAdapter`
 - `IDPSourceAdapter`
 
 Code:
 - `palimpsest/discovery/sources/adapter.py`
+- `palimpsest/discovery/sources/gallica_adapter.py`
 - `palimpsest/discovery/sources/registry.py`
 - `palimpsest/discovery/sources/vatican_adapter.py`
 - `palimpsest/discovery/sources/idp_adapter.py`
@@ -145,6 +147,11 @@ Each of those is just a stable faceted collection URL plus shallow record
 scraping and IIIF-manifest extraction.
 
 Current fit assumptions:
+
+- `gallica`
+  - `automation_fit = 4`
+  - `north_star_fit = 4`
+  - best for bulk public SRU + IIIF intake with stronger metadata than Vatican
 
 - `vatican`
   - `automation_fit = 5`
@@ -178,11 +185,7 @@ Best next adapter targets for the current north star:
    - repositories with shelfmark-level listing pages and stable public manifests
    - these are often better autonomous sources than museum object portals
 
-6. `gallica`
-   - strong automation potential because of public IIIF at scale
-   - likely best for bulk manuscript intake once rate limits are handled
-
-7. `vhmml`
+6. `vhmml`
    - high thematic upside, but lower unattended suitability because access and reuse
      constraints are tighter
 
