@@ -42,3 +42,5 @@ class RunConfig:
     auto_skip_non_text: bool = False
     shard_count: int = 1
     shard_index: int = 0
+    use_cache: bool = True  # Enable Gemini context caching for cost savings
+    cache_ttl_hours: int = 2  # Cache time-to-live in hours

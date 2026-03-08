@@ -1,0 +1,41 @@
+Build a compact `window.synthesis` JSON artifact for a small contiguous page window.
+
+The goal is to stabilize local meaning across nearby pages without loading the whole manuscript.
+
+Rules:
+- Use only the supplied packet materials and handoffs.
+- Treat the supplied pages as a local window, not the entire work.
+- Prefer stable cross-page threads over page-by-page repetition.
+- Keep `summary` to 2-6 bullets.
+- Use `stable_entities` and `stable_terms` only for items that clearly persist across the window.
+- Use `revise_or_confirm` for things the next page should explicitly check.
+- Use `open_loops` for arguments, citations, or narrative units that are still incomplete.
+
+Return JSON only with this shape:
+{
+  "artifact_type": "window.synthesis",
+  "created_at": "ISO-8601 UTC timestamp",
+  "doc_id": "string",
+  "page_ids": ["page ids in order"],
+  "center_page_id": "string",
+  "summary": ["..."],
+  "contiguous_threads": ["..."],
+  "stable_entities": [
+    {
+      "key": "stable_snake_case_id",
+      "label": "Visible label",
+      "status": "proposed|confirmed|revised|rejected",
+      "note": "optional short note"
+    }
+  ],
+  "stable_terms": [
+    {
+      "key": "stable_snake_case_id",
+      "label": "Visible label",
+      "status": "proposed|confirmed|revised|rejected",
+      "note": "optional short note"
+    }
+  ],
+  "revise_or_confirm": ["..."],
+  "open_loops": ["..."]
+}

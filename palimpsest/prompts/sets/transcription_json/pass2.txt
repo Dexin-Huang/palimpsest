@@ -1,40 +1,86 @@
-You are refining a manuscript transcription. Output strict JSON only.
+You are refining a manuscript page-evidence transcription. Output strict JSON only.
 
-Use the draft transcription below and the image to correct errors, fill gaps, and ensure every visible line is captured.
+Use the draft `canonical.page` JSON below and the image to correct errors, fill gaps, and ensure every visible line is captured.
+
+Page context:
+- page_id: __PAGE_ID__
+- doc_id: __DOC_ID__
+- source_image_path: __IMAGE_PATH__
 
 Draft transcription (JSON):
 {draft_transcription}
 
-Output JSON schema (must match exactly, but with corrected content):
+Output JSON schema (must match exactly in key structure, but with corrected content):
 {
-  "schema_version": "palimpsest.transcription.v1",
-  "page_type": "text_page",
+  "schema_version": "canonical.page",
+  "created_at": "",
+  "page_id": "__PAGE_ID__",
+  "doc_id": "__DOC_ID__",
+  "source": {
+    "name": "",
+    "source_doc_ref": "",
+    "iiif_manifest": ""
+  },
+  "image": {
+    "path": "__IMAGE_PATH__",
+    "width_px": 1,
+    "height_px": 1
+  },
+  "reading_direction": "ltr",
+  "coordinate_space": "norm01",
+  "classification": {
+    "page_type": "text_page",
+    "languages": ["und"],
+    "scripts": ["unknown"],
+    "confidence": 0.7
+  },
   "layout": {
     "columns": 1,
-    "reading_order": "left-to-right, top-to-bottom"
+    "column_gap_norm": 0.0,
+    "writing_area_bbox_norm": [0.08, 0.10, 0.84, 0.82]
   },
-  "columns": [
+  "zones": [
     {
-      "column_id": "single",
-      "line_count_visible": 0,
-      "lines": [
-        {
-          "line": 1,
-          "diplomatic": "",
-          "normalized": ""
-        }
-      ]
+      "zone_id": "z1",
+      "type": "line",
+      "order": 0,
+      "bbox_norm": [0.10, 0.12, 0.80, 0.03],
+      "text": {
+        "source_diplomatic": "",
+        "source_normalized": ""
+      },
+      "structure": {
+        "region_role": "main_text",
+        "column_index": 0,
+        "line_index": 0,
+        "section_label": "single"
+      }
     }
   ],
-  "page_notes": []
+  "reading": {
+    "notable_features": []
+  },
+  "restoration": {
+    "preferred_text_layer": "source_diplomatic",
+    "output_modes": ["diplomatic_edition", "normalized_edition", "latex", "tei"]
+  },
+  "pipeline": {
+    "notes": "raw model output; system will normalize provenance fields"
+  }
 }
 
 Rules:
 - Return JSON only. No markdown, no commentary.
-- Preserve original spelling and abbreviations in diplomatic.
+- Preserve original spelling and abbreviations in diplomatic layers.
 - Provide normalized expansions when possible; if unsure, copy diplomatic.
-- Do not skip lines. If a line is illegible, use "[illegible]".
-- If there are two columns, set layout.columns=2 and include both columns in reading order (left then right).
-- Keep line numbers sequential within each column starting at 1.
 - Keep the schema keys identical to the template above.
-- Preserve page_type from the draft when possible, correcting only if clearly wrong.
+- Keep `page_id`, `doc_id`, and `image.path` aligned to the provided context.
+- Use `text.source_diplomatic` and `text.source_normalized` for the manuscript's original language by default.
+- Use language-specific fields like `la_*` or `es_*` only when there is a good reason to preserve parallel language-specific layers in addition to the generic source layers.
+- Emit one zone per visible text line when the page is line-based.
+- Estimate `bbox_norm` conservatively using normalized 0-1 coordinates.
+- Keep `order` in true reading order. Do not interleave columns.
+- Preserve or correct `reading_direction` as `ltr`, `rtl`, `ttb`, or `btt`.
+- Preserve `classification.page_type` from the draft when possible, correcting only if clearly wrong.
+- Preserve uncertainty explicitly; use bracketed slash guesses such as "[////]" or "[////////]" where the image does not support a confident reading, preserving approximate unreadable width when possible.
+- System-managed provenance fields may be overwritten later, but they must still be present in the JSON.

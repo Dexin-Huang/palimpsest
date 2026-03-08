@@ -19,6 +19,8 @@ def validate_doc_id(doc_id: str) -> None:
 def _ensure_layout(doc_dir: Path) -> None:
     (doc_dir / "images").mkdir(parents=True, exist_ok=True)
     (doc_dir / "exports" / "transcriptions_full").mkdir(parents=True, exist_ok=True)
+    (doc_dir / "exports" / "canonical_pages").mkdir(parents=True, exist_ok=True)
+    (doc_dir / "exports" / "restoration").mkdir(parents=True, exist_ok=True)
     (doc_dir / "exports" / "book").mkdir(parents=True, exist_ok=True)
     (doc_dir / "runs").mkdir(parents=True, exist_ok=True)
 

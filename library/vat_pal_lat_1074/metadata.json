@@ -1,0 +1,13 @@
+{
+  "status": "transcription_failed",
+  "source_url": "https://digi.vatlib.it/iiif/MSS_Pal.lat.1074/manifest.json",
+  "doc_id": "vat_pal_lat_1074",
+  "created_at": "2026-01-30T20:58:40Z",
+  "updated_at": "2026-01-31T01:36:59Z",
+  "downloaded_count": 0,
+  "skipped_count": 126,
+  "page_count": 126,
+  "failed_pages": 10,
+  "processed_pages": 126,
+  "missing_final_count": 0
+}

@@ -1,0 +1,410 @@
+from __future__ import annotations
+
+import json
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from palimpsest.agent_sdk import AgentRunResult, run_agent_prompt
+from palimpsest.edition_fonts import resolve_edition_font_policy
+from palimpsest.models import ALLOWED_PACKET_STATUSES, PacketFileRef, PagePacket
+
+
+TASK_CHOICES = [
+    "advance",
+    "fill_witness",
+    "annotate",
+    "translate",
+    "interpret",
+    "render_edition",
+]
+PACKET_NEXT_ACTIONS = (
+    "fill_witness",
+    "fill_notes",
+    "draft_translation",
+    "draft_interpretation",
+    "review_terms",
+    "review_questions",
+    "render_edition",
+    "prepare_section_synthesis",
+    "complete",
+)
+_STATUS_ALIASES = {
+    "filled": "draft",
+    "done": "complete",
+    "completed": "complete",
+    "in_progress": "started",
+    "in-progress": "started",
+    "review": "reviewed",
+    "final": "complete",
+}
+_NEXT_ACTION_ALIASES = {
+    "annotate": "fill_notes",
+    "translate": "draft_translation",
+    "interpret": "draft_interpretation",
+    "notes": "fill_notes",
+    "translation": "draft_translation",
+    "interpretation": "draft_interpretation",
+    "edition": "render_edition",
+    "synthesize": "prepare_section_synthesis",
+    "done": "complete",
+}
+@dataclass
+class PacketScholarInputs:
+    packet_path: Path
+    workspace: Path
+    witness_source: Path | None
+    context_sources: list[Path]
+
+
+def _materialize_input_copy(src: Path, target: Path) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, target)
+    return target
+
+
+def _continuity_source_paths(packet: PagePacket) -> list[Path]:
+    continuity = packet.continuity
+    candidates = [
+        continuity.previous_handoff_path,
+        continuity.window_synthesis_path,
+        continuity.previous_packet_path,
+    ]
+    result: list[Path] = []
+    for value in candidates:
+        if not value:
+            continue
+        path = Path(value)
+        if path.exists():
+            result.append(path.resolve())
+    return result
+
+
+def _ensure_portable_edition_tex(packet: PagePacket) -> None:
+    ref = packet.files.get("edition_tex")
+    if ref is None:
+        return
+    path = Path(ref.path)
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    font_lines = resolve_edition_font_policy().latex_lines()
+    if all(line in text for line in font_lines):
+        return
+
+    lines = text.splitlines()
+    output: list[str] = []
+    inserted = False
+    skip_font_lines = {
+        r"\setmainfont{Junicode}",
+        r"\setCJKmainfont{SimSun}",
+        r"\IfFontExistsTF{Junicode}{\setmainfont{Junicode}}{\setmainfont{Times New Roman}}",
+        r"\IfFontExistsTF{Noto Serif CJK SC}{\setCJKmainfont{Noto Serif CJK SC}}{%",
+        r"  \IfFontExistsTF{Source Han Serif SC}{\setCJKmainfont{Source Han Serif SC}}{\setCJKmainfont{SimSun}}%",
+        r"}",
+    }
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped in skip_font_lines:
+            continue
+        output.append(line)
+        if stripped == r"\usepackage{xeCJK}" and not inserted:
+            output.extend(font_lines)
+            inserted = True
+
+    if not inserted:
+        return
+    path.write_text("\n".join(output) + "\n", encoding="utf-8")
+
+
+def _normalize_status(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in ALLOWED_PACKET_STATUSES:
+        return raw
+    if raw in _STATUS_ALIASES:
+        return _STATUS_ALIASES[raw]
+    return "draft" if raw else "empty"
+
+
+def _infer_next_action(payload: dict) -> str:
+    files = payload.get("files") or {}
+    if not isinstance(files, dict):
+        return "fill_witness"
+
+    order = [
+        ("witness", "fill_witness"),
+        ("notes", "fill_notes"),
+        ("translation", "draft_translation"),
+        ("interpretation", "draft_interpretation"),
+        ("terms", "review_terms"),
+        ("questions", "review_questions"),
+        ("edition_tex", "render_edition"),
+    ]
+    for key, action in order:
+        ref = files.get(key) or {}
+        if not isinstance(ref, dict):
+            return action
+        if _normalize_status(ref.get("status")) in {"empty", "started"}:
+            return action
+    return "prepare_section_synthesis"
+
+
+def repair_packet_json(packet_path: Path) -> PagePacket:
+    packet_path = packet_path.resolve()
+    payload: dict[str, Any] = json.loads(packet_path.read_text(encoding="utf-8"))
+
+    files = payload.get("files") or {}
+    if isinstance(files, dict):
+        for ref in files.values():
+            if isinstance(ref, dict):
+                ref["status"] = _normalize_status(ref.get("status"))
+    else:
+        files = {}
+        payload["files"] = files
+
+    packet_dir = packet_path.parent
+    edition_pdf_path = str((packet_dir / "edition_spread.pdf").resolve())
+    if "edition_pdf" not in files:
+        files["edition_pdf"] = PacketFileRef(
+            kind="edition_pdf",
+            path=edition_pdf_path,
+            status="draft" if Path(edition_pdf_path).exists() else "empty",
+            note="Compiled PDF rendering of edition_spread.tex" if Path(edition_pdf_path).exists() else None,
+        ).model_dump()
+    elif isinstance(files["edition_pdf"], dict):
+        files["edition_pdf"].setdefault("kind", "edition_pdf")
+        files["edition_pdf"].setdefault("path", edition_pdf_path)
+        if Path(files["edition_pdf"]["path"]).exists() and _normalize_status(files["edition_pdf"].get("status")) == "empty":
+            files["edition_pdf"]["status"] = "draft"
+            files["edition_pdf"]["note"] = files["edition_pdf"].get("note") or "Compiled PDF rendering of edition_spread.tex"
+
+    workflow = payload.get("workflow") or {}
+    if not isinstance(workflow, dict):
+        workflow = {}
+        payload["workflow"] = workflow
+    next_action = str(workflow.get("next_action") or "").strip()
+    next_action = _NEXT_ACTION_ALIASES.get(next_action, next_action)
+    if next_action not in PACKET_NEXT_ACTIONS:
+        next_action = _infer_next_action(payload)
+    workflow["next_action"] = next_action
+
+    packet = PagePacket.model_validate(payload)
+    packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
+    _ensure_portable_edition_tex(packet)
+    return packet
+
+
+def prepare_packet_workspace(
+    packet_path: Path,
+    *,
+    witness_path: Path | None = None,
+    context_paths: list[Path] | None = None,
+) -> PacketScholarInputs:
+    packet_path = packet_path.resolve()
+    if not packet_path.exists():
+        raise FileNotFoundError(f"Packet not found: {packet_path}")
+    packet = repair_packet_json(packet_path)
+    workspace = packet_path.parent.resolve()
+
+    inputs_dir = workspace / "inputs"
+    copied_witness: Path | None = None
+    copied_contexts: list[Path] = []
+    seen_contexts: set[Path] = set()
+
+    if witness_path is not None:
+        witness_path = witness_path.resolve()
+        copied_witness = _materialize_input_copy(witness_path, inputs_dir / "witness_source.md")
+
+    all_context_paths = [*_continuity_source_paths(packet), *((context_paths or []))]
+    for index, context in enumerate(all_context_paths, start=1):
+        context = context.resolve()
+        if context in seen_contexts:
+            continue
+        seen_contexts.add(context)
+        safe_name = f"context_{index:02d}_{context.stem}{context.suffix or '.md'}"
+        copied_contexts.append(_materialize_input_copy(context, inputs_dir / safe_name))
+
+    return PacketScholarInputs(
+        packet_path=packet_path,
+        workspace=workspace,
+        witness_source=copied_witness,
+        context_sources=copied_contexts,
+    )
+
+
+def build_packet_scholar_prompt(
+    packet_inputs: PacketScholarInputs,
+    *,
+    task: str,
+) -> str:
+    if task not in TASK_CHOICES:
+        valid = ", ".join(TASK_CHOICES)
+        raise ValueError(f"Unsupported packet scholar task {task!r}. Expected one of: {valid}")
+
+    lines = [
+        "You are advancing one Palimpsest page.packet.",
+        "",
+        f"Packet file: {packet_inputs.packet_path.name}",
+        f"Task: {task}",
+        "",
+        "Start by reading these files in this order:",
+        "1. packet.json",
+        "2. witness.md",
+        "3. notes.md",
+        "4. translation.md",
+        "5. interpretation.md",
+        "6. terms.md",
+        "7. questions.md",
+        "8. edition_spread.tex",
+    ]
+
+    if packet_inputs.witness_source is not None:
+        lines.extend(
+            [
+                "",
+                "New witness input is available:",
+                f"- inputs/{packet_inputs.witness_source.name}",
+            ]
+        )
+
+    if packet_inputs.context_sources:
+        lines.append("")
+        lines.append("Local context inputs are available:")
+        for path in packet_inputs.context_sources:
+            lines.append(f"- inputs/{path.name}")
+
+    lines.extend(
+        [
+            "",
+            "Task rules:",
+            "- Work only inside this packet workspace.",
+            "- Do not inspect the wider repository.",
+            "- Treat witness text as evidence. Never invent witness lines.",
+            "- Keep direct evidence separate from probable inference.",
+            "- Update packet.json statuses and workflow.next_action before finishing.",
+            f"- Allowed packet statuses: {', '.join(ALLOWED_PACKET_STATUSES)}.",
+            "- Never invent status labels such as filled, done, or in_progress.",
+            f"- Prefer workflow.next_action values from: {', '.join(PACKET_NEXT_ACTIONS)}.",
+            "- Keep each file focused on its layer.",
+            "",
+            "Layer rules:",
+            "- witness.md: diplomatic witness only.",
+            "- notes.md: page-local observations and cross-page pointers.",
+            "- translation.md: provisional translation, explicit about uncertainty.",
+            "- interpretation.md: short evidence-bound interpretation.",
+            "- terms.md: visible names, works, places, and technical terms.",
+            "- questions.md: unresolved items or checks for later pages.",
+            "- edition_spread.tex: keep a minimal facing-page layout in sync; do not overdesign it.",
+        ]
+    )
+
+    if task == "fill_witness":
+        lines.extend(
+            [
+                "",
+                "Specific objective for fill_witness:",
+                "- If witness_source.md exists, use it to populate witness.md faithfully.",
+                "- Preserve uncertainty markers like [////].",
+                "- Then update packet.json so witness status becomes draft and workflow.next_action becomes fill_notes.",
+            ]
+        )
+    elif task == "annotate":
+        lines.extend(
+            [
+                "",
+                "Specific objective for annotate:",
+                "- Work from witness.md and any context inputs.",
+                "- Improve notes.md, terms.md, and questions.md.",
+                "- Do not broaden into a long essay.",
+            ]
+        )
+    elif task == "translate":
+        lines.extend(
+            [
+                "",
+                "Specific objective for translate:",
+                "- Draft or improve translation.md conservatively from witness and context.",
+                "- Mark uncertainty explicitly.",
+            ]
+        )
+    elif task == "interpret":
+        lines.extend(
+            [
+                "",
+                "Specific objective for interpret:",
+                "- Draft or improve interpretation.md.",
+                "- Use the phrase 'Probable inference' for non-explicit claims.",
+            ]
+        )
+    elif task == "render_edition":
+        lines.extend(
+            [
+                "",
+                "Specific objective for render_edition:",
+                "- Populate edition_spread.tex as a minimal compilable facing-page edition.",
+                "- Put diplomatic witness on the left and translation plus interpretation on the right.",
+                "- Keep the layout restrained and readable.",
+                "- Escape LaTeX-special characters when needed.",
+            "- Preserve uncertainty markers like [////] in the witness layer.",
+            "- Keep the existing LaTeX preamble portable. Do not hard-code fonts if fallback logic already exists.",
+            "- Preserve or use the BEGIN/END content markers if they exist in edition_spread.tex.",
+            "- Update packet.json so edition_tex.status becomes draft and workflow.next_action becomes prepare_section_synthesis unless every major layer is already reviewed or complete.",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "",
+                "Specific objective for advance:",
+                "- Choose the next sensible scholarly step based on packet.json and file contents.",
+                "- Prefer fill_witness first, then annotate, then translate, then interpret, then render_edition.",
+            ]
+        )
+
+    lines.extend(
+        [
+            "",
+            "Before you finish:",
+            "- Save all touched files.",
+            "- Update packet.json statuses.",
+            "- Set workflow.next_action to the next unresolved step.",
+            "- Reply with a brief summary of what changed.",
+        ]
+    )
+
+    return "\n".join(lines).strip()
+
+
+async def run_packet_scholar(
+    *,
+    packet_path: Path,
+    model: str,
+    task: str = "advance",
+    witness_path: Path | None = None,
+    context_paths: list[Path] | None = None,
+    max_turns: int = 80,
+    max_budget_usd: float | None = None,
+    max_thinking_tokens: int | None = None,
+    permission_mode: str = "default",
+) -> AgentRunResult:
+    packet_inputs = prepare_packet_workspace(
+        packet_path,
+        witness_path=witness_path,
+        context_paths=context_paths or [],
+    )
+    prompt = build_packet_scholar_prompt(packet_inputs, task=task)
+    result = await run_agent_prompt(
+        prompt=prompt,
+        workspace=packet_inputs.workspace,
+        model=model,
+        profile="packet_scholar",
+        with_web_search=False,
+        max_turns=max_turns,
+        max_budget_usd=max_budget_usd,
+        max_thinking_tokens=max_thinking_tokens,
+        permission_mode=permission_mode,
+    )
+    repair_packet_json(packet_inputs.packet_path)
+    return result

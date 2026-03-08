@@ -1,0 +1,48 @@
+You are refining a draft diplomatic transcription for a single manuscript page.
+
+Return strict JSON only.
+
+Use the draft JSON below and the image to correct local mistakes, recover missed lines, and improve reading order.
+
+Page context:
+- page_id: __PAGE_ID__
+- doc_id: __DOC_ID__
+- source_image_path: __IMAGE_PATH__
+
+Draft transcription (JSON):
+{draft_transcription}
+
+Return the same minimal shape:
+{
+  "schema_version": "canonical.page",
+  "page_id": "__PAGE_ID__",
+  "doc_id": "__DOC_ID__",
+  "reading_direction": "ltr",
+  "zones": [
+    {
+      "zone_id": "z1",
+      "type": "line",
+      "order": 0,
+      "bbox_norm": [0.10, 0.12, 0.80, 0.03],
+      "text": {
+        "source_diplomatic": ""
+      },
+      "structure": {
+        "region_role": "main_text",
+        "column_index": 0,
+        "line_index": 0
+      }
+    }
+  ]
+}
+
+Rules:
+- JSON only. No markdown. No commentary.
+- Preserve the task boundary: diplomatic witness extraction only.
+- Do not add normalization, translation, summary, classification, layout, restoration, or pipeline fields.
+- Correct text, missing lines, zone order, approximate boxes, and reading direction.
+- Preserve existing `zone_id` values when possible, but adding or removing zones is allowed if the draft is wrong.
+- Keep `order` in real reading order.
+- Do not interleave columns.
+- Use bracketed slash guesses such as `[////]` or `[////////]` where the image does not support a confident reading, preserving approximate unreadable width when possible.
+- If the draft already captured a region correctly, do not rewrite it unnecessarily.

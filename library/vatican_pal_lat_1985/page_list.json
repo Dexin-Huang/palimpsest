@@ -1,0 +1,313 @@
+{
+  "manifest_url": "https://digi.vatlib.it/iiif/MSS_Pal.lat.1985/manifest.json",
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "page_0000",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0001_al_piatto.anteriore.jp2/full/max/0/default.jpg",
+      "filename": "page_0000.jpg",
+      "order": 1,
+      "width": 2776,
+      "height": 2033,
+      "label": "piatto.anteriore"
+    },
+    {
+      "page_id": "page_0001",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0002_ba_risguardia.anteriore.jp2/full/max/0/default.jpg",
+      "filename": "page_0001.jpg",
+      "order": 2,
+      "width": 2896,
+      "height": 2038,
+      "label": "risguardia.anteriore"
+    },
+    {
+      "page_id": "page_0002",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0003_cr_0001r.jp2/full/max/0/default.jpg",
+      "filename": "page_0002.jpg",
+      "order": 3,
+      "width": 2776,
+      "height": 2033,
+      "label": "Ir"
+    },
+    {
+      "page_id": "page_0003",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0004_cr_0001v.jp2/full/max/0/default.jpg",
+      "filename": "page_0003.jpg",
+      "order": 4,
+      "width": 2896,
+      "height": 2038,
+      "label": "Iv"
+    },
+    {
+      "page_id": "f001r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0005_fa_0001r.jp2/full/max/0/default.jpg",
+      "filename": "f001r.jpg",
+      "order": 5,
+      "width": 2776,
+      "height": 2033,
+      "label": "1r"
+    },
+    {
+      "page_id": "f001v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0006_fa_0001v.jp2/full/max/0/default.jpg",
+      "filename": "f001v.jpg",
+      "order": 6,
+      "width": 2896,
+      "height": 2038,
+      "label": "1v"
+    },
+    {
+      "page_id": "f002r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0007_fa_0002r.jp2/full/max/0/default.jpg",
+      "filename": "f002r.jpg",
+      "order": 7,
+      "width": 2776,
+      "height": 2033,
+      "label": "2r"
+    },
+    {
+      "page_id": "f002v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0008_fa_0002v.jp2/full/max/0/default.jpg",
+      "filename": "f002v.jpg",
+      "order": 8,
+      "width": 2896,
+      "height": 2038,
+      "label": "2v"
+    },
+    {
+      "page_id": "f003r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0009_fa_0003r.jp2/full/max/0/default.jpg",
+      "filename": "f003r.jpg",
+      "order": 9,
+      "width": 2776,
+      "height": 2033,
+      "label": "3r"
+    },
+    {
+      "page_id": "f003v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0010_fa_0003v.jp2/full/max/0/default.jpg",
+      "filename": "f003v.jpg",
+      "order": 10,
+      "width": 2896,
+      "height": 2038,
+      "label": "3v"
+    },
+    {
+      "page_id": "f004r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0011_fa_0004r.jp2/full/max/0/default.jpg",
+      "filename": "f004r.jpg",
+      "order": 11,
+      "width": 2776,
+      "height": 2033,
+      "label": "4r"
+    },
+    {
+      "page_id": "f004v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0012_fa_0004v.jp2/full/max/0/default.jpg",
+      "filename": "f004v.jpg",
+      "order": 12,
+      "width": 2896,
+      "height": 2038,
+      "label": "4v"
+    },
+    {
+      "page_id": "f005r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0013_fa_0005r.jp2/full/max/0/default.jpg",
+      "filename": "f005r.jpg",
+      "order": 13,
+      "width": 2776,
+      "height": 2033,
+      "label": "5r"
+    },
+    {
+      "page_id": "f005v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0014_fa_0005v.jp2/full/max/0/default.jpg",
+      "filename": "f005v.jpg",
+      "order": 14,
+      "width": 2896,
+      "height": 2038,
+      "label": "5v"
+    },
+    {
+      "page_id": "f006r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0015_fa_0006r.jp2/full/max/0/default.jpg",
+      "filename": "f006r.jpg",
+      "order": 15,
+      "width": 2776,
+      "height": 2033,
+      "label": "6r"
+    },
+    {
+      "page_id": "f006v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0016_fa_0006v.jp2/full/max/0/default.jpg",
+      "filename": "f006v.jpg",
+      "order": 16,
+      "width": 2896,
+      "height": 2038,
+      "label": "6v"
+    },
+    {
+      "page_id": "f007r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0017_fa_0007r.jp2/full/max/0/default.jpg",
+      "filename": "f007r.jpg",
+      "order": 17,
+      "width": 2776,
+      "height": 2033,
+      "label": "7r"
+    },
+    {
+      "page_id": "f007v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0018_fa_0007v.jp2/full/max/0/default.jpg",
+      "filename": "f007v.jpg",
+      "order": 18,
+      "width": 2896,
+      "height": 2038,
+      "label": "7v"
+    },
+    {
+      "page_id": "f008r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0019_fa_0008r.jp2/full/max/0/default.jpg",
+      "filename": "f008r.jpg",
+      "order": 19,
+      "width": 2776,
+      "height": 2033,
+      "label": "8r"
+    },
+    {
+      "page_id": "f008v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0020_fa_0008v.jp2/full/max/0/default.jpg",
+      "filename": "f008v.jpg",
+      "order": 20,
+      "width": 2896,
+      "height": 2038,
+      "label": "8v"
+    },
+    {
+      "page_id": "f009r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0021_fa_0009r.jp2/full/max/0/default.jpg",
+      "filename": "f009r.jpg",
+      "order": 21,
+      "width": 2776,
+      "height": 2033,
+      "label": "9r"
+    },
+    {
+      "page_id": "f009v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0022_fa_0009v.jp2/full/max/0/default.jpg",
+      "filename": "f009v.jpg",
+      "order": 22,
+      "width": 2896,
+      "height": 2038,
+      "label": "9v"
+    },
+    {
+      "page_id": "f010r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0023_fa_0010r.jp2/full/max/0/default.jpg",
+      "filename": "f010r.jpg",
+      "order": 23,
+      "width": 2776,
+      "height": 2033,
+      "label": "10r"
+    },
+    {
+      "page_id": "f010v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0024_fa_0010v.jp2/full/max/0/default.jpg",
+      "filename": "f010v.jpg",
+      "order": 24,
+      "width": 2896,
+      "height": 2038,
+      "label": "10v"
+    },
+    {
+      "page_id": "page_0024",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0025_sr_0002r.jp2/full/max/0/default.jpg",
+      "filename": "page_0024.jpg",
+      "order": 25,
+      "width": 2776,
+      "height": 2033,
+      "label": "IIr"
+    },
+    {
+      "page_id": "page_0025",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0026_sr_0002v.jp2/full/max/0/default.jpg",
+      "filename": "page_0025.jpg",
+      "order": 26,
+      "width": 2896,
+      "height": 2038,
+      "label": "IIv"
+    },
+    {
+      "page_id": "page_0026",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0027_ye_risguardia.posteriore.jp2/full/max/0/default.jpg",
+      "filename": "page_0026.jpg",
+      "order": 27,
+      "width": 2776,
+      "height": 2033,
+      "label": "risguardia.posteriore"
+    },
+    {
+      "page_id": "page_0027",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0028_yh_dorso.jp2/full/max/0/default.jpg",
+      "filename": "page_0027.jpg",
+      "order": 28,
+      "width": 416,
+      "height": 3835,
+      "label": "dorso"
+    },
+    {
+      "page_id": "page_0028",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0029_yl_taglio.centrale.jp2/full/max/0/default.jpg",
+      "filename": "page_0028.jpg",
+      "order": 29,
+      "width": 364,
+      "height": 1924,
+      "label": "taglio.centrale"
+    },
+    {
+      "page_id": "page_0029",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0030_yn_taglio.inferiore.jp2/full/max/0/default.jpg",
+      "filename": "page_0029.jpg",
+      "order": 30,
+      "width": 419,
+      "height": 2767,
+      "label": "taglio.inferiore"
+    },
+    {
+      "page_id": "page_0030",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0031_yp_taglio.superiore.jp2/full/max/0/default.jpg",
+      "filename": "page_0030.jpg",
+      "order": 31,
+      "width": 384,
+      "height": 2765,
+      "label": "taglio.superiore"
+    },
+    {
+      "page_id": "page_0031",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0032_za_piatto.posteriore.jp2/full/max/0/default.jpg",
+      "filename": "page_0031.jpg",
+      "order": 32,
+      "width": 2848,
+      "height": 2036,
+      "label": "piatto.posteriore"
+    },
+    {
+      "page_id": "page_0032",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0033_zx_colorchecker.jp2/full/max/0/default.jpg",
+      "filename": "page_0032.jpg",
+      "order": 33,
+      "width": 2692,
+      "height": 2569,
+      "label": "colorchecker"
+    },
+    {
+      "page_id": "page_0033",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1985/Pal.lat.1985_0034_zz_scala.millimetrica.jp2/full/max/0/default.jpg",
+      "filename": "page_0033.jpg",
+      "order": 34,
+      "width": 2776,
+      "height": 2033,
+      "label": "scala.millimetrica"
+    }
+  ],
+  "doc_id": "vatican_pal_lat_1985"
+}

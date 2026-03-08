@@ -4,7 +4,14 @@ Palimpsest is a repeatable factory for turning digitized manuscripts into a
 clean, searchable library. The repo is optimized for clarity, auditability, and
 scale; it favors a single golden path over optional, ad-hoc workflows.
 
+North star: recover neglected knowledge traditions from archival evidence.
+The library exists to support discovery, comparison, and research, not merely
+to produce transcriptions.
+
 ## Core Principles
+- Knowledge recovery over raw throughput: prefer designs that preserve
+  provenance and support later analysis, even when they are less optimized for
+  pure OCR speed.
 - Library-first: every document lives under `library/<doc_id>/` with stable
   metadata, page lists, images, and exports.
 - Canonical JSON: per-page JSON outputs are the source of truth; everything

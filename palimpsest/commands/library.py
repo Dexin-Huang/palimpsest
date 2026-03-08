@@ -6,6 +6,8 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
+from palimpsest.config import DEFAULT_MEDIA_RESOLUTION, DEFAULT_MODEL_VISION
+from palimpsest.library.clean import CleanConfig, clean_document
 from palimpsest.library.config import LIBRARY_ROOT
 from palimpsest.library.download import download_pages
 from palimpsest.library.iiif import build_page_list
@@ -13,6 +15,7 @@ from palimpsest.library.intake import ingest_document
 from palimpsest.library.io import read_json
 from palimpsest.library.metadata import update_metadata
 from palimpsest.library.run import run_document
+from palimpsest.transcription.estimate import estimate_cost
 
 
 def _load_json(path: Path) -> dict:
@@ -51,6 +54,19 @@ def cmd_intake(args: argparse.Namespace) -> None:
         page_list = build_page_list(args.manifest, size=args.size)
         if "source_url" not in metadata:
             metadata["source_url"] = args.manifest
+        manifest_summary = page_list.get("manifest_summary") or {}
+        if manifest_summary:
+            metadata.setdefault("source_catalog", manifest_summary)
+            if manifest_summary.get("label"):
+                metadata.setdefault("source_label", manifest_summary["label"])
+            if manifest_summary.get("title") and not manifest_summary.get("title_is_shelfmark"):
+                metadata.setdefault("title", manifest_summary["title"])
+            if manifest_summary.get("date"):
+                metadata.setdefault("date", manifest_summary["date"])
+            if manifest_summary.get("language"):
+                metadata.setdefault("language", manifest_summary["language"])
+            if manifest_summary.get("place"):
+                metadata.setdefault("place", manifest_summary["place"])
     else:
         raise SystemExit("Provide --page-list or --manifest")
 
@@ -89,6 +105,47 @@ def cmd_run(args: argparse.Namespace) -> None:
     if not doc_dir.exists():
         raise SystemExit(f"Missing document folder: {doc_dir}")
 
+    # Determine use_cleaned: None=auto, True=force, False=force-not
+    if args.use_cleaned:
+        use_cleaned = True
+    elif args.no_cleaned:
+        use_cleaned = False
+    else:
+        use_cleaned = None  # Auto-detect
+
+    # Determine which images directory will be used
+    if use_cleaned:
+        images_dir = doc_dir / "images_cleaned"
+    elif use_cleaned is False:
+        images_dir = doc_dir / "images"
+    else:
+        # Auto-detect
+        cleaned = doc_dir / "images_cleaned"
+        original = doc_dir / "images"
+        if cleaned.exists() and list(cleaned.glob(args.pattern)):
+            images_dir = cleaned
+        else:
+            images_dir = original
+
+    # Estimate cost if requested
+    if args.estimate:
+        if not images_dir.exists():
+            raise SystemExit(f"Images directory not found: {images_dir}")
+
+        estimate = estimate_cost(
+            image_dir=images_dir,
+            pattern=args.pattern,
+            model=DEFAULT_MODEL_VISION,
+            pass_mode=args.pass_mode,
+            media_resolution=DEFAULT_MEDIA_RESOLUTION or "high",
+        )
+        print("=" * 50)
+        print("COST ESTIMATE")
+        print("=" * 50)
+        print(estimate.summary())
+        print("=" * 50)
+        return
+
     run_document(
         doc_dir=doc_dir,
         prompt_set=args.prompt_set,
@@ -100,6 +157,43 @@ def cmd_run(args: argparse.Namespace) -> None:
         download_first=not args.skip_download,
         pattern=args.pattern,
         master_path=Path(args.master) if args.master else None,
+        use_cleaned=use_cleaned,
+        use_cache=not args.no_cache,
+    )
+
+
+def cmd_clean(args: argparse.Namespace) -> None:
+    doc_dir = Path(args.library_root) / args.doc_id
+    if not doc_dir.exists():
+        raise SystemExit(f"Missing document folder: {doc_dir}")
+
+    config = CleanConfig(
+        k_high=args.k_high,
+        k_low=args.k_low,
+        hysteresis_window=args.hysteresis_window,
+        sauvola_k=args.sauvola_k,
+        sauvola_window=args.sauvola_window,
+        sauvola_median=args.sauvola_median,
+        hysteresis_weight=args.hysteresis_weight,
+        sauvola_weight=args.sauvola_weight,
+        binarization_weight=args.binarization_weight,
+        use_docres=not args.no_docres,
+        docres_max_dim=args.docres_max_dim,
+    )
+
+    result = clean_document(
+        doc_dir=doc_dir,
+        output_subdir=args.output_dir,
+        pattern=args.pattern,
+        workers=args.workers,
+        limit=args.limit,
+        overwrite=args.overwrite,
+        config=config,
+    )
+
+    print(
+        f"Cleaned {result['processed']} pages "
+        f"(failed: {result.get('failed', 0)}) -> {result.get('output_dir', '')}"
     )
 
 
@@ -198,16 +292,19 @@ def cmd_import_project(args: argparse.Namespace) -> None:
 
     _copy_tree(images_src, doc_dir / "images", args.overwrite)
     _copy_tree(exports_src / "transcriptions_full", doc_dir / "exports" / "transcriptions_full", args.overwrite)
+    _copy_tree(exports_src / "canonical_pages", doc_dir / "exports" / "canonical_pages", args.overwrite)
+    _copy_tree(exports_src / "restoration", doc_dir / "exports" / "restoration", args.overwrite)
     _copy_tree(exports_src / "book", doc_dir / "exports" / "book", args.overwrite)
 
-    book_index = doc_dir / "exports" / "book" / "book_index.json"
-    if book_index.exists():
-        index = read_json(book_index)
-        missing_final = index.get("missing_final", [])
-        status = "assembled_partial" if missing_final else "assembled"
+    restoration_manifest = doc_dir / "exports" / "restoration" / "restoration_manifest.json"
+    if restoration_manifest.exists():
+        restoration = read_json(restoration_manifest)
         update_metadata(
             doc_dir,
-            {"status": status, "missing_final_count": len(missing_final)},
+            {
+                "status": "assembled",
+                "restored_pages": restoration.get("total_pages", 0),
+            },
         )
     else:
         update_metadata(doc_dir, {"status": "assembled_missing"})
@@ -258,7 +355,19 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     run.add_argument("--auto-skip-non-text", action="store_true")
     run.add_argument("--skip-download", action="store_true")
     run.add_argument("--pattern", default="*.jpg", help="Image glob pattern (default: *.jpg)")
+    run.add_argument("--estimate", action="store_true", help="Show cost estimate without running")
     run.add_argument("--master", help="Master discovery JSONL to sync (optional)")
+    run.add_argument("--no-cache", action="store_true",
+                     help="Disable context caching (saves API setup time for small batches)")
+    cleaned_group = run.add_mutually_exclusive_group()
+    cleaned_group.add_argument(
+        "--use-cleaned", action="store_true",
+        help="Force use of cleaned images (images_cleaned/)"
+    )
+    cleaned_group.add_argument(
+        "--no-cleaned", action="store_true",
+        help="Force use of original images (images/), even if cleaned exist"
+    )
     run.set_defaults(func=cmd_run)
 
     status = sub.add_parser("status", help="Summarize library status")
@@ -268,6 +377,32 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     status.add_argument("--list", action="store_true", help="List doc_id and status")
     status.add_argument("--limit", type=int, default=50, help="Max rows when listing")
     status.set_defaults(func=cmd_status)
+
+    # Clean subparser
+    clean = sub.add_parser("clean", help="Clean bleed-through from manuscript images")
+    clean.add_argument("--doc-id", required=True, help="Document ID")
+    clean.add_argument("--library-root", default=str(LIBRARY_ROOT), help="Library root path")
+    clean.add_argument("--output-dir", default="images_cleaned", help="Output subfolder name")
+    clean.add_argument("--pattern", default="*.jpg", help="Image glob pattern")
+    clean.add_argument("--limit", type=int, help="Max images to process")
+    clean.add_argument("--workers", type=int, default=4, help="Parallel workers (CPU)")
+    clean.add_argument("--overwrite", action="store_true", help="Overwrite existing cleaned images")
+    # Hysteresis parameters
+    clean.add_argument("--k-high", type=float, default=0.10, help="Hysteresis high threshold k")
+    clean.add_argument("--k-low", type=float, default=0.20, help="Hysteresis low threshold k")
+    clean.add_argument("--hysteresis-window", type=int, default=25, help="Hysteresis window size")
+    # Sauvola parameters
+    clean.add_argument("--sauvola-k", type=float, default=0.30, help="Sauvola k parameter")
+    clean.add_argument("--sauvola-window", type=int, default=25, help="Sauvola window size")
+    clean.add_argument("--sauvola-median", type=int, default=3, help="Sauvola median filter size")
+    # Blend weights
+    clean.add_argument("--hysteresis-weight", type=float, default=0.33, help="Hysteresis blend weight")
+    clean.add_argument("--sauvola-weight", type=float, default=0.34, help="Sauvola blend weight")
+    clean.add_argument("--binarization-weight", type=float, default=0.33, help="DocRes blend weight")
+    # DocRes options
+    clean.add_argument("--no-docres", action="store_true", help="Skip DocRes (CPU-only mode)")
+    clean.add_argument("--docres-max-dim", type=int, default=1800, help="Max dimension for DocRes")
+    clean.set_defaults(func=cmd_clean)
 
     imp = sub.add_parser("import-project", help="Import a legacy project into library/")
     imp.add_argument("--doc-id", required=True, help="Document ID")
@@ -291,4 +426,3 @@ def main(argv: list[str] | None = None) -> None:
     add_subparser(subparsers)
     args = parser.parse_args(argv)
     args.func(args)
-

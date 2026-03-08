@@ -4,8 +4,11 @@ import argparse
 from pathlib import Path
 
 from palimpsest.config import DEFAULT_MODEL_READING
+from palimpsest.page_continuity import run_page_handoff, run_window_synthesis
+from palimpsest.page_packet import create_page_packet
 from palimpsest.page_prepare import prepare_image
 from palimpsest.page_reading import run_page_reading, run_section_synthesis
+from palimpsest.packet_render import render_packet_edition
 
 
 def cmd_prepare(args: argparse.Namespace) -> None:
@@ -37,6 +40,26 @@ def cmd_read(args: argparse.Namespace) -> None:
     print(f"chars: {artifact.char_count}")
 
 
+def cmd_packet(args: argparse.Namespace) -> None:
+    packet, packet_path = create_page_packet(
+        Path(args.image),
+        out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
+        prepare=not args.raw,
+        previous_packet_path=Path(args.previous_packet).resolve() if args.previous_packet else None,
+        previous_handoff_path=Path(args.previous_handoff).resolve() if args.previous_handoff else None,
+        window_synthesis_path=Path(args.window).resolve() if args.window else None,
+    )
+    print(f"packet: {packet_path}")
+    print(f"page_unit: {packet.page_unit}")
+    if packet.prepared_image_path:
+        print(f"prepared_image: {packet.prepared_image_path}")
+    if packet.continuity.previous_handoff_path:
+        print(f"previous_handoff: {packet.continuity.previous_handoff_path}")
+    if packet.continuity.window_synthesis_path:
+        print(f"window_synthesis: {packet.continuity.window_synthesis_path}")
+    print(f"next_action: {packet.workflow.next_action}")
+
+
 def cmd_synthesize(args: argparse.Namespace) -> None:
     artifact = run_section_synthesis(
         [Path(item) for item in args.input],
@@ -53,14 +76,64 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
     print(f"chars: {artifact.char_count}")
 
 
+def cmd_render(args: argparse.Namespace) -> None:
+    artifact = render_packet_edition(
+        Path(args.packet),
+        engine=args.engine,
+        keep_logs=args.keep_logs,
+    )
+    print(f"pdf: {artifact.pdf_path}")
+    print(f"tex: {artifact.tex_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"engine: {artifact.engine_path}")
+
+
+def cmd_handoff(args: argparse.Namespace) -> None:
+    artifact = run_page_handoff(
+        Path(args.packet),
+        out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
+        prompt_file=Path(args.prompt_file).resolve() if args.prompt_file else None,
+        model=args.model,
+        next_page_id=args.next_page_id,
+        previous_handoff_path=Path(args.previous_handoff).resolve() if args.previous_handoff else None,
+    )
+    print(f"handoff_json: {artifact.json_path}")
+    print(f"handoff_md: {artifact.markdown_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"model: {artifact.model}")
+
+
+def cmd_window(args: argparse.Namespace) -> None:
+    artifact = run_window_synthesis(
+        [Path(item) for item in args.packet],
+        out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
+        prompt_file=Path(args.prompt_file).resolve() if args.prompt_file else None,
+        model=args.model,
+        center_page_id=args.center_page_id,
+    )
+    print(f"window_json: {artifact.json_path}")
+    print(f"window_md: {artifact.markdown_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"model: {artifact.model}")
+
+
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
-    parser = subparsers.add_parser("page", help="Prepare, read, and synthesize page-level witness artifacts")
+    parser = subparsers.add_parser("page", help="Prepare, packetize, read, and synthesize page-level witness artifacts")
     sub = parser.add_subparsers(dest="page_cmd", required=True)
 
     prepare = sub.add_parser("prepare", help="Deterministically crop a page down to its manuscript content area")
     prepare.add_argument("--image", required=True, help="Source image to prepare")
     prepare.add_argument("--out-dir", help="Output directory for prepared image artifact")
     prepare.set_defaults(func=cmd_prepare)
+
+    packet = sub.add_parser("packet", help="Create a scholar-facing page packet with stubs and edition template")
+    packet.add_argument("--image", required=True, help="Source image to packetize")
+    packet.add_argument("--out-dir", help="Output directory for page packet")
+    packet.add_argument("--raw", action="store_true", help="Skip automatic preparation and packetize the raw image")
+    packet.add_argument("--previous-packet", help="Optional previous packet.json for continuity")
+    packet.add_argument("--previous-handoff", help="Optional previous page_handoff.json or .md for continuity")
+    packet.add_argument("--window", help="Optional local window_synthesis.json or .md for continuity")
+    packet.set_defaults(func=cmd_packet)
 
     read = sub.add_parser("read", help="Run the focused witness prompt on one page image")
     read.add_argument("--image", required=True, help="Source image to read")
@@ -90,3 +163,39 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         help=f"Multimodal synthesis model (default: {DEFAULT_MODEL_READING})",
     )
     synthesize.set_defaults(func=cmd_synthesize)
+
+    render = sub.add_parser("render", help="Deterministically compile a packet edition PDF with tectonic")
+    render.add_argument("--packet", required=True, help="Path to packet.json")
+    render.add_argument("--engine", help="Explicit path to the tectonic binary")
+    render.add_argument("--keep-logs", action="store_true", help="Ask tectonic to keep LaTeX log files")
+    render.set_defaults(func=cmd_render)
+
+    handoff = sub.add_parser("handoff", help="Generate a compact forward handoff from one completed page packet")
+    handoff.add_argument("--packet", required=True, help="Path to packet.json")
+    handoff.add_argument("--next-page-id", help="Optional next page id to carry in the handoff")
+    handoff.add_argument("--previous-handoff", help="Optional previous handoff markdown or JSON to compress with this page")
+    handoff.add_argument("--out-dir", help="Output directory for handoff artifacts")
+    handoff.add_argument("--prompt-file", help="Explicit handoff prompt file path")
+    handoff.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Multimodal model for continuity compression (default: {DEFAULT_MODEL_READING})",
+    )
+    handoff.set_defaults(func=cmd_handoff)
+
+    window = sub.add_parser("window", help="Generate a compact sliding-window synthesis from adjacent page packets")
+    window.add_argument(
+        "--packet",
+        action="append",
+        required=True,
+        help="Input packet.json path in reading order; repeat for each packet in the window",
+    )
+    window.add_argument("--center-page-id", help="Optional explicit center page id for the window")
+    window.add_argument("--out-dir", help="Output directory for window synthesis artifacts")
+    window.add_argument("--prompt-file", help="Explicit window prompt file path")
+    window.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Multimodal model for window synthesis (default: {DEFAULT_MODEL_READING})",
+    )
+    window.set_defaults(func=cmd_window)

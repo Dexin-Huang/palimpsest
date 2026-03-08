@@ -1,0 +1,169 @@
+{
+  "manifest_url": "https://digi.vatlib.it/iiif/MSS_Borg.cin.381/manifest.json",
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "f001r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0001.jp2/full/max/0/default.jpg",
+      "filename": "f001r.jpg",
+      "order": 1,
+      "width": 2352,
+      "height": 1781,
+      "label": "1"
+    },
+    {
+      "page_id": "f002r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0002.jp2/full/max/0/default.jpg",
+      "filename": "f002r.jpg",
+      "order": 2,
+      "width": 1964,
+      "height": 1785,
+      "label": "2"
+    },
+    {
+      "page_id": "f003r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0003.jp2/full/max/0/default.jpg",
+      "filename": "f003r.jpg",
+      "order": 3,
+      "width": 1964,
+      "height": 1785,
+      "label": "3"
+    },
+    {
+      "page_id": "f004r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0004.jp2/full/max/0/default.jpg",
+      "filename": "f004r.jpg",
+      "order": 4,
+      "width": 1964,
+      "height": 1785,
+      "label": "4"
+    },
+    {
+      "page_id": "f005r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0005.jp2/full/max/0/default.jpg",
+      "filename": "f005r.jpg",
+      "order": 5,
+      "width": 1964,
+      "height": 1785,
+      "label": "5"
+    },
+    {
+      "page_id": "f006r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0006.jp2/full/max/0/default.jpg",
+      "filename": "f006r.jpg",
+      "order": 6,
+      "width": 2004,
+      "height": 1788,
+      "label": "6"
+    },
+    {
+      "page_id": "f007r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0007.jp2/full/max/0/default.jpg",
+      "filename": "f007r.jpg",
+      "order": 7,
+      "width": 2004,
+      "height": 1788,
+      "label": "7"
+    },
+    {
+      "page_id": "f008r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0008.jp2/full/max/0/default.jpg",
+      "filename": "f008r.jpg",
+      "order": 8,
+      "width": 2004,
+      "height": 1788,
+      "label": "8"
+    },
+    {
+      "page_id": "f009r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0009.jp2/full/max/0/default.jpg",
+      "filename": "f009r.jpg",
+      "order": 9,
+      "width": 2004,
+      "height": 1788,
+      "label": "9"
+    },
+    {
+      "page_id": "f010r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0010.jp2/full/max/0/default.jpg",
+      "filename": "f010r.jpg",
+      "order": 10,
+      "width": 2004,
+      "height": 1788,
+      "label": "10"
+    },
+    {
+      "page_id": "f011r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0011.jp2/full/max/0/default.jpg",
+      "filename": "f011r.jpg",
+      "order": 11,
+      "width": 2004,
+      "height": 1788,
+      "label": "11"
+    },
+    {
+      "page_id": "f012r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0012.jp2/full/max/0/default.jpg",
+      "filename": "f012r.jpg",
+      "order": 12,
+      "width": 2004,
+      "height": 1788,
+      "label": "12"
+    },
+    {
+      "page_id": "f013r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0013.jp2/full/max/0/default.jpg",
+      "filename": "f013r.jpg",
+      "order": 13,
+      "width": 2004,
+      "height": 1788,
+      "label": "13"
+    },
+    {
+      "page_id": "f014r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0014.jp2/full/max/0/default.jpg",
+      "filename": "f014r.jpg",
+      "order": 14,
+      "width": 2004,
+      "height": 1788,
+      "label": "14"
+    },
+    {
+      "page_id": "f015r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0015.jp2/full/max/0/default.jpg",
+      "filename": "f015r.jpg",
+      "order": 15,
+      "width": 2004,
+      "height": 1788,
+      "label": "15"
+    },
+    {
+      "page_id": "f016r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0016.jp2/full/max/0/default.jpg",
+      "filename": "f016r.jpg",
+      "order": 16,
+      "width": 2004,
+      "height": 1788,
+      "label": "16"
+    },
+    {
+      "page_id": "f017r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0017.jp2/full/max/0/default.jpg",
+      "filename": "f017r.jpg",
+      "order": 17,
+      "width": 2004,
+      "height": 1788,
+      "label": "17"
+    },
+    {
+      "page_id": "f018r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Borg.cin.381/Borg.cin.381_0018.jp2/full/max/0/default.jpg",
+      "filename": "f018r.jpg",
+      "order": 18,
+      "width": 2004,
+      "height": 1788,
+      "label": "18"
+    }
+  ],
+  "doc_id": "vatican_borg_cin_381"
+}

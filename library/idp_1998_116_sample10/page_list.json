@@ -1,0 +1,126 @@
+{
+  "manifest_url": "https://data.idp.bl.uk/iiif/3/manifest/42902D60462D4985AB4B23450BC60D7D",
+  "manifest_label": "Daoist manuscript from Dunhuang",
+  "manifest_summary": {
+    "label": "Daoist manuscript from Dunhuang",
+    "title": "Daoist manuscript from Dunhuang",
+    "title_is_shelfmark": true,
+    "shelfmark": "Daoist manuscript from Dunhuang",
+    "author": null,
+    "contributor": null,
+    "date": null,
+    "language": null,
+    "place": null,
+    "description": null,
+    "metadata_field_count": 3,
+    "metadata_entries": [
+      {
+        "label": "Pressmark",
+        "value": "1998-116"
+      },
+      {
+        "label": "Description",
+        "value": "Manuscript scroll believed to be from Dunhuang.\u00a0 Removed in 1910 for Beijing.\u00a0 Ended up in the Fanjiang Ge  hall of Li Shengduo (Muzhai ) of Dehua.\u00a0 After Li Shengduo died, the work was purchased by Zhang Guchu (1890-1968; i.e., Zhang Hong, a Cantonese painter working in an art publishing firm in the 1930s) in 1947 (dinghai) [recorded in his 'Jichuanan suo cang Dunhuang shishi tulu' manuscript copy].\u00a0 Ye Gongchuo was one of the few people to see this work when it was in Li Shengduo's collection.\u00a0 After it went to Zhang Guchu, it was viewed by Huang Binhong and Ye.\u00a0 When Rao Zongyi wrote about this piece, it was still in Zhang Guchu's coll.\u00a0 In 1960, it became part of the Peng family coll. in Hong Kong, and it entered the John B. Elliott coll. in 1985."
+      },
+      {
+        "label": "Reading Direction",
+        "value": "Right to left"
+      }
+    ],
+    "canvas_count": 38
+  },
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "f000r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/9E77C4521C12416197FDA7DC8538A1CC/full/max/0/default.jpg",
+      "filename": "f000r.jpg",
+      "order": 1,
+      "width": 13989,
+      "height": 1476,
+      "label": "0"
+    },
+    {
+      "page_id": "f001r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/0065BB9716FA4B398C1CF8B47990CEB7/full/max/0/default.jpg",
+      "filename": "f001r.jpg",
+      "order": 2,
+      "width": 10063,
+      "height": 1476,
+      "label": "1"
+    },
+    {
+      "page_id": "f002r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/C35BCE2ACD3C47D48F95D139C64FB6A2/full/max/0/default.jpg",
+      "filename": "f002r.jpg",
+      "order": 3,
+      "width": 1108,
+      "height": 1476,
+      "label": "2"
+    },
+    {
+      "page_id": "f003r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/5B06ABA11A6843EA920453D8D952FECD/full/max/0/default.jpg",
+      "filename": "f003r.jpg",
+      "order": 4,
+      "width": 1108,
+      "height": 1476,
+      "label": "3"
+    },
+    {
+      "page_id": "f004r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/A929B0E9BAE8426DA9007612BB31171C/full/max/0/default.jpg",
+      "filename": "f004r.jpg",
+      "order": 5,
+      "width": 1108,
+      "height": 1476,
+      "label": "4"
+    },
+    {
+      "page_id": "f005r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/D1A747940F8F41629459E22E8839A20B/full/max/0/default.jpg",
+      "filename": "f005r.jpg",
+      "order": 6,
+      "width": 1108,
+      "height": 1476,
+      "label": "5"
+    },
+    {
+      "page_id": "f006r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/5DF52084CF6F42B48CD3D572A0189FB3/full/max/0/default.jpg",
+      "filename": "f006r.jpg",
+      "order": 7,
+      "width": 1108,
+      "height": 1476,
+      "label": "6"
+    },
+    {
+      "page_id": "f007r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/553DA4AF4F864F8B86FD0A90C772141C/full/max/0/default.jpg",
+      "filename": "f007r.jpg",
+      "order": 8,
+      "width": 1108,
+      "height": 1476,
+      "label": "7"
+    },
+    {
+      "page_id": "f008r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/F50C1C0180D540C58FE3BEC10D4923A7/full/max/0/default.jpg",
+      "filename": "f008r.jpg",
+      "order": 9,
+      "width": 1108,
+      "height": 1476,
+      "label": "8"
+    },
+    {
+      "page_id": "f009r",
+      "url": "https://data.idp.bl.uk/image/iiif/3/66FE1E7EE56F46A09D8A7807D8BA8D7E/full/max/0/default.jpg",
+      "filename": "f009r.jpg",
+      "order": 10,
+      "width": 1108,
+      "height": 1476,
+      "label": "9"
+    }
+  ],
+  "doc_id": "idp_1998_116_sample10"
+}

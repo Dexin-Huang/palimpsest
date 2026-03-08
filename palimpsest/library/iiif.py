@@ -6,6 +6,65 @@ from typing import Any
 import requests
 
 
+def normalize_manifest_text(value: Any) -> str:
+    """Flatten common IIIF text structures to a plain string."""
+    if isinstance(value, dict):
+        for vals in value.values():
+            if vals:
+                return vals[0] if isinstance(vals, list) else str(vals)
+        return ""
+    if isinstance(value, list):
+        return str(value[0]) if value else ""
+    return str(value) if value is not None else ""
+
+
+def _same_catalog_token(left: str, right: str) -> bool:
+    norm = lambda s: re.sub(r"[^a-z0-9]+", "", s.lower())
+    return bool(left and right and norm(left) == norm(right))
+
+
+def _count_canvases(manifest: dict) -> int:
+    return len(extract_canvases(manifest))
+
+
+def extract_manifest_summary(manifest: dict) -> dict:
+    """Extract a conservative source-catalog summary from an IIIF manifest."""
+    metadata_entries: list[dict[str, str]] = []
+    metadata_map: dict[str, str] = {}
+
+    for entry in manifest.get("metadata", []) or []:
+        label = normalize_manifest_text(entry.get("label")).strip()
+        value = normalize_manifest_text(entry.get("value")).strip()
+        if not label:
+            continue
+        metadata_entries.append({"label": label, "value": value})
+        key = re.sub(r"\s+", " ", label).strip().lower()
+        if key and key not in metadata_map and value:
+            metadata_map[key] = value
+
+    label = normalize_manifest_text(manifest.get("label")).strip()
+    description = normalize_manifest_text(manifest.get("description")).strip()
+    shelfmark = metadata_map.get("shelfmark") or label
+    title = metadata_map.get("title") or label
+    title_is_shelfmark = _same_catalog_token(title, shelfmark)
+
+    return {
+        "label": label or None,
+        "title": title or None,
+        "title_is_shelfmark": title_is_shelfmark,
+        "shelfmark": shelfmark or None,
+        "author": metadata_map.get("author") or metadata_map.get("creator"),
+        "contributor": metadata_map.get("contributor") or metadata_map.get("other name"),
+        "date": metadata_map.get("date") or metadata_map.get("dat"),
+        "language": metadata_map.get("language") or metadata_map.get("lingua"),
+        "place": metadata_map.get("place") or metadata_map.get("origin"),
+        "description": description or None,
+        "metadata_field_count": len(metadata_entries),
+        "metadata_entries": metadata_entries,
+        "canvas_count": _count_canvases(manifest),
+    }
+
+
 def fetch_manifest(url: str) -> dict:
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
@@ -85,6 +144,8 @@ def extract_canvases(manifest: dict) -> list[dict]:
 
 def build_image_url(service_url: str, size: int | str) -> str:
     base = service_url.rstrip("/")
+    if re.search(r"\.(?:jpg|jpeg|png|webp|tif|tiff)$", base, re.I):
+        return base
     if isinstance(size, str) and size.lower() in ("max", "full"):
         size_param = "max"
     else:
@@ -109,6 +170,7 @@ def build_page_list(manifest_url: str, size: int | str = "max") -> dict:
     canvases = extract_canvases(manifest)
     if not canvases:
         raise ValueError("No canvases found in manifest")
+    manifest_summary = extract_manifest_summary(manifest)
     pages: list[dict] = []
     used: set[str] = set()
     for idx, canvas in enumerate(canvases):
@@ -134,6 +196,8 @@ def build_page_list(manifest_url: str, size: int | str = "max") -> dict:
         )
     return {
         "manifest_url": manifest_url,
+        "manifest_label": manifest_summary.get("label"),
+        "manifest_summary": manifest_summary,
         "image_size": size,
         "pages": pages,
     }

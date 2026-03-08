@@ -13,6 +13,12 @@ from google.genai import types
 from palimpsest.config import DEFAULT_MEDIA_RESOLUTION, DEFAULT_THINKING_LEVEL
 from palimpsest.vision.agentic import extract_agentic_vision_response
 
+from .cache import (
+    CacheManager,
+    extract_pass2_instruction,
+    is_cacheable_text,
+    is_caching_supported,
+)
 from .config import RunConfig
 from .flags import load_page_flags
 from .io import atomic_write_text, hash_text, strip_json_fences, validate_json_file, validate_json_text
@@ -39,18 +45,89 @@ def _resolve_media_resolution():
     return getattr(types.MediaResolution, attr, None)
 
 
-def _build_genai_config() -> types.GenerateContentConfig:
+def _find_doc_dir(image_path: Path, out_dir: Path) -> Optional[Path]:
+    """Find the nearest document root for prompt/context inference."""
+    candidates: list[Path] = []
+    candidates.extend(image_path.parents)
+    candidates.extend(out_dir.parents)
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if (candidate / "metadata.json").exists() and (candidate / "page_list.json").exists():
+            return candidate
+    return None
+
+
+def _build_genai_config(
+    use_code_execution: bool = True,
+    use_thinking: bool = True,
+    response_json: bool = False,
+) -> types.GenerateContentConfig:
     kwargs = {
-        "tools": [types.Tool(code_execution={})],
         "temperature": 0.1,
+        "max_output_tokens": 65536,  # Must be explicit - default is only 8192
     }
-    thinking_level = _resolve_thinking_level()
-    if thinking_level:
-        kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=thinking_level)
+    if use_code_execution:
+        kwargs["tools"] = [types.Tool(code_execution={})]
+    elif response_json:
+        kwargs["response_mime_type"] = "application/json"
+    if use_thinking:
+        thinking_level = _resolve_thinking_level()
+        if thinking_level:
+            kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=thinking_level)
     media_resolution = _resolve_media_resolution()
     if media_resolution:
         kwargs["media_resolution"] = media_resolution
     return types.GenerateContentConfig(**kwargs)
+
+
+def _resolve_prompt_doc_id(image_path: Path, out_dir: Path) -> str:
+    doc_dir = _find_doc_dir(image_path, out_dir)
+    if doc_dir is not None:
+        metadata_path = doc_dir / "metadata.json"
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            doc_id = metadata.get("doc_id")
+            if isinstance(doc_id, str) and doc_id:
+                return doc_id
+        except Exception:
+            pass
+    if doc_dir is not None and doc_dir.name and doc_dir.name != "exports":
+        return doc_dir.name
+    return image_path.parent.name or "unknown_doc"
+
+
+def _resolve_prompt_image_path(image_path: Path, out_dir: Path) -> str:
+    doc_dir = _find_doc_dir(image_path, out_dir)
+    if doc_dir is not None and image_path.parent.name == "images_cleaned":
+        original_candidate = doc_dir / "images" / image_path.name
+        if original_candidate.exists():
+            return f"images/{image_path.name}"
+    if doc_dir is not None and image_path.is_relative_to(doc_dir):
+        return str(image_path.relative_to(doc_dir)).replace("\\", "/")
+    if image_path.parent.name:
+        return f"{image_path.parent.name}/{image_path.name}"
+    return image_path.name
+
+
+def _fill_prompt_context(prompt: str, image_path: Path, out_dir: Path) -> str:
+    return (
+        prompt.replace("__PAGE_ID__", image_path.stem)
+        .replace("__DOC_ID__", _resolve_prompt_doc_id(image_path, out_dir))
+        .replace("__IMAGE_PATH__", _resolve_prompt_image_path(image_path, out_dir))
+    )
+
+
+def _prompt_context_block(image_path: Path, out_dir: Path) -> str:
+    return (
+        "Page context:\n"
+        f"- page_id: {image_path.stem}\n"
+        f"- doc_id: {_resolve_prompt_doc_id(image_path, out_dir)}\n"
+        f"- source_image_path: {_resolve_prompt_image_path(image_path, out_dir)}"
+    )
 
 
 @dataclass
@@ -63,6 +140,8 @@ class RunContext:
     expected_stems: list[str]
     out_dir: Path
     skip_pass2: dict[str, str]
+    pass1_cache_name: Optional[str] = None
+    pass2_cache_name: Optional[str] = None
 
     def event(self, stage: str, status: str, extra: Optional[dict] = None) -> None:
         payload = {
@@ -157,19 +236,32 @@ def transcribe_pass1(
     client: genai.Client,
     image_path: Path,
     prompt: str,
+    prompt_context: str,
     model: str,
     output_format: str,
+    cache_name: Optional[str] = None,
+    use_code_execution: bool = True,
+    use_thinking: bool = True,
 ) -> object:
     image_bytes = image_path.read_bytes()
     image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
 
-    config = _build_genai_config()
-    # Note: response_mime_type is not supported with code_execution (Agentic Vision).
-    # We rely on the prompt to return JSON and validate it downstream.
+    config = _build_genai_config(
+        use_code_execution=use_code_execution,
+        use_thinking=use_thinking,
+        response_json=(output_format == "json" and not use_code_execution),
+    )
+
+    if cache_name:
+        # Use cached general prompt and send the per-page context explicitly.
+        config.cached_content = cache_name
+        contents = [prompt_context, image_part]
+    else:
+        contents = [prompt, image_part]
 
     return client.models.generate_content(
         model=model,
-        contents=[prompt, image_part],
+        contents=contents,
         config=config,
     )
 
@@ -179,20 +271,28 @@ def transcribe_pass2(
     image_path: Path,
     draft: str,
     refine_prompt_template: str,
+    prompt_context: str,
     model: str,
     output_format: str,
+    cache_name: Optional[str] = None,
 ) -> object:
     image_bytes = image_path.read_bytes()
     image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-    prompt = refine_prompt_template.replace("{draft_transcription}", draft)
 
-    config = _build_genai_config()
-    # Note: response_mime_type is not supported with code_execution (Agentic Vision).
-    # We rely on the prompt to return JSON and validate it downstream.
+    # Pass 2 uses standard vision (no code_execution, no thinking) since it's refinement, not discovery
+    config = _build_genai_config(use_code_execution=False, use_thinking=False)
+
+    if cache_name:
+        # System instruction is cached, send page context + draft + image as content.
+        config.cached_content = cache_name
+        contents = [prompt_context, draft, image_part]
+    else:
+        prompt = refine_prompt_template.replace("{draft_transcription}", draft)
+        contents = [prompt, image_part]
 
     return client.models.generate_content(
         model=model,
-        contents=[prompt, image_part],
+        contents=contents,
         config=config,
     )
 
@@ -232,6 +332,49 @@ def _analyze_pass1(text: str) -> dict:
         data = json.loads(text)
     except Exception:
         return {"total_lines": 0, "total_chars": 0, "columns": 0, "notes": []}
+
+    if data.get("schema_version") == "canonical.page":
+        zones = data.get("zones", [])
+        total_lines = 0
+        total_chars = 0
+        if isinstance(zones, list):
+            for zone in zones:
+                if not isinstance(zone, dict):
+                    continue
+                text_obj = zone.get("text", {})
+                if not isinstance(text_obj, dict):
+                    continue
+                value = (
+                    text_obj.get("source_diplomatic")
+                    or text_obj.get("source_normalized")
+                    or text_obj.get("la_diplomatic")
+                    or text_obj.get("es_diplomatic")
+                    or text_obj.get("la_normalized")
+                    or text_obj.get("es_normalized")
+                    or ""
+                )
+                if value is None:
+                    continue
+                total_lines += 1
+                total_chars += len(str(value))
+            layout = data.get("layout", {})
+            if isinstance(layout, dict):
+                columns = layout.get("columns", 1)
+            else:
+                columns = 1
+        else:
+            columns = 1
+        reading = data.get("reading", {})
+        notable = reading.get("notable_features", []) if isinstance(reading, dict) else []
+        classification = data.get("classification", {})
+        page_type = classification.get("page_type") if isinstance(classification, dict) else None
+        return {
+            "total_lines": total_lines,
+            "total_chars": total_chars,
+            "columns": columns if isinstance(columns, int) else 1,
+            "notes": notable if isinstance(notable, list) else [],
+            "page_type": page_type,
+        }
 
     columns = data.get("columns", [])
     page_type = data.get("page_type")
@@ -282,7 +425,9 @@ def transcribe_page(
     ext = "json" if run_config.output_format == "json" else "txt"
     pass1_path = out_dir / f"{base}_pass1.{ext}"
     pass2_path = out_dir / f"{base}_final.{ext}"
-    pass1_prompt, refine_prompt = context.prompt_pair
+    pass1_prompt = _fill_prompt_context(context.prompt_pair[0], image_path, out_dir)
+    refine_prompt = _fill_prompt_context(context.prompt_pair[1], image_path, out_dir)
+    prompt_context = _prompt_context_block(image_path, out_dir)
     pass1_hash = context.prompt_hashes["pass1"]
     pass2_hash = context.prompt_hashes["pass2"]
     do_pass1 = run_config.pass_mode in ("both", "pass1")
@@ -301,6 +446,10 @@ def transcribe_page(
     if client is None:
         client = genai.Client()
 
+    minimal_prompt_set = (run_config.prompt.prompt_set or "").strip().lower() == "transcription_minimal_json"
+    pass1_use_code_execution = not minimal_prompt_set
+    pass1_use_thinking = not minimal_prompt_set
+
     pass1_text: Optional[str] = None
     if run_config.skip_existing and pass1_path.exists():
         json_error = validate_json_file(pass1_path) if run_config.output_format == "json" else None
@@ -318,7 +467,10 @@ def transcribe_page(
 
         def call_pass1():
             return transcribe_pass1(
-                client, image_path, pass1_prompt, run_config.model, run_config.output_format
+                client, image_path, pass1_prompt, prompt_context, run_config.model, run_config.output_format,
+                cache_name=context.pass1_cache_name,
+                use_code_execution=pass1_use_code_execution,
+                use_thinking=pass1_use_thinking,
             )
 
         def trace_pass1(agentic, response, text: str) -> None:
@@ -457,8 +609,10 @@ def transcribe_page(
                 image_path,
                 pass1_text or "",
                 refine_prompt,
+                prompt_context,
                 run_config.model,
                 run_config.output_format,
+                cache_name=context.pass2_cache_name,
             )
 
         def trace_pass2(agentic, response, text: str) -> None:
@@ -551,18 +705,31 @@ def _summarize(results: list[dict], verbose: bool, pass_mode: str) -> tuple[int,
     return complete, failed
 
 
-def _maybe_assemble(out_dir: Path, output_format: str, pass_mode: str) -> None:
+def _maybe_assemble(image_dir: Path, out_dir: Path, output_format: str, pass_mode: str) -> None:
     if output_format != "json" or pass_mode == "pass1":
         return
     try:
-        from palimpsest.book import assemble_book
+        from palimpsest.canonical import export_canonical_pages
 
-        index = assemble_book(out_dir)
-        print(f"\nBook assembled: {index['total_pages']} pages")
-        if index.get("missing_final"):
-            print(f"Missing final pages: {len(index['missing_final'])}")
+        manifest = export_canonical_pages(
+            transcriptions_dir=out_dir,
+            image_dir=image_dir,
+            out_dir=out_dir.parent / "canonical_pages",
+        )
+        print(f"Canonical pages exported: {manifest['total_pages']} pages")
     except Exception as exc:
-        print(f"Book assembly failed: {exc}")
+        print(f"Canonical page export failed: {exc}")
+        return
+    try:
+        from palimpsest.restoration import assemble_diplomatic_book
+
+        restoration = assemble_diplomatic_book(
+            out_dir.parent / "canonical_pages",
+            out_dir.parent / "restoration",
+        )
+        print(f"Diplomatic restoration assembled: {restoration['total_pages']} pages")
+    except Exception as exc:
+        print(f"Diplomatic restoration failed: {exc}")
 
 
 def run_single(image_path: Path, out_dir: Path, run_config: RunConfig) -> dict:
@@ -575,6 +742,13 @@ def run_single(image_path: Path, out_dir: Path, run_config: RunConfig) -> dict:
         image_count=1,
     )
     context = prepare_context(out_dir, run_meta, prompt_pair, [image_path.stem])
+
+    # For single pages, caching has minimal benefit but we support it for consistency
+    cache_manager = _setup_caches(run_config, prompt_pair, 1) if run_config.use_cache else None
+    if cache_manager:
+        context.pass1_cache_name = cache_manager.pass1_cache_name
+        context.pass2_cache_name = cache_manager.pass2_cache_name
+
     client = genai.Client()
     result = transcribe_page(
         image_path=image_path,
@@ -596,8 +770,59 @@ def run_single(image_path: Path, out_dir: Path, run_config: RunConfig) -> dict:
             "failed_pages": 0 if is_complete else 1,
         },
     )
-    _maybe_assemble(out_dir, run_config.output_format, run_config.pass_mode)
+    _maybe_assemble(image_path.parent, out_dir, run_config.output_format, run_config.pass_mode)
+
+    # Clean up caches
+    if cache_manager:
+        cache_manager.delete_caches()
+
     return result
+
+
+def _setup_caches(
+    run_config: RunConfig,
+    prompt_pair: tuple[str, str],
+    page_count: int,
+) -> Optional[CacheManager]:
+    """Create context caches if enabled and supported.
+
+    Returns:
+        CacheManager if caches were created, None otherwise.
+    """
+    if not run_config.use_cache:
+        return None
+
+    if not is_caching_supported(run_config.model):
+        print(f"Note: Context caching not supported for model {run_config.model}")
+        return None
+
+    if page_count < 3:
+        return None
+
+    try:
+        client = genai.Client()
+        cache_manager = CacheManager(client=client, model=run_config.model)
+
+        # Create Pass 1 cache if we're doing pass1
+        if run_config.pass_mode in ("both", "pass1"):
+            if is_cacheable_text(prompt_pair[0]):
+                cache_manager.create_pass1_cache(prompt_pair[0], ttl_hours=run_config.cache_ttl_hours)
+
+        # Create Pass 2 cache if we're doing pass2
+        if run_config.pass_mode in ("both", "pass2"):
+            pass2_instruction = extract_pass2_instruction(prompt_pair[1])
+            if pass2_instruction and is_cacheable_text(pass2_instruction):
+                cache_manager.create_pass2_cache(pass2_instruction, ttl_hours=run_config.cache_ttl_hours)
+
+        cache_count = len(cache_manager._created_caches)
+        if cache_count == 0:
+            return None
+        print(f"Created {cache_count} context cache(s) for {page_count} pages")
+        return cache_manager
+
+    except Exception as e:
+        print(f"Warning: Cache creation failed: {e}")
+        return None
 
 
 def run_batch(image_dir: Path, out_dir: Path, pattern: str, run_config: RunConfig) -> list[dict]:
@@ -628,6 +853,12 @@ def run_batch(image_dir: Path, out_dir: Path, pattern: str, run_config: RunConfi
     if run_config.shard_count > 1:
         run_meta["image_total"] = total_images
     context = prepare_context(out_dir, run_meta, prompt_pair, expected_stems)
+
+    # Set up context caching for cost savings
+    cache_manager = _setup_caches(run_config, prompt_pair, len(images))
+    if cache_manager:
+        context.pass1_cache_name = cache_manager.pass1_cache_name
+        context.pass2_cache_name = cache_manager.pass2_cache_name
 
     _print_header(images, total_images, pattern, run_config, out_dir)
 
@@ -683,7 +914,7 @@ def run_batch(image_dir: Path, out_dir: Path, pattern: str, run_config: RunConfi
                     context.update_status()
 
     complete, failed = _summarize(results, run_config.verbose, run_config.pass_mode)
-    _maybe_assemble(out_dir, run_config.output_format, run_config.pass_mode)
+    _maybe_assemble(image_dir, out_dir, run_config.output_format, run_config.pass_mode)
     context.update_status()
     context.event(
         "run",
@@ -693,5 +924,9 @@ def run_batch(image_dir: Path, out_dir: Path, pattern: str, run_config: RunConfi
             "failed_pages": failed,
         },
     )
+
+    # Clean up caches
+    if cache_manager:
+        cache_manager.delete_caches()
 
     return results

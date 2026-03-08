@@ -1,17 +1,36 @@
-# Palimpsest Vision: Library-First Factory
+# Palimpsest Vision: Knowledge Recovery Factory
 
 ## Executive Summary
-Build a repeatable factory that turns newly discovered manuscripts into a clean,
-searchable library:
+Build a repeatable factory for recovering neglected knowledge traditions from
+archives.
+
+North star:
+- Turn neglected manuscripts and archival corpora into searchable evidence for
+  discovering lost or under-studied knowledge.
+
+Operationally, this still means building a clean, searchable library:
 - Full-resolution images
 - Scholarly-grade transcriptions (per page + compiled book)
+- Translations, structured extraction, and provenance-bearing page JSON
 - Downstream reconstructions and translations
 
-This system scales linearly and stays auditable: discovery -> intake -> processing.
+This system scales linearly and stays auditable: discovery -> intake ->
+processing -> extraction -> comparison.
+
+The purpose is not transcription for its own sake. Transcription is the
+evidence layer that makes downstream discovery possible.
+
+Current operating priority:
+- build scholar-trustworthy diplomatic restoration first
+- derive readable book output from that restoration
+- treat broader extraction and large-scale discovery as downstream work
 
 ---
 
 ## Design Principles
+- North star first: optimize for recovering neglected knowledge, not merely OCR
+  throughput.
+- Wedge first: restoration quality comes before breadth of automation.
 - Repeatable: same inputs, same outputs
 - Composable: small modules, clean interfaces
 - Auditable: everything logged, everything traceable
@@ -23,7 +42,7 @@ This system scales linearly and stays auditable: discovery -> intake -> processi
 ## System Modules (3)
 
 ### 1) Discovery -> Intake
-Purpose: find "interesting" manuscripts and rank them for ROI.
+Purpose: find promising corpora for knowledge recovery and rank them for ROI.
 
 Responsibilities:
 - Collect metadata from catalogs / APIs / lists
@@ -49,11 +68,13 @@ Interestingness rubric (initial, editable):
 - Clear marginalia/annotations indicated (+)
 - Rare iconography or uncommon text (+)
 - Very high page count with low prior coverage (+)
+- Signals of scientific, technical, cosmological, geographic, or recipe content (+)
+- Enough related material to support cross-document comparison (+)
 
 ---
 
 ### 2) Processing / Transcription
-Purpose: turn page images into publication-grade text outputs.
+Purpose: turn page images into publication-grade evidence.
 
 Responsibilities:
 - Ensure page images are present
@@ -81,6 +102,8 @@ Core principles:
 - Full run logging (events, errors, page status)
 - Two-pass OCR with strict validation
 - Auto-skip non-text pages when flagged
+- Preserve enough structure and provenance for later extraction and comparison
+- Optimize first for diplomatic restoration, not generic plain-text OCR
 
 Page types (for auto-skip + audit):
 - text_page
@@ -96,6 +119,10 @@ Page types (for auto-skip + audit):
 
 ### 3) Recreation / Restoration (Future)
 Purpose: visual restoration + scanlation-style overlays.
+
+This should no longer be treated as distant garnish. Restoration is now part of
+the first product wedge, with overlays and visual polish still considered
+downstream.
 
 Inputs:
 - Transcribed text + layout
@@ -127,6 +154,10 @@ library/
 
 ## Data Model (Canonical)
 
+North-star implication:
+- Per-page JSON remains canonical because every later claim, translation,
+  comparison, and hypothesis must point back to auditable page evidence.
+
 ### Document Registry (DB)
 Minimum fields:
 - doc_id
@@ -139,6 +170,7 @@ Minimum fields:
 - triage_reason
 - newly_digitized (bool)
 - status (discovered, queued, ingested, downloaded, transcribing, assembled, reviewed)
+- focus_domains (optional; e.g. alchemy, astronomy, pharmacology, maps)
 
 Doc ID scheme (current decision):
 - Format: `<source>_<collection>_<identifier>` (lowercase, ASCII, underscores)
@@ -205,7 +237,11 @@ Page ID rules (current decision):
 4) Assembly
    - Build full book output + per-page files
 
-5) Review / Publish
+5) Extraction / Comparison
+   - Extract entities, claims, and references
+   - Compare across manuscripts and time periods
+
+6) Review / Publish
    - Quick human audit
    - Finalize outputs for research or publication
 
@@ -262,6 +298,7 @@ Done:
 - No UI until pipeline is stable
 - No complex metadata normalization beyond core fields
 - No multi-model experimentation in the base pipeline
+- No claim generation without provenance-bearing evidence
 
 ---
 

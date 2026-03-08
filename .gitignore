@@ -4,14 +4,15 @@
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
 
 # Scratch / temp
 scratch/
+*.stackdump
+.claude/
 
-# Derived outputs (keep library exports tracked)
+# Derived outputs
 **/exports/
-!library/**/exports/
-!library/**/exports/**
 
 # Large binary assets (images stored locally, not in git)
 **/images/
@@ -22,10 +23,24 @@ scratch/
 # Discovery cache
 discovery/manifests/
 discovery/detail_*.html
+discovery/scouts/
+discovery/*_sample.jsonl
+discovery/registry/*.jsonl
+!discovery/registry/master.jsonl
 
 # Library derived artifacts
 library/**/images/
 library/**/runs/
+library/**/experiments/
+library/**/temp_docres_input/
+library/**/images_cleaned*/
+library/**/temp_binarization/
+
+# Tool test outputs
+tools/DocRes/
+tools/bleed-through-cleaner/
+tools/test_*.png
+test_narration.wav
 
 # Windows device file
 nul

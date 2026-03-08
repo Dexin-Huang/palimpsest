@@ -1,10 +1,24 @@
 """Page-level models for Palimpsest."""
 
-from typing import Literal, Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any, Tuple
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 
 from .zone import Zone
+
+PageType = Literal[
+    "text_page",
+    "cover",
+    "blank",
+    "ownership",
+    "binding",
+    "illustration_only",
+    "diagram",
+    "map",
+    "table",
+    "index",
+    "other",
+]
 
 
 class Margins(BaseModel):
@@ -32,6 +46,18 @@ class Layout(BaseModel):
         default=None,
         description="Type of ruling visible on the page"
     )
+    writing_area_bbox_norm: Optional[Tuple[float, float, float, float]] = Field(
+        default=None,
+        description="Normalized writing area [x, y, w, h] as 0-1 fractions"
+    )
+    line_count_estimate: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Estimated number of main text lines on the page"
+    )
+    has_marginalia: Optional[bool] = Field(default=None)
+    has_interlinear_glosses: Optional[bool] = Field(default=None)
+    has_running_header: Optional[bool] = Field(default=None)
 
 
 class ImageInfo(BaseModel):
@@ -42,6 +68,35 @@ class ImageInfo(BaseModel):
     height_px: int = Field(gt=0, description="Image height in pixels")
     sha256: Optional[str] = Field(default=None, description="SHA256 hash for integrity")
     iiif_url: Optional[str] = Field(default=None, description="Original IIIF image URL")
+
+
+class PreparedImage(BaseModel):
+    """Derived image used for page preparation or rendering."""
+
+    kind: Literal["cropped", "deskewed", "debleeded", "contrast_enhanced", "aligned", "thumbnail"]
+    path: str = Field(description="Relative path to derived image")
+    width_px: Optional[int] = Field(default=None, gt=0)
+    height_px: Optional[int] = Field(default=None, gt=0)
+    based_on: Optional[str] = Field(default=None, description="Source image path or derivative id")
+
+
+class PreparationStep(BaseModel):
+    """Single image preparation step applied before reading."""
+
+    name: Literal["crop", "deskew", "debleed", "contrast", "align", "denoise", "other"]
+    params: Optional[Dict[str, Any]] = Field(default=None)
+    note: Optional[str] = Field(default=None)
+
+
+class PreparationInfo(BaseModel):
+    """Image preparation metadata."""
+
+    prepared_images: Optional[List[PreparedImage]] = Field(default=None)
+    steps: Optional[List[PreparationStep]] = Field(default=None)
+    preferred_image_kind: Optional[str] = Field(
+        default=None,
+        description="Which image derivative was used for downstream reading"
+    )
 
 
 class SourceInfo(BaseModel):
@@ -99,12 +154,111 @@ class PipelineInfo(BaseModel):
     notes: Optional[str] = Field(default=None)
 
 
-class Page(BaseModel):
-    """Complete page document model (rescript.page.v1 schema)."""
+class PageClassification(BaseModel):
+    """High-level page classification for routing and downstream logic."""
 
-    schema_version: Literal["rescript.page.v1"] = Field(
-        default="rescript.page.v1",
-        description="Schema version identifier"
+    page_type: PageType = Field(description="Overall page type")
+    genre: Optional[str] = Field(
+        default=None,
+        description="Content genre such as recipe, commentary, itinerary, table, glossary"
+    )
+    domain_tags: Optional[List[str]] = Field(
+        default=None,
+        description="High-level topic tags such as alchemy, astronomy, pharmacology, geography"
+    )
+    languages: Optional[List[str]] = Field(default=None)
+    scripts: Optional[List[str]] = Field(default=None)
+    has_illustration: Optional[bool] = Field(default=None)
+    has_diagram: Optional[bool] = Field(default=None)
+    has_table: Optional[bool] = Field(default=None)
+    has_marginalia: Optional[bool] = Field(default=None)
+    has_interlinear_glosses: Optional[bool] = Field(default=None)
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class PageReading(BaseModel):
+    """Interpretive but evidence-bound understanding of the page."""
+
+    summary: Optional[str] = Field(
+        default=None,
+        description="Short evidence-bound summary of what the page is doing"
+    )
+    genre: Optional[str] = Field(default=None)
+    domain_tags: Optional[List[str]] = Field(default=None)
+    notable_features: Optional[List[str]] = Field(
+        default=None,
+        description="Signals such as recipe sequence, first-person travel account, site list, table headings"
+    )
+    first_person_voice: Optional[bool] = Field(default=None)
+    procedural_text: Optional[bool] = Field(default=None)
+    questions: Optional[List[str]] = Field(
+        default=None,
+        description="Open questions or ambiguities worth later review"
+    )
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class PageRestorationHints(BaseModel):
+    """Hints for derived facsimile reconstruction and scholarly typesetting."""
+
+    preserve_columns: bool = Field(
+        default=True,
+        description="Keep original column structure in reconstruction outputs"
+    )
+    preserve_line_breaks: bool = Field(
+        default=True,
+        description="Preserve line breaks for diplomatic or facsimile-style outputs"
+    )
+    preserve_marginalia_positions: bool = Field(
+        default=True,
+        description="Keep marginalia spatially anchored where possible"
+    )
+    preserve_interlinear_insertions: bool = Field(
+        default=True,
+        description="Represent interlinear insertions in situ when possible"
+    )
+    preserve_rubrication: bool = Field(
+        default=True,
+        description="Carry rubric color/styling into derived outputs"
+    )
+    preserve_initials: bool = Field(
+        default=True,
+        description="Keep decorated initials distinct in derived outputs"
+    )
+    preferred_text_layer: Optional[str] = Field(
+        default=None,
+        description="Suggested base layer for rendering, e.g. la_diplomatic or la_normalized"
+    )
+    output_modes: Optional[List[Literal[
+        "diplomatic_edition",
+        "normalized_edition",
+        "pseudo_facsimile",
+        "overlay",
+        "latex",
+        "tei",
+    ]]] = Field(
+        default=None,
+        description="Recommended render/output modes supported by this page evidence"
+    )
+    notes: Optional[str] = Field(default=None)
+
+
+class PageQuality(BaseModel):
+    """Assessment of page/image quality for routing and QA."""
+
+    legibility: Optional[Literal["poor", "fair", "good", "excellent"]] = Field(default=None)
+    bleed_through: Optional[Literal["none", "light", "moderate", "heavy"]] = Field(default=None)
+    skew: Optional[Literal["none", "light", "moderate", "heavy"]] = Field(default=None)
+    crop_quality: Optional[Literal["poor", "fair", "good"]] = Field(default=None)
+    notes: Optional[str] = Field(default=None)
+
+
+class Page(BaseModel):
+    """Complete page document model."""
+
+    schema_version: Literal["canonical.page"] = Field(
+        default="canonical.page",
+        description="Canonical schema identifier"
     )
     created_at: Optional[str] = Field(
         default=None,
@@ -116,12 +270,17 @@ class Page(BaseModel):
 
     source: Optional[SourceInfo] = Field(default=None)
     image: ImageInfo
-    reading_direction: Literal["ltr", "rtl"] = Field(default="ltr")
+    preparation: Optional[PreparationInfo] = Field(default=None)
+    reading_direction: Literal["ltr", "rtl", "ttb", "btt"] = Field(default="ltr")
     coordinate_space: Literal["norm01"] = Field(default="norm01")
 
+    classification: Optional[PageClassification] = Field(default=None)
     layout: Optional[Layout] = Field(default=None)
     zones: List[Zone] = Field(default_factory=list)
     claims: Optional[List[Claim]] = Field(default=None)
+    reading: Optional[PageReading] = Field(default=None)
+    restoration: Optional[PageRestorationHints] = Field(default=None)
+    quality: Optional[PageQuality] = Field(default=None)
 
     pipeline: Optional[PipelineInfo] = Field(default=None)
 

@@ -20,10 +20,22 @@ Usage:
 
 import json
 import sqlite3
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Iterator
+
+
+def _json_dumps(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _json_loads(value: Optional[str]) -> Any:
+    if not value:
+        return None
+    return json.loads(value)
 
 
 @dataclass
@@ -54,6 +66,7 @@ class Manuscript:
     languages: Optional[List[str]] = None
     subject_areas: Optional[List[str]] = None
     description: Optional[str] = None
+    source_catalog: Optional[Dict[str, Any]] = None
 
     # Timestamps
     discovered_at: Optional[str] = None
@@ -76,6 +89,48 @@ class Opportunity:
     first_seen_at: Optional[str] = None
     last_seen_at: Optional[str] = None
     status: str = "new"
+
+
+@dataclass
+class Enrichment:
+    """Enrichment signals for manuscript discovery triage.
+
+    These signals help determine if a manuscript is truly unstudied
+    vs. just poorly cataloged.
+    """
+
+    manuscript_id: str
+
+    # Catalog analysis
+    catalog_description_words: Optional[int] = None  # Length of catalog entry
+    manifest_metadata_fields: Optional[int] = None   # How many IIIF fields populated
+    has_bibliography: Optional[bool] = None          # Catalog cites scholarship?
+    has_incipit: Optional[bool] = None               # Opening text recorded?
+
+    # External database presence
+    in_viaf: Optional[bool] = None                   # Author in authority file?
+    viaf_id: Optional[str] = None
+    in_europeana: Optional[bool] = None              # Aggregated to Europeana?
+    in_mirabile: Optional[bool] = None               # In medieval Latin DB?
+    in_pinakes: Optional[bool] = None                # In Greek MS DB?
+
+    # Scholarship signals
+    google_scholar_hits: Optional[int] = None        # Citations found
+    google_search_hits: Optional[int] = None         # General web mentions
+    transcription_exists: Optional[bool] = None      # Online transcription?
+    transcription_source: Optional[str] = None       # Where? (Transkribus, etc.)
+
+    # Content signals
+    common_text_detected: Optional[str] = None       # "physiologus", "bible", etc.
+    original_content_signals: Optional[List[str]] = None  # ["epistolae", "registrum"]
+    author_famous: Optional[bool] = None             # Known author?
+
+    # Computed
+    studied_score: Optional[int] = None              # 0-10, higher = more studied
+
+    # Metadata
+    enriched_at: Optional[str] = None
+    enrichment_notes: Optional[str] = None
 
 
 @dataclass
@@ -163,11 +218,13 @@ class DiscoveryDB:
                 languages TEXT,  -- JSON array
                 subject_areas TEXT,  -- JSON array
                 description TEXT,
+                source_catalog_json TEXT,
 
                 discovered_at TEXT,
                 updated_at TEXT
             )
         """)
+        self._ensure_column("manuscripts", "source_catalog_json", "TEXT")
 
         # Opportunities table (triage + digitization tracking)
         cursor.execute("""
@@ -227,6 +284,44 @@ class DiscoveryDB:
             )
         """)
 
+        # Enrichment table for triage signals
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS enrichment (
+                manuscript_id TEXT PRIMARY KEY REFERENCES manuscripts(id),
+
+                -- Catalog analysis
+                catalog_description_words INTEGER,
+                manifest_metadata_fields INTEGER,
+                has_bibliography BOOLEAN,
+                has_incipit BOOLEAN,
+
+                -- External database presence
+                in_viaf BOOLEAN,
+                viaf_id TEXT,
+                in_europeana BOOLEAN,
+                in_mirabile BOOLEAN,
+                in_pinakes BOOLEAN,
+
+                -- Scholarship signals
+                google_scholar_hits INTEGER,
+                google_search_hits INTEGER,
+                transcription_exists BOOLEAN,
+                transcription_source TEXT,
+
+                -- Content signals
+                common_text_detected TEXT,
+                original_content_signals TEXT,  -- JSON array
+                author_famous BOOLEAN,
+
+                -- Computed
+                studied_score INTEGER,
+
+                -- Metadata
+                enriched_at TEXT,
+                enrichment_notes TEXT
+            )
+        """)
+
         # Create indexes
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_manuscripts_status
@@ -259,6 +354,14 @@ class DiscoveryDB:
 
         self.conn.commit()
 
+    def _ensure_column(self, table: str, column: str, column_def: str) -> None:
+        cursor = self.conn.cursor()
+        cursor.execute(f"PRAGMA table_info({table})")
+        existing = {row["name"] for row in cursor.fetchall()}
+        if column not in existing:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+            self.conn.commit()
+
     def close(self):
         """Close database connection."""
         self.conn.close()
@@ -289,17 +392,18 @@ class DiscoveryDB:
                 id, shelfmark, repository, iiif_manifest_url, canvas_count,
                 obscurity_score, wtf_score, interest_score,
                 status, priority,
-                collection, title, date_range, languages, subject_areas, description,
+                collection, title, date_range, languages, subject_areas, description, source_catalog_json,
                 discovered_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             ms.id, ms.shelfmark, ms.repository, ms.iiif_manifest_url, ms.canvas_count,
             ms.obscurity_score, ms.wtf_score, ms.interest_score,
             ms.status, ms.priority,
             ms.collection, ms.title, ms.date_range,
-            json.dumps(ms.languages) if ms.languages else None,
-            json.dumps(ms.subject_areas) if ms.subject_areas else None,
+            _json_dumps(ms.languages),
+            _json_dumps(ms.subject_areas),
             ms.description,
+            _json_dumps(ms.source_catalog),
             ms.discovered_at, ms.updated_at
         ))
         self.conn.commit()
@@ -345,9 +449,11 @@ class DiscoveryDB:
 
         # Handle JSON fields
         if "languages" in updates and isinstance(updates["languages"], list):
-            updates["languages"] = json.dumps(updates["languages"])
+            updates["languages"] = _json_dumps(updates["languages"])
         if "subject_areas" in updates and isinstance(updates["subject_areas"], list):
-            updates["subject_areas"] = json.dumps(updates["subject_areas"])
+            updates["subject_areas"] = _json_dumps(updates["subject_areas"])
+        if "source_catalog" in updates:
+            updates["source_catalog_json"] = _json_dumps(updates.pop("source_catalog"))
 
         updates["updated_at"] = datetime.utcnow().isoformat() + "Z"
 
@@ -437,9 +543,10 @@ class DiscoveryDB:
             collection=row["collection"],
             title=row["title"],
             date_range=row["date_range"],
-            languages=json.loads(row["languages"]) if row["languages"] else None,
-            subject_areas=json.loads(row["subject_areas"]) if row["subject_areas"] else None,
+            languages=_json_loads(row["languages"]),
+            subject_areas=_json_loads(row["subject_areas"]),
             description=row["description"],
+            source_catalog=_json_loads(row["source_catalog_json"]) if "source_catalog_json" in row.keys() else None,
             discovered_at=row["discovered_at"],
             updated_at=row["updated_at"],
         )
@@ -562,6 +669,93 @@ class DiscoveryDB:
             )
             for r in rows
         ]
+
+    # ==================== Enrichment CRUD ====================
+
+    def upsert_enrichment(self, enrichment: Enrichment) -> None:
+        """Insert or update enrichment record."""
+        now = datetime.utcnow().isoformat() + "Z"
+        enrichment.enriched_at = now
+
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO enrichment (
+                manuscript_id,
+                catalog_description_words, manifest_metadata_fields,
+                has_bibliography, has_incipit,
+                in_viaf, viaf_id, in_europeana, in_mirabile, in_pinakes,
+                google_scholar_hits, google_search_hits,
+                transcription_exists, transcription_source,
+                common_text_detected, original_content_signals, author_famous,
+                studied_score, enriched_at, enrichment_notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            enrichment.manuscript_id,
+            enrichment.catalog_description_words,
+            enrichment.manifest_metadata_fields,
+            enrichment.has_bibliography,
+            enrichment.has_incipit,
+            enrichment.in_viaf,
+            enrichment.viaf_id,
+            enrichment.in_europeana,
+            enrichment.in_mirabile,
+            enrichment.in_pinakes,
+            enrichment.google_scholar_hits,
+            enrichment.google_search_hits,
+            enrichment.transcription_exists,
+            enrichment.transcription_source,
+            enrichment.common_text_detected,
+            json.dumps(enrichment.original_content_signals) if enrichment.original_content_signals else None,
+            enrichment.author_famous,
+            enrichment.studied_score,
+            enrichment.enriched_at,
+            enrichment.enrichment_notes,
+        ))
+        self.conn.commit()
+
+    def get_enrichment(self, manuscript_id: str) -> Optional[Enrichment]:
+        """Get enrichment record by manuscript ID."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT * FROM enrichment WHERE manuscript_id = ?",
+            (manuscript_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return Enrichment(
+            manuscript_id=row["manuscript_id"],
+            catalog_description_words=row["catalog_description_words"],
+            manifest_metadata_fields=row["manifest_metadata_fields"],
+            has_bibliography=bool(row["has_bibliography"]) if row["has_bibliography"] is not None else None,
+            has_incipit=bool(row["has_incipit"]) if row["has_incipit"] is not None else None,
+            in_viaf=bool(row["in_viaf"]) if row["in_viaf"] is not None else None,
+            viaf_id=row["viaf_id"],
+            in_europeana=bool(row["in_europeana"]) if row["in_europeana"] is not None else None,
+            in_mirabile=bool(row["in_mirabile"]) if row["in_mirabile"] is not None else None,
+            in_pinakes=bool(row["in_pinakes"]) if row["in_pinakes"] is not None else None,
+            google_scholar_hits=row["google_scholar_hits"],
+            google_search_hits=row["google_search_hits"],
+            transcription_exists=bool(row["transcription_exists"]) if row["transcription_exists"] is not None else None,
+            transcription_source=row["transcription_source"],
+            common_text_detected=row["common_text_detected"],
+            original_content_signals=json.loads(row["original_content_signals"]) if row["original_content_signals"] else None,
+            author_famous=bool(row["author_famous"]) if row["author_famous"] is not None else None,
+            studied_score=row["studied_score"],
+            enriched_at=row["enriched_at"],
+            enrichment_notes=row["enrichment_notes"],
+        )
+
+    def list_unenriched(self, limit: int = 100) -> List[str]:
+        """List manuscript IDs that don't have enrichment records."""
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT m.id FROM manuscripts m
+            LEFT JOIN enrichment e ON m.id = e.manuscript_id
+            WHERE e.manuscript_id IS NULL
+            LIMIT ?
+        """, (limit,))
+        return [row["id"] for row in cursor.fetchall()]
 
     # ==================== Scholarship CRUD ====================
 
@@ -795,6 +989,7 @@ class DiscoveryDB:
                     languages=data.get("content", {}).get("languages"),
                     subject_areas=data.get("content", {}).get("subject_areas"),
                     description=data.get("content", {}).get("description"),
+                    source_catalog=data.get("source_catalog"),
                     discovered_at=data.get("discovery", {}).get("discovered_date"),
                 )
 
@@ -867,6 +1062,7 @@ class DiscoveryDB:
                         "subject_areas": ms.subject_areas,
                         "description": ms.description,
                     },
+                    "source_catalog": ms.source_catalog,
                     "physical": {
                         "date_range": ms.date_range,
                     },

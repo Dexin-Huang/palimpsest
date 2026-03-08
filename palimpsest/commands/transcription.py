@@ -122,7 +122,11 @@ def cmd_run(args: argparse.Namespace) -> None:
             out_dir=Path(args.out_dir),
             run_config=run_config,
         )
-        if result["status"] != "complete":
+        if run_config.pass_mode == "pass1":
+            is_complete = result["status"] in {"complete", "pass1_complete"}
+        else:
+            is_complete = result["status"] == "complete"
+        if not is_complete:
             raise SystemExit(f"Failed: {result['status']}")
     else:
         run_batch(

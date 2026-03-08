@@ -1,0 +1,65 @@
+{
+  "title": "Six female spirits to protect children.",
+  "date": "800 to 899",
+  "language": "Khotanese (lang.), Chinese (lang.)",
+  "collection": "idp_child_protection_spirits",
+  "source_url": "https://idp.bl.uk/collection/A4B515259F294F7FB00ABE5778861C0F/",
+  "source_catalog": {
+    "object_id": "A4B515259F294F7FB00ABE5778861C0F",
+    "source_url": "https://idp.bl.uk/collection/A4B515259F294F7FB00ABE5778861C0F/",
+    "iiif_manifest_url": "https://data.idp.bl.uk/iiif/3/manifest/A4B515259F294F7FB00ABE5778861C0F",
+    "title": "Six female spirits to protect children.",
+    "date": "800 to 899",
+    "find_site": "Dunhuang Mogao",
+    "measurement": "height 33 centimetres, width 8 centimetres",
+    "material": "ink and colours on paper",
+    "language_or_script": [
+      "Khotanese (lang.)",
+      "Chinese (lang.)"
+    ],
+    "subject": [
+      "women",
+      "Medicine",
+      "children"
+    ],
+    "institution": "British Museum",
+    "provenance": "Stein 1906-8",
+    "find_site_identifier": "DHMG.",
+    "find_site_description": "Mogao Caves near Dunhuang",
+    "short_description": null,
+    "references": null,
+    "item_type": "pothi",
+    "source_fields": {
+      "title": "Six female spirits to protect children.",
+      "date": "800 to 899",
+      "find_site": "Dunhuang Mogao",
+      "measurement": "height 33 centimetres, width 8 centimetres",
+      "material": "ink and colours on paper",
+      "language_script": [
+        "Khotanese (lang.)",
+        "Chinese (lang.)"
+      ],
+      "subject": [
+        "women",
+        "Medicine",
+        "children"
+      ],
+      "description": "Scope and content : Three P\u014dth\u012b fols. with paintings of demons, and Chin. and Br\u0101hm\u012b inscriptions referring to same. Demons, six in number, painted on obv. and rev. of each fol. and occupying in each case one half of leaf. Upper half (which shows string hole of P\u014dth\u012b) bears inscr. (c) Obv. Stag-headed, with deer\u2019s hooves (?) partially preserved; flesh uncoloured. Holds young child in arms. 4 ll. Chin. and Br\u0101hm\u012b inscr. (c) Rev. Ox-headed, with hooves; flesh dark blue; limbs specially long and thin. R. hand holds noose (?), L. undetermined obj. as in case of (a) obv. and rev. and (b) obv. On stand between feet lies infant in swaddling bands. 9 ll. inscr. almost entirely Chin. 12\u00be3\u2033 \u00d7 3\u2033. (a) Pl. XCVI.",
+      "institution": "British Museum",
+      "provenance": "Stein 1906-8",
+      "find_site_identifier": "DHMG.",
+      "stein_site_number": "Ch.00217.c",
+      "find_site_description": "Mogao Caves near Dunhuang"
+    },
+    "search_summary": "Title Six female spirits to protect children. Material ink and colours on paper Pressmark 1919,0101,0.177.3 Item type pothi"
+  },
+  "triage_score": 10,
+  "triage_reason": "Dunhuang child-protection spirit folio with painted demon figures and Chinese/Khotanese/Brahmi inscriptions.",
+  "status": "downloaded",
+  "doc_id": "idp_1919_0101_0_177_3",
+  "created_at": "2026-03-08T20:36:09Z",
+  "updated_at": "2026-03-08T20:36:23Z",
+  "downloaded_count": 2,
+  "skipped_count": 0,
+  "page_count": 2
+}

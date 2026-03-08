@@ -6,7 +6,7 @@ This module orchestrates multi-pass analysis of manuscript pages:
 3. Translation - English layers (literal + interpreted)
 4. Claims - Extract structured data (names, dates, places)
 
-Uses Gemini 3 Flash with code_execution for Agentic Vision capabilities,
+Uses Gemini 3.1 Flash-Lite Preview with code_execution for Agentic Vision capabilities,
 allowing the model to zoom/crop to read fine details.
 """
 
@@ -318,7 +318,7 @@ class VisionPipeline:
             )
 
         return Page(
-            schema_version="rescript.page.v1",
+            schema_version="canonical.page",
             created_at=datetime.utcnow().isoformat() + "Z",
             page_id=page_id,
             doc_id=doc_id,
@@ -567,6 +567,8 @@ class VisionPipeline:
                 order=z.get("order", len(zones)),
                 bbox_norm=tuple(z.get("bbox_norm", [0, 0, 1, 0.05])),
                 text=TextLayers(
+                    source_diplomatic=text_data.get("source_diplomatic"),
+                    source_normalized=text_data.get("source_normalized"),
                     la_diplomatic=text_data.get("la_diplomatic"),
                     la_normalized=text_data.get("la_normalized"),
                     es_diplomatic=text_data.get("es_diplomatic"),
@@ -595,8 +597,14 @@ class VisionPipeline:
         # Build text for translation
         texts_to_translate = []
         for z in zones:
-            source_text = z.text.la_normalized or z.text.la_diplomatic or \
-                         z.text.es_normalized or z.text.es_diplomatic
+            source_text = (
+                z.text.source_normalized
+                or z.text.source_diplomatic
+                or z.text.la_normalized
+                or z.text.la_diplomatic
+                or z.text.es_normalized
+                or z.text.es_diplomatic
+            )
             if source_text:
                 texts_to_translate.append({
                     "zone_id": z.zone_id,
@@ -666,8 +674,14 @@ Return JSON with format:
         # Collect all text for analysis
         all_text = []
         for z in zones:
-            text = z.text.en_interpreted or z.text.en_literal or \
-                   z.text.la_normalized or z.text.la_diplomatic
+            text = (
+                z.text.en_interpreted
+                or z.text.en_literal
+                or z.text.source_normalized
+                or z.text.source_diplomatic
+                or z.text.la_normalized
+                or z.text.la_diplomatic
+            )
             if text:
                 all_text.append(f"[{z.zone_id}] {text}")
 

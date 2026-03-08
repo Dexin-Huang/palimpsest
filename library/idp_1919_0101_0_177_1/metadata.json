@@ -1,0 +1,99 @@
+{
+  "title": "Six female spirits to protect children.",
+  "date": "800 to 899",
+  "language": "Chinese (lang.), Khotanese (lang.), Chinese (script), Brahmi (script)",
+  "collection": "idp_child_protection_spirits",
+  "source_url": "https://idp.bl.uk/collection/11A002DB97EC4EF8908A13D20DE68CC8/",
+  "source_catalog": {
+    "object_id": "11A002DB97EC4EF8908A13D20DE68CC8",
+    "source_url": "https://idp.bl.uk/collection/11A002DB97EC4EF8908A13D20DE68CC8/",
+    "iiif_manifest_url": "https://data.idp.bl.uk/iiif/3/manifest/11A002DB97EC4EF8908A13D20DE68CC8",
+    "title": "Six female spirits to protect children.",
+    "date": "800 to 899",
+    "find_site": "Dunhuang Mogao",
+    "measurement": "height 33 centimetres, width 8 centimetres",
+    "material": "ink and colours on paper",
+    "language_or_script": [
+      "Chinese (lang.)",
+      "Khotanese (lang.)",
+      "Chinese (script)",
+      "Brahmi (script)"
+    ],
+    "subject": [
+      "Medicine",
+      "women",
+      "children"
+    ],
+    "institution": "British Museum",
+    "provenance": "Stein 1906-8",
+    "find_site_identifier": "DHMG.",
+    "find_site_description": "Mogao Caves near Dunhuang",
+    "short_description": null,
+    "references": null,
+    "item_type": "pothi",
+    "source_fields": {
+      "title": "Six female spirits to protect children.",
+      "date": "800 to 899",
+      "find_site": "Dunhuang Mogao",
+      "measurement": "height 33 centimetres, width 8 centimetres",
+      "material": "ink and colours on paper",
+      "language_script": [
+        "Chinese (lang.)",
+        "Khotanese (lang.)",
+        "Chinese (script)",
+        "Brahmi (script)"
+      ],
+      "subject": [
+        "Medicine",
+        "women",
+        "children"
+      ],
+      "description": "Scope and content : Three P\u014dth\u012b fols. with paintings of demons, and Chin. and Br\u0101hm\u012b inscriptions referring to same. Demons, six in number, painted on obv. and rev. of each fol. and occupying in each case one half of leaf. Upper half (which shows string hole of P\u014dth\u012b) bears inscr. a) Obv. Cat-or leopard-headed; feet lost; flesh brown; R. hand raised as if beckoning; L. hand holding by stem large pink object like half-open flower, but flower is turned downwards and demon grasps stem like neck of bottle. Cf. same object in L. hand of most of other demons. Between legs appear head and part body of infant, apparently lying on ground. 3 ll. Chin. and Br\u0101hm\u012b inscr. (a) Rev. Hawk-headed, with wings; feet lost; flesh dark grey. L. hand grasps undetermined obj. like demon above, and in same fashion; R. hand by side, perhaps holding hand of standing child, lower half of whom is preserved below standing by demon\u2019s R. leg. 3 ll. Chin. and Br\u0101hm\u012b inscr.",
+      "institution": "British Museum",
+      "provenance": "Stein 1906-8",
+      "find_site_identifier": "DHMG.",
+      "stein_site_number": "Ch.00217.a",
+      "find_site_description": "Mogao Caves near Dunhuang"
+    },
+    "search_summary": "Title Six female spirits to protect children. Material ink and colours on paper Pressmark 1919,0101,0.177.1 Item type pothi",
+    "manifest_summary": {
+      "label": "Six female spirits to protect children.",
+      "title": "Six female spirits to protect children.",
+      "title_is_shelfmark": true,
+      "shelfmark": "Six female spirits to protect children.",
+      "author": null,
+      "contributor": null,
+      "date": null,
+      "language": null,
+      "place": null,
+      "description": null,
+      "metadata_field_count": 3,
+      "metadata_entries": [
+        {
+          "label": "Pressmark",
+          "value": "1919,0101,0.177.1"
+        },
+        {
+          "label": "Description",
+          "value": "Three P\u014dth\u012b fols. with paintings of demons, and Chin. and Br\u0101hm\u012b inscriptions referring to same. Demons, six in number, painted on obv. and rev. of each fol. and occupying in each case one half of leaf. Upper half (which shows string hole of P\u014dth\u012b) bears inscr. a) Obv. Cat-or leopard-headed; feet lost; flesh brown; R. hand raised as if beckoning; L. hand holding by stem large pink object like half-open flower, but flower is turned downwards and demon grasps stem like neck of bottle. Cf. same object in L. hand of most of other demons. Between legs appear head and part body of infant, apparently lying on ground. 3 ll. Chin. and Br\u0101hm\u012b inscr. (a) Rev. Hawk-headed, with wings; feet lost; flesh dark grey. L. hand grasps undetermined obj. like demon above, and in same fashion; R. hand by side, perhaps holding hand of standing child, lower half of whom is preserved below standing by demon\u2019s R. leg. 3 ll. Chin. and Br\u0101hm\u012b inscr."
+        },
+        {
+          "label": "Reading Direction",
+          "value": "Right to left"
+        }
+      ],
+      "canvas_count": 2
+    },
+    "canvas_count": 2,
+    "manifest_metadata_fields": 3
+  },
+  "triage_score": 10,
+  "triage_reason": "Dunhuang child-protection spirit folio with painted demon figures and Chinese/Khotanese/Brahmi inscriptions.",
+  "status": "downloaded",
+  "doc_id": "idp_1919_0101_0_177_1",
+  "created_at": "2026-03-08T20:36:07Z",
+  "updated_at": "2026-03-08T20:36:23Z",
+  "downloaded_count": 2,
+  "skipped_count": 0,
+  "page_count": 2
+}

@@ -1,0 +1,52 @@
+Build a compact forward-facing `page.handoff` JSON artifact from the supplied packet materials.
+
+The goal is context efficiency for the next page, not a full essay.
+
+Rules:
+- Use only the supplied materials.
+- Prefer short, high-signal bullets.
+- Keep the handoff page-local and forward-looking.
+- Distinguish `proposed` from `confirmed`.
+- Do not invent global certainty from one page.
+- If continuity is unclear, use `continues_text: null`.
+- Keep `summary` to 2-5 bullets.
+- Keep `active_entities` and `active_terms` focused on items likely to matter on the next page.
+- Put unresolved checks into `verify_next`.
+
+Return JSON only with this shape:
+{
+  "artifact_type": "page.handoff",
+  "created_at": "ISO-8601 UTC timestamp",
+  "doc_id": "string",
+  "page_id": "string",
+  "next_page_id": "string or null",
+  "source_packet_path": "string",
+  "continues_text": true,
+  "summary": ["..."],
+  "active_entities": [
+    {
+      "key": "stable_snake_case_id",
+      "label": "Visible label",
+      "status": "proposed|confirmed|revised|rejected",
+      "note": "optional short note"
+    }
+  ],
+  "active_terms": [
+    {
+      "key": "stable_snake_case_id",
+      "label": "Visible label",
+      "status": "proposed|confirmed|revised|rejected",
+      "note": "optional short note"
+    }
+  ],
+  "verify_next": ["..."],
+  "local_questions": ["..."],
+  "proposed_links": [
+    {
+      "link_type": "continues_argument_from_previous|continues_text_to_next|echoes_previous_theme|other",
+      "target_page_id": "page id",
+      "status": "proposed|confirmed|revised|rejected",
+      "note": "optional short note"
+    }
+  ]
+}

@@ -39,6 +39,11 @@ Run full pipeline:
 python -m palimpsest library run --doc-id vatican_pal_lat_1267
 ```
 
+Worker helper:
+```
+python -m palimpsest agent-inspect --with-web-search "Find the current official viewer URL"
+```
+
 ## Transcription CLI (direct)
 
 ```
@@ -53,9 +58,12 @@ python -m palimpsest transcribe run \
 ## Configuration
 
 Use `.env` for model selection:
-- `PALIMPSEST_MODEL_VISION`
 - `PALIMPSEST_MODEL_TRIAGE`
+- `PALIMPSEST_MODEL_VISION`
+- `PALIMPSEST_MODEL_READING`
 - `PALIMPSEST_MODEL_RECON`
+
+Use `*-image-preview` models for reconstruction/image-generation lanes, not the main transcription lane.
 
 ## Repo structure
 

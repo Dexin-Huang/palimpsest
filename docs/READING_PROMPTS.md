@@ -44,11 +44,26 @@ Preparation principles:
 - keep the manuscript area intact
 - prefer one good crop over a complicated region graph
 
+Scholar workflow:
+
+- create a `page.packet`
+- fill the witness first
+- let the scholar/agent layer notes, translation, and interpretation on top
+- emit a `page.handoff` for the next page
+- emit a `window.synthesis` once 2-3 adjacent packets exist
+- use section synthesis only after several packets exist
+
 CLI sketch:
 
 ```bash
 python -m palimpsest page prepare --image library/<doc_id>/images/<page>.jpg
+python -m palimpsest page packet --image library/<doc_id>/images/<page>.jpg
 python -m palimpsest page read --image library/<doc_id>/images/<page>.jpg
+python -m palimpsest page handoff --packet library/<doc_id>/experiments/<page>_packet/packet.json --next-page-id <next_page_id>
+python -m palimpsest page window \
+  --packet library/<doc_id>/experiments/<page1>_packet/packet.json \
+  --packet library/<doc_id>/experiments/<page2>_packet/packet.json
+python -m palimpsest page render --packet library/<doc_id>/experiments/<page>_packet/packet.json
 python -m palimpsest page synthesize \
   --input library/<doc_id>/experiments/<page1>_reading/<page1>_reading.md \
   --input library/<doc_id>/experiments/<page2>_reading/<page2>_reading.md \
@@ -63,3 +78,4 @@ Translation and historical interpretation should use a broader local context.
 Related:
 
 - `docs/MODEL_STRATEGY.md`
+- `docs/PAGE_PACKET.md`

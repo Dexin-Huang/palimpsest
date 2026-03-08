@@ -1,0 +1,95 @@
+{
+  "title": "Daoist manuscript from Dunhuang",
+  "date": "270",
+  "language": "Chinese",
+  "collection": "chinese_daoism",
+  "source_url": "https://idp.bl.uk/collection/42902D60462D4985AB4B23450BC60D7D/",
+  "source_catalog": {
+    "object_id": "42902D60462D4985AB4B23450BC60D7D",
+    "source_url": "https://idp.bl.uk/collection/42902D60462D4985AB4B23450BC60D7D/",
+    "iiif_manifest_url": "https://data.idp.bl.uk/iiif/3/manifest/42902D60462D4985AB4B23450BC60D7D",
+    "title": "Daoist manuscript from Dunhuang",
+    "date": "270",
+    "find_site": "Dunhuang Mogao",
+    "measurement": "height 30.8 centimetres, width 208.2 centimetres",
+    "material": "manuscript, ink on paper",
+    "language_or_script": [
+      "Chinese (lang.)",
+      "Chinese (script)"
+    ],
+    "subject": [
+      "seal",
+      "Daoism"
+    ],
+    "institution": "Princeton University Art Museum",
+    "provenance": "Purchased",
+    "find_site_identifier": "DHMG.",
+    "find_site_description": "Mogao Caves near Dunhuang",
+    "short_description": null,
+    "references": null,
+    "item_type": "scroll",
+    "source_fields": {
+      "title": "Daoist manuscript from Dunhuang",
+      "date": "270",
+      "find_site": "Dunhuang Mogao",
+      "measurement": "height 30.8 centimetres, width 208.2 centimetres",
+      "material": "manuscript, ink on paper",
+      "language_script": [
+        "Chinese (lang.)",
+        "Chinese (script)"
+      ],
+      "subject": [
+        "seal",
+        "Daoism"
+      ],
+      "description": "Scope and content : Manuscript scroll believed to be from Dunhuang. Removed in 1910 for Beijing. Ended up in the Fanjiang Ge hall of Li Shengduo (Muzhai ) of Dehua. After Li Shengduo died, the work was purchased by Zhang Guchu (1890-1968; i.e., Zhang Hong, a Cantonese painter working in an art publishing firm in the 1930s) in 1947 (dinghai) [recorded in his 'Jichuanan suo cang Dunhuang shishi tulu' manuscript copy]. Ye Gongchuo was one of the few people to see this work when it was in Li Shengduo's collection. After it went to Zhang Guchu, it was viewed by Huang Binhong and Ye. When Rao Zongyi wrote about this piece, it was still in Zhang Guchu's coll. In 1960, it became part of the Peng family coll. in Hong Kong, and it entered the John B. Elliott coll. in 1985.",
+      "institution": "Princeton University Art Museum",
+      "provenance": "Purchased",
+      "find_site_identifier": "DHMG.",
+      "stein_site_number": "Ch.",
+      "find_site_description": "Mogao Caves near Dunhuang"
+    },
+    "search_summary": "Title Daoist manuscript from Dunhuang Material manuscript, ink on paper Pressmark 1998-116 Item type scroll",
+    "manifest_summary": {
+      "label": "Daoist manuscript from Dunhuang",
+      "title": "Daoist manuscript from Dunhuang",
+      "title_is_shelfmark": true,
+      "shelfmark": "Daoist manuscript from Dunhuang",
+      "author": null,
+      "contributor": null,
+      "date": null,
+      "language": null,
+      "place": null,
+      "description": null,
+      "metadata_field_count": 3,
+      "metadata_entries": [
+        {
+          "label": "Pressmark",
+          "value": "1998-116"
+        },
+        {
+          "label": "Description",
+          "value": "Manuscript scroll believed to be from Dunhuang.\u00a0 Removed in 1910 for Beijing.\u00a0 Ended up in the Fanjiang Ge  hall of Li Shengduo (Muzhai ) of Dehua.\u00a0 After Li Shengduo died, the work was purchased by Zhang Guchu (1890-1968; i.e., Zhang Hong, a Cantonese painter working in an art publishing firm in the 1930s) in 1947 (dinghai) [recorded in his 'Jichuanan suo cang Dunhuang shishi tulu' manuscript copy].\u00a0 Ye Gongchuo was one of the few people to see this work when it was in Li Shengduo's collection.\u00a0 After it went to Zhang Guchu, it was viewed by Huang Binhong and Ye.\u00a0 When Rao Zongyi wrote about this piece, it was still in Zhang Guchu's coll.\u00a0 In 1960, it became part of the Peng family coll. in Hong Kong, and it entered the John B. Elliott coll. in 1985."
+        },
+        {
+          "label": "Reading Direction",
+          "value": "Right to left"
+        }
+      ],
+      "canvas_count": 38
+    },
+    "canvas_count": 38,
+    "manifest_metadata_fields": 3
+  },
+  "triage_score": 9,
+  "triage_reason": "Early Chinese Daoist manuscript from the Dunhuang Mogao caves; specific text or ritual content is not explicitly identified in the catalog.. The manuscript has a well-documented provenance history involving notable 20th-century collectors and scholars (Li Shengduo, Ye Gongchuo, Rao Zongyi), but appears to lack a widely available modern critical edition or digital transcription.",
+  "status": "downloaded",
+  "sample_of": "idp_42902d60462d4985ab4b23450bc60d7d",
+  "sample_page_count": 10,
+  "doc_id": "idp_1998_116_sample10",
+  "created_at": "2026-03-08T20:25:23Z",
+  "updated_at": "2026-03-08T20:25:57Z",
+  "downloaded_count": 10,
+  "skipped_count": 0,
+  "page_count": 10
+}

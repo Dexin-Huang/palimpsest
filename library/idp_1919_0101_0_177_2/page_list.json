@@ -1,0 +1,54 @@
+{
+  "manifest_url": "https://data.idp.bl.uk/iiif/3/manifest/E80B129FAE174220A08DEAD31C3DB53C",
+  "manifest_label": "Six female spirits to protect children.",
+  "manifest_summary": {
+    "label": "Six female spirits to protect children.",
+    "title": "Six female spirits to protect children.",
+    "title_is_shelfmark": true,
+    "shelfmark": "Six female spirits to protect children.",
+    "author": null,
+    "contributor": null,
+    "date": null,
+    "language": null,
+    "place": null,
+    "description": null,
+    "metadata_field_count": 3,
+    "metadata_entries": [
+      {
+        "label": "Pressmark",
+        "value": "1919,0101,0.177.2"
+      },
+      {
+        "label": "Description",
+        "value": "Three P\u014dth\u012b fols. with paintings of demons, and Chin. and Br\u0101hm\u012b inscriptions referring to same. Demons, six in number, painted on obv. and rev. of each fol. and occupying in each case one half of leaf. Upper half (which shows string hole of P\u014dth\u012b) bears inscr. (b) Obv. Cock-headed, with wings and cock\u2019s feet; flesh yellow. R. hand raised with first and second fingers extended, thumb and other fingers joined; L. hand grasping obj. as in two preceding figs. Child in green shirt sits by R. foot, clasping leg. Painting broken. 4 ll. Chin. and Br\u0101hm\u012b inscr. (b) Rev. Dog-or lion-headed, with wings and bird\u2019s feet; flesh brown. Stands facing spectator, holding up by wrists and ankles human fig., whose inside he devours. Painting broken. 4 ll. Chin. and Br\u0101hm\u012b inscr."
+      },
+      {
+        "label": "Reading Direction",
+        "value": "Right to left"
+      }
+    ],
+    "canvas_count": 2
+  },
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "f000r",
+      "url": "https://data.idp.bl.uk/mediaLib/t/m/s/sfxhmmez1ywkpqo7lynx3a/large_AAC225BBEF55468085016F9CFA4BA2F5.jpg",
+      "filename": "f000r.jpg",
+      "order": 1,
+      "width": 316,
+      "height": 1200,
+      "label": "0"
+    },
+    {
+      "page_id": "f001r",
+      "url": "https://data.idp.bl.uk/mediaLib/r/8/x/m5ep5bn33ac2383ycnobc1/large_16AC843447AF4B3EBE215AD226FC3ECB.jpg",
+      "filename": "f001r.jpg",
+      "order": 2,
+      "width": 342,
+      "height": 1200,
+      "label": "1"
+    }
+  ],
+  "doc_id": "idp_1919_0101_0_177_2"
+}

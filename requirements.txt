@@ -1,0 +1,18 @@
+# Core
+google-genai>=1.0.0
+claude-agent-sdk>=0.1
+requests>=2.28.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Database
+# sqlite3 is stdlib
+
+# Async fetching
+aiohttp>=3.9.0
+
+# HTML parsing (for Vatican scraper)
+lxml>=5.0.0
+
+# PDF rendering (existing)
+reportlab>=4.0.0

@@ -4,7 +4,7 @@ This module provides two main capabilities:
 1. GeminiOCR - Structured OCR that outputs Page JSON with zones and claims
 2. transcribe_image() - Simple transcription that outputs text (for human review)
 
-Model: gemini-3-flash-preview with Agentic Vision (code_execution tool)
+Model: gemini-3.1-flash-lite-preview with Agentic Vision (code_execution tool)
 
 Key configuration:
     - Use code_execution tool to enable Agentic Vision (model can zoom/crop)
@@ -111,7 +111,7 @@ def transcribe_image(
     Args:
         image_path: Path to the image file
         prompt_type: Name of prompt template (default: transcription_enhanced)
-        model: Gemini model name (default: gemini-3-flash-preview)
+        model: Gemini model name (default: gemini-3.1-flash-lite-preview)
         temperature: Model temperature (default: 0.1 for consistency)
 
     Returns:
@@ -151,7 +151,7 @@ class GeminiOCR:
         """Initialize the OCR pipeline.
 
         Args:
-            model: Gemini model to use. Default is gemini-3-flash-preview.
+            model: Gemini model to use. Default is gemini-3.1-flash-lite-preview.
                    This model has Agentic Vision - can zoom/crop to read fine details.
                    Note: gemini-2.0-flash is NOT capable of reading medieval scripts.
         """
@@ -373,6 +373,8 @@ class GeminiOCR:
         for z in result.get("zones", []):
             text_data = z.get("text", {})
             text = TextLayers(
+                source_diplomatic=text_data.get("source_diplomatic"),
+                source_normalized=text_data.get("source_normalized"),
                 la_diplomatic=text_data.get("la_diplomatic"),
                 la_normalized=text_data.get("la_normalized"),
                 en_literal=text_data.get("en_literal"),
@@ -411,7 +413,7 @@ class GeminiOCR:
         source = SourceInfo(**source_info) if source_info else None
 
         return Page(
-            schema_version="rescript.page.v1",
+            schema_version="canonical.page",
             created_at=datetime.utcnow().isoformat() + "Z",
             page_id=page_id,
             doc_id=doc_id,
