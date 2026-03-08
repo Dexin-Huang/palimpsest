@@ -44,6 +44,9 @@ class DiscoverySourceAdapter(Protocol):
 
     source_id: str
     label: str
+    automation_fit: int | None
+    north_star_fit: int | None
+    access: str | None
 
     def list_collections(self) -> list[SourceCollection]:
         """Return available top-level collections."""

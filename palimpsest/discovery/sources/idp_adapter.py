@@ -329,6 +329,9 @@ class IDPSourceAdapter(DiscoverySourceAdapter):
 
     source_id: str = "idp"
     label: str = "International Dunhuang Programme"
+    automation_fit: int = 3
+    north_star_fit: int = 4
+    access: str = "public_open_web_iiif"
 
     def list_collections(self) -> list[SourceCollection]:
         return [

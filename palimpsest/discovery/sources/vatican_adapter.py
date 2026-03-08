@@ -29,6 +29,9 @@ class VaticanSourceAdapter(DiscoverySourceAdapter):
 
     source_id: str = "vatican"
     label: str = "Biblioteca Apostolica Vaticana"
+    automation_fit: int = 5
+    north_star_fit: int = 4
+    access: str = "public_open_iiif"
 
     def list_collections(self) -> list[SourceCollection]:
         collections = get_available_collections()
@@ -38,9 +41,6 @@ class VaticanSourceAdapter(DiscoverySourceAdapter):
                 key=item["name"],
                 label=item["label"],
                 listing_url=item["url"],
-                automation_fit=5,
-                north_star_fit=4,
-                access="public_open_iiif",
             )
             for item in collections
         ]

@@ -38,6 +38,22 @@ def safe_console_text(value: str) -> str:
     return value.encode(encoding, errors="replace").decode(encoding, errors="replace")
 
 
+def format_source_fit(
+    *,
+    automation_fit: int | None,
+    north_star_fit: int | None,
+    access: str | None,
+) -> str | None:
+    bits: list[str] = []
+    if automation_fit is not None:
+        bits.append(f"automation={automation_fit}/5")
+    if north_star_fit is not None:
+        bits.append(f"north_star={north_star_fit}/5")
+    if access:
+        bits.append(f"access={access}")
+    return " | ".join(bits) if bits else None
+
+
 def parse_range(value: str) -> tuple[int, int]:
     """Parse a range string like '1500-2100' into (start, end)."""
     parts = value.split("-")
@@ -444,18 +460,23 @@ def cmd_sources_list(args: argparse.Namespace) -> None:
 
     for source_id, adapter in sorted(adapters.items()):
         print(f"{source_id}: {adapter.label}")
+        source_fit = format_source_fit(
+            automation_fit=getattr(adapter, "automation_fit", None),
+            north_star_fit=getattr(adapter, "north_star_fit", None),
+            access=getattr(adapter, "access", None),
+        )
+        if source_fit:
+            print(f"      {safe_console_text(source_fit)}")
         for collection in adapter.list_collections():
             line = f"  - {collection.key}: {collection.label}"
             print(safe_console_text(line))
-            fit_bits = []
-            if collection.automation_fit is not None:
-                fit_bits.append(f"automation={collection.automation_fit}/5")
-            if collection.north_star_fit is not None:
-                fit_bits.append(f"north_star={collection.north_star_fit}/5")
-            if collection.access:
-                fit_bits.append(f"access={collection.access}")
-            if fit_bits:
-                print(f"      {safe_console_text(' | '.join(fit_bits))}")
+            collection_fit = format_source_fit(
+                automation_fit=collection.automation_fit,
+                north_star_fit=collection.north_star_fit,
+                access=collection.access,
+            )
+            if collection_fit and collection_fit != source_fit:
+                print(f"      {safe_console_text(collection_fit)}")
             if collection.notes:
                 print(f"      {safe_console_text(collection.notes)}")
             if collection.listing_url:

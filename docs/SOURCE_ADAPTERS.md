@@ -72,6 +72,10 @@ Fields:
 - `north_star_fit`
 - `access`
 
+These fields are optional at the collection level.
+If a whole source has one stable profile, keep the fit metadata on the adapter
+itself and only use collection-level values when a collection genuinely differs.
+
 ### `SourceDocumentRef`
 
 One manuscript reference discovered from a source.
@@ -208,6 +212,8 @@ Minimal CLI:
 - look for high `automation_fit`
 - look for high `north_star_fit`
 - queue the intersection first
+- treat the source-level profile as the default
+- treat collection-level fit lines as meaningful overrides, not repeated boilerplate
 
 The adapter layer should remain boring.
 That is what makes the rest of the system elegant.
