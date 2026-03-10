@@ -676,16 +676,31 @@ def _load_page_assembly(packet: PagePacket) -> PageAssembly | None:
 def _build_witness_content_from_assembly(assembly: PageAssembly) -> WitnessContent:
     columns: list[ColumnWitness] = []
     for unit in assembly.units:
+        assembly_pairs = unit.pairs or []
+        header_zh = unit.label
+        header_en = ""
+        if assembly_pairs and unit.role == "header":
+            header_zh = assembly_pairs[0].source or unit.label
+            header_en = assembly_pairs[0].translation or ""
         columns.append(
             ColumnWitness(
-                header_zh=unit.label,
-                header_en="",
+                header_zh=header_zh,
+                header_en=header_en,
                 unit_id=unit.unit_id,
                 region_id=unit.region_id,
                 role=unit.role,
                 bbox_norm=unit.bbox_norm,
                 page_side=unit.page_side,
                 pairs=[
+                    SentencePair(
+                        source=pair.source,
+                        translation=pair.translation,
+                        unit_id=unit.unit_id,
+                        region_id=unit.region_id,
+                        bbox_norm=unit.bbox_norm,
+                    )
+                    for pair in assembly_pairs
+                ] or [
                     SentencePair(
                         source=line,
                         translation="",

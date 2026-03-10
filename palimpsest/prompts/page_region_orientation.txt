@@ -13,18 +13,27 @@ Return JSON only with this shape:
   "start_edge": "top_right|top_left|bottom_right|bottom_left|unknown",
   "script_hint": "brief script/language guess",
   "summary": "what this region appears to be",
-  "diplomatic_lines": ["line 1", "line 2"],
+  "pairs": [
+    {
+      "source": "visible source text",
+      "translation": "short direct English gloss",
+      "kind": "line|header|page_number|marginalia|other",
+      "note": "optional local note"
+    }
+  ],
   "notes": ["brief note"]
 }
 
 Requirements:
 - Be conservative.
-- We do not need a full transcription; we need enough lines to orient later reconstruction.
-- For text regions, give 2-8 short diplomatic lines in visible order.
+- We do not need a full transcription; we need enough aligned units to orient later reconstruction.
+- For text regions, give 2-8 short source/translation pairs in visible order.
+- Keep translations direct and local. Do not interpret the whole page.
+- For headers or page numbers, one pair is enough.
 - Preserve uncertainty inline using:
   - [option1/option2] for competing readings
   - [word?] for one tentative visible guess
   - (word) for supplied restorations of damaged text
   - [?] if no honest guess remains
-- If the crop is non-textual, leave diplomatic_lines empty and explain in summary/notes.
+- If the crop is non-textual, leave pairs empty and explain in summary/notes.
 - Return JSON only. No markdown fences.

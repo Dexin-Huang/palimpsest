@@ -11,7 +11,7 @@ from google.genai import types
 from PIL import Image, ImageDraw, ImageFont
 
 from palimpsest.config import DEFAULT_MODEL_VISION, DEFAULT_MODEL_READING
-from palimpsest.models import LayoutProbe, PageAssembly, PageAssemblyUnit, RegionOrientation
+from palimpsest.models import LayoutProbe, PageAssembly, PageAssemblyUnit, RegionOrientation, RegionReadPair
 
 
 DEFAULT_LAYOUT_PROMPT_NAME = "page_layout_probe"
@@ -322,6 +322,7 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
                 line_flow=read.line_flow if read else None,
                 start_edge=read.start_edge if read else None,
                 summary=read.summary if read else region.notes,
+                pairs=list(read.pairs) if read else [],
                 diplomatic_lines=list(read.diplomatic_lines) if read else [],
                 notes=list(read.notes) if read else ([region.notes] if region.notes else []),
             )
@@ -356,8 +357,15 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
         if unit.line_flow:
             markdown_lines.append(f"- Line flow: `{unit.line_flow}`")
         markdown_lines.append("")
-        for line in unit.diplomatic_lines:
-            markdown_lines.append(line)
+        for pair in unit.pairs:
+            markdown_lines.append(pair.source)
+            if pair.translation:
+                markdown_lines.append(f"=> {pair.translation}")
+            if pair.note:
+                markdown_lines.append(f"   note: {pair.note}")
+        if not unit.pairs:
+            for line in unit.diplomatic_lines:
+                markdown_lines.append(line)
         if unit.notes:
             markdown_lines.append("")
             markdown_lines.append("Notes:")

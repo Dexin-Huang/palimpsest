@@ -66,6 +66,7 @@ from .folio_render import (
 from .layout_probe import (
     LayoutProbeRegion,
     LayoutProbe,
+    RegionReadPair,
     RegionOrientation,
     PageAssemblyUnit,
     PageAssembly,
@@ -134,6 +135,7 @@ __all__ = [
     "FolioRender",
     "LayoutProbeRegion",
     "LayoutProbe",
+    "RegionReadPair",
     "RegionOrientation",
     "PageAssemblyUnit",
     "PageAssembly",
