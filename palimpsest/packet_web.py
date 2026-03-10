@@ -14,6 +14,7 @@ from palimpsest.models import (
     FolioRender,
     FolioRenderCover,
     FolioRenderImagePanel,
+    FolioRenderImageRegion,
     FolioRenderNavigation,
     FolioRenderSection,
     FolioRenderSpread,
@@ -22,6 +23,7 @@ from palimpsest.models import (
     InterpretationContent,
     MarginaliaEntry,
     NoteBlock,
+    PageAssembly,
     PagePacket,
     QuestionEntry,
     SentencePair,
@@ -644,6 +646,74 @@ def _build_witness_content(
     return WitnessContent(columns=columns, marginalia=marginalia)
 
 
+def _load_page_assembly(packet: PagePacket) -> PageAssembly | None:
+    candidate_paths: list[Path] = []
+    assembly_ref = packet.files.get("page_assembly")
+    if assembly_ref is not None and getattr(assembly_ref, "path", None):
+        candidate_paths.append(Path(assembly_ref.path))
+    layout_ref = packet.files.get("layout_probe")
+    if layout_ref is not None and getattr(layout_ref, "path", None):
+        candidate_paths.append(Path(layout_ref.path).parent / "page_assembly.json")
+    if packet.prepared_image_path:
+        candidate_paths.append(Path(packet.prepared_image_path).resolve().parent.parent / "layout_probe" / "page_assembly.json")
+    unique_paths: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidate_paths:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique_paths.append(resolved)
+    assembly_path = next((path for path in unique_paths if path.exists()), None)
+    if assembly_path is None:
+        return None
+    try:
+        return PageAssembly.model_validate_json(assembly_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _build_witness_content_from_assembly(assembly: PageAssembly) -> WitnessContent:
+    columns: list[ColumnWitness] = []
+    for unit in assembly.units:
+        columns.append(
+            ColumnWitness(
+                header_zh=unit.label,
+                header_en="",
+                unit_id=unit.unit_id,
+                region_id=unit.region_id,
+                role=unit.role,
+                bbox_norm=unit.bbox_norm,
+                page_side=unit.page_side,
+                pairs=[
+                    SentencePair(
+                        source=line,
+                        translation="",
+                        unit_id=unit.unit_id,
+                        region_id=unit.region_id,
+                        bbox_norm=unit.bbox_norm,
+                    )
+                    for line in unit.diplomatic_lines
+                ],
+            )
+        )
+    return WitnessContent(columns=columns, marginalia=[])
+
+
+def _build_image_regions_from_assembly(assembly: PageAssembly) -> list[FolioRenderImageRegion]:
+    return [
+        FolioRenderImageRegion(
+            region_id=unit.region_id,
+            unit_id=unit.unit_id,
+            label=unit.label,
+            role=unit.role,
+            bbox_norm=unit.bbox_norm,
+            page_side=unit.page_side,
+        )
+        for unit in assembly.units
+    ]
+
+
 def _parse_terms(terms_doc: MarkdownDocument) -> list[TermEntry]:
     """Parse terms.md into structured term entries."""
     entries: list[TermEntry] = []
@@ -798,6 +868,12 @@ def _render_structured_witness_face(folio: FolioRender) -> str:
     parts.append('    </div>')
 
     for col in wc.columns:
+        region_attrs = ""
+        if col.region_id:
+            region_attrs += f' data-region-id="{escape(col.region_id)}"'
+        if col.unit_id:
+            region_attrs += f' data-unit-id="{escape(col.unit_id)}"'
+        parts.append(f'    <section class="witness-unit"{region_attrs}>')
         parts.append('    <div class="column-header">')
         parts.append(f'      <div class="column-header-chinese">{escape(col.header_zh)}</div>')
         if col.header_en:
@@ -808,12 +884,18 @@ def _render_structured_witness_face(folio: FolioRender) -> str:
         for pair in col.pairs:
             source_html = _render_lacuna(pair.source) if pair.source else ""
             trans_html = _render_translation_inline(pair.translation) if pair.translation else ""
-            parts.append('    <div class="pair">')
+            pair_region_attrs = region_attrs
+            if pair.region_id:
+                pair_region_attrs = f' data-region-id="{escape(pair.region_id)}"'
+                if pair.unit_id:
+                    pair_region_attrs += f' data-unit-id="{escape(pair.unit_id)}"'
+            parts.append(f'    <div class="pair"{pair_region_attrs}>')
             if source_html:
                 parts.append(f'      <div class="pair-source">{source_html}</div>')
             if trans_html:
                 parts.append(f'      <div class="pair-translation">{trans_html}</div>')
             parts.append('    </div>')
+        parts.append('    </section>')
 
     if wc.marginalia:
         for marg in wc.marginalia:
@@ -903,6 +985,7 @@ def _build_folio_render(
     interpretation_sections: list[FolioTemplateSection],
     witness_content: WitnessContent | None = None,
     interpretation_content: InterpretationContent | None = None,
+    image_regions: list[FolioRenderImageRegion] | None = None,
 ) -> FolioRender:
     display_page = _display_page_id(packet.page_id)
     content_render_sections = [
@@ -934,6 +1017,7 @@ def _build_folio_render(
                 source_label=book_title,
                 image_path=image_href,
                 caption="Source witness / raw folio image",
+                regions=image_regions or [],
             ),
             content=FolioRenderTextPanel(
                 header_label="Witness & Translation",
@@ -1026,6 +1110,19 @@ def _render_interpretation_piece(
 
 
 def _render_spread_piece(folio: FolioRender, *, content_piece: str, interpretation_piece: str) -> str:
+    region_overlays = "\n".join(
+        (
+            f'<div class="image-region image-region--{escape(region.role)}" '
+            f'data-region-id="{escape(region.region_id)}" '
+            f'data-unit-id="{escape(region.unit_id or "")}" '
+            f'title="{escape(region.label)}" '
+            f'style="left:{region.bbox_norm[0] * 100:.3f}%;top:{region.bbox_norm[1] * 100:.3f}%;'
+            f'width:{region.bbox_norm[2] * 100:.3f}%;height:{region.bbox_norm[3] * 100:.3f}%;">'
+            f'<span class="image-region-label">{escape(region.label)}</span>'
+            f'</div>'
+        )
+        for region in folio.spread.image.regions
+    )
     return "\n".join(
         [
             '<div class="spread">',
@@ -1036,6 +1133,9 @@ def _render_spread_piece(folio: FolioRender, *, content_piece: str, interpretati
             '    </div>',
             '    <div class="image-frame">',
             f'      <img src="{escape(folio.spread.image.image_path)}" alt="{escape(folio.spread.image.folio_label)} source image">',
+            '      <div class="image-overlay">',
+            region_overlays,
+            '      </div>',
             '    </div>',
             f'    <span class="image-caption">{escape(folio.spread.image.caption)}</span>',
             '  </div>',
@@ -1281,6 +1381,47 @@ def _site_css() -> str:
     border: 1px solid rgba(0,0,0,0.05);
     pointer-events: none;
   }
+  .image-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .image-region {
+    position: absolute;
+    border: 2px solid rgba(138,75,42,0.45);
+    background: rgba(138,75,42,0.08);
+    box-shadow: inset 0 0 0 1px rgba(247,241,230,0.22);
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .image-region:hover,
+  .image-region.is-linked-active {
+    border-color: rgba(138,75,42,0.95);
+    background: rgba(138,75,42,0.18);
+    box-shadow: inset 0 0 0 1px rgba(247,241,230,0.5), 0 0 0 2px rgba(138,75,42,0.18);
+  }
+  .image-region-label {
+    position: absolute;
+    top: -1.2rem;
+    left: 0;
+    background: rgba(20,18,16,0.86);
+    color: var(--parchment);
+    font-size: 0.46rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    line-height: 1;
+    padding: 0.22rem 0.32rem;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  .image-region:hover .image-region-label,
+  .image-region.is-linked-active .image-region-label {
+    opacity: 1;
+    transform: translateY(0);
+  }
   .image-caption {
     position: absolute;
     bottom: 1rem;
@@ -1490,6 +1631,15 @@ def _site_css() -> str:
   /* ─── Structured witness: column headers ─── */
   .column-header { margin-top: 2rem; margin-bottom: 1.2rem; }
   .column-header:first-child { margin-top: 0; }
+  .witness-unit {
+    position: relative;
+    transition: background 0.18s ease, box-shadow 0.18s ease;
+    border-radius: 4px;
+  }
+  .witness-unit.is-linked-active {
+    background: rgba(138,75,42,0.08);
+    box-shadow: 0 0 0 1px rgba(138,75,42,0.16);
+  }
   .column-header-chinese {
     font-size: 1.1rem;
     color: var(--accent);
@@ -1516,7 +1666,8 @@ def _site_css() -> str:
     border-bottom: 1px solid var(--rule-light);
     transition: background 0.25s ease;
   }
-  .pair:hover {
+  .pair:hover,
+  .pair.is-linked-active {
     background: var(--glow);
     margin-left: -0.6rem; margin-right: -0.6rem;
     padding-left: 0.6rem; padding-right: 0.6rem;
@@ -1776,7 +1927,13 @@ def _render_folio_html(
         ),
     ]
 
-    witness_content = _build_witness_content(witness_doc, translation_doc)
+    page_assembly = _load_page_assembly(packet)
+    if page_assembly is not None:
+        witness_content = _build_witness_content_from_assembly(page_assembly)
+        image_regions = _build_image_regions_from_assembly(page_assembly)
+    else:
+        witness_content = _build_witness_content(witness_doc, translation_doc)
+        image_regions = []
     interpretation_content = _build_interpretation_content(
         interpretation_doc, notes_doc, terms_doc, questions_doc
     )
@@ -1792,6 +1949,7 @@ def _render_folio_html(
         interpretation_sections=interpretation_sections,
         witness_content=witness_content,
         interpretation_content=interpretation_content,
+        image_regions=image_regions,
     )
     cover_piece = _render_cover_piece(folio)
     content_piece = _render_content_piece(folio)
@@ -1863,6 +2021,25 @@ def _render_folio_html(
         }}
       }});
     }}
+
+    const linkedNodes = Array.from(document.querySelectorAll('[data-region-id]'));
+    function setLinkedActive(regionId, active) {{
+      if (!regionId) {{
+        return;
+      }}
+      linkedNodes.forEach((node) => {{
+        if (node.dataset.regionId === regionId) {{
+          node.classList.toggle('is-linked-active', active);
+        }}
+      }});
+    }}
+
+    linkedNodes.forEach((node) => {{
+      node.addEventListener('mouseenter', () => setLinkedActive(node.dataset.regionId, true));
+      node.addEventListener('mouseleave', () => setLinkedActive(node.dataset.regionId, false));
+      node.addEventListener('focus', () => setLinkedActive(node.dataset.regionId, true));
+      node.addEventListener('blur', () => setLinkedActive(node.dataset.regionId, false));
+    }});
 
     window.addEventListener('keydown', (event) => {{
       if (cover && cover.classList.contains('active') && (event.key === 'ArrowRight' || event.key === ' ')) {{

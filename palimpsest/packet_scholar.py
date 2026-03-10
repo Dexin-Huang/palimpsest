@@ -170,6 +170,10 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
     edition_pdf_path = str((packet_dir / "edition_spread.pdf").resolve())
     edition_html_path = str((packet_dir / "edition_elegant.html").resolve())
     folio_render_path = str((packet_dir / "folio_render.json").resolve())
+    layout_probe_path = str((packet_dir / "layout_probe" / "layout_probe.json").resolve())
+    layout_overlay_path = str((packet_dir / "layout_probe" / "layout_overlay.png").resolve())
+    region_orientations_path = str((packet_dir / "layout_probe" / "region_orientations.json").resolve())
+    page_assembly_path = str((packet_dir / "layout_probe" / "page_assembly.json").resolve())
     if "edition_pdf" not in files:
         files["edition_pdf"] = PacketFileRef(
             kind="edition_pdf",
@@ -211,6 +215,30 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
         if Path(files["folio_render"]["path"]).exists() and _normalize_status(files["folio_render"].get("status")) == "empty":
             files["folio_render"]["status"] = "draft"
             files["folio_render"]["note"] = files["folio_render"].get("note") or "Structured folio.render JSON artifact"
+    layout_defaults = {
+        "layout_probe": (layout_probe_path, "Coarse layout probe for region-first reconstruction"),
+        "layout_overlay": (layout_overlay_path, "Overlay preview of coarse layout regions"),
+        "region_orientations": (region_orientations_path, "Region orientation and quick-read hints"),
+        "page_assembly": (page_assembly_path, "Deterministic assembly from region reads"),
+    }
+    for key, (default_path, default_note) in layout_defaults.items():
+        if key not in files:
+            files[key] = PacketFileRef(
+                kind=key,
+                path=default_path,
+                status="draft" if Path(default_path).exists() else "empty",
+                note=default_note if Path(default_path).exists() else None,
+            ).model_dump()
+            continue
+        if not isinstance(files[key], dict):
+            continue
+        files[key].setdefault("kind", key)
+        current_path = str(files[key].get("path") or "").strip()
+        if not current_path:
+            files[key]["path"] = default_path
+        if Path(files[key]["path"]).exists() and _normalize_status(files[key].get("status")) == "empty":
+            files[key]["status"] = "draft"
+            files[key]["note"] = files[key].get("note") or default_note
 
     workflow = payload.get("workflow") or {}
     if not isinstance(workflow, dict):

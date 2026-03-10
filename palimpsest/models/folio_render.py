@@ -1,6 +1,6 @@
 """Structured render contract for one folio edition page."""
 
-from typing import Literal, Optional, List
+from typing import Literal, Optional, List, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -35,6 +35,9 @@ class SentencePair(BaseModel):
 
     source: str
     translation: str
+    unit_id: Optional[str] = Field(default=None)
+    region_id: Optional[str] = Field(default=None)
+    bbox_norm: Optional[Tuple[float, float, float, float]] = Field(default=None)
 
 
 class ColumnWitness(BaseModel):
@@ -42,6 +45,11 @@ class ColumnWitness(BaseModel):
 
     header_zh: str
     header_en: str
+    unit_id: Optional[str] = Field(default=None)
+    region_id: Optional[str] = Field(default=None)
+    role: Optional[str] = Field(default=None)
+    bbox_norm: Optional[Tuple[float, float, float, float]] = Field(default=None)
+    page_side: Optional[Literal["left", "right", "center", "full"]] = Field(default=None)
     pairs: List[SentencePair] = Field(default_factory=list)
 
 
@@ -120,6 +128,18 @@ class FolioRenderImagePanel(BaseModel):
     source_label: str
     image_path: str
     caption: str
+    regions: List["FolioRenderImageRegion"] = Field(default_factory=list)
+
+
+class FolioRenderImageRegion(BaseModel):
+    """One linked image region overlay."""
+
+    region_id: str
+    unit_id: Optional[str] = Field(default=None)
+    label: str
+    role: str
+    bbox_norm: Tuple[float, float, float, float]
+    page_side: Optional[Literal["left", "right", "center", "full"]] = Field(default=None)
 
 
 class FolioRenderTextPanel(BaseModel):
