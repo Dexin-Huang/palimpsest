@@ -1,0 +1,105 @@
+{
+  "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8300208t/manifest.json",
+  "manifest_label": "BnF. D\u00e9partement des Manuscrits. Pelliot chinois 4837",
+  "manifest_summary": {
+    "label": "BnF. D\u00e9partement des Manuscrits. Pelliot chinois 4837",
+    "title": "Pelliot chinois 4837",
+    "title_is_shelfmark": false,
+    "shelfmark": "Biblioth\u00e8que nationale de France. D\u00e9partement des Manuscrits. Pelliot chinois 4837",
+    "author": null,
+    "contributor": null,
+    "date": "0701-0900",
+    "language": "chinois",
+    "place": null,
+    "description": "Pelliot chinois 4837",
+    "metadata_field_count": 11,
+    "metadata_entries": [
+      {
+        "label": "Repository",
+        "value": ""
+      },
+      {
+        "label": "Digitised by",
+        "value": "Biblioth\u00e8que nationale de France"
+      },
+      {
+        "label": "Source Images",
+        "value": "https://gallica.bnf.fr/ark:/12148/btv1b8300208t"
+      },
+      {
+        "label": "Metadata Source",
+        "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b8300208t"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "Biblioth\u00e8que nationale de France. D\u00e9partement des Manuscrits. Pelliot chinois 4837"
+      },
+      {
+        "label": "Title",
+        "value": "Pelliot chinois 4837"
+      },
+      {
+        "label": "Date",
+        "value": "0701-0900"
+      },
+      {
+        "label": "Language",
+        "value": "chinois"
+      },
+      {
+        "label": "Format",
+        "value": "Livret fragmentaire de 2 feuillets coll\u00e9s par leur bord droit. Pap. assez homog\u00e8ne, bis (2,5 Y 7/4). Verg. 8 par cm. Trous, fentes et \u00e9chancrures. - 28,2 \u00d7 17 cm"
+      },
+      {
+        "label": "Relation",
+        "value": "Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc121109c"
+      },
+      {
+        "label": "Type",
+        "value": "Manuscrit"
+      }
+    ],
+    "canvas_count": 4
+  },
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "page_0000",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8300208t/f1/full/max/0/default.jpg",
+      "filename": "page_0000.jpg",
+      "order": 1,
+      "width": 2320,
+      "height": 2985,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0001",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8300208t/f2/full/max/0/default.jpg",
+      "filename": "page_0001.jpg",
+      "order": 2,
+      "width": 1890,
+      "height": 2970,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0002",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8300208t/f3/full/max/0/default.jpg",
+      "filename": "page_0002.jpg",
+      "order": 3,
+      "width": 1874,
+      "height": 2960,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0003",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8300208t/f4/full/max/0/default.jpg",
+      "filename": "page_0003.jpg",
+      "order": 4,
+      "width": 1895,
+      "height": 2955,
+      "label": "NP"
+    }
+  ],
+  "page_count": 4,
+  "doc_id": "gallica_pelliot_chinois_4837"
+}

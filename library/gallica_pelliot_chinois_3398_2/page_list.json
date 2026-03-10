@@ -1,0 +1,199 @@
+{
+  "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/manifest.json",
+  "manifest_label": "BnF. D\u00e9partement des Manuscrits. Pelliot chinois 3398-2",
+  "manifest_summary": {
+    "label": "BnF. D\u00e9partement des Manuscrits. Pelliot chinois 3398-2",
+    "title": "Texte divinatoire.",
+    "title_is_shelfmark": false,
+    "shelfmark": "Biblioth\u00e8que nationale de France. D\u00e9partement des Manuscrits. Pelliot chinois 3398-2",
+    "author": null,
+    "contributor": null,
+    "date": null,
+    "language": "chinois",
+    "place": null,
+    "description": "Texte divinatoire.",
+    "metadata_field_count": 10,
+    "metadata_entries": [
+      {
+        "label": "Repository",
+        "value": ""
+      },
+      {
+        "label": "Digitised by",
+        "value": "Biblioth\u00e8que nationale de France"
+      },
+      {
+        "label": "Source Images",
+        "value": "https://gallica.bnf.fr/ark:/12148/btv1b83002453"
+      },
+      {
+        "label": "Metadata Source",
+        "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b83002453"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "Biblioth\u00e8que nationale de France. D\u00e9partement des Manuscrits. Pelliot chinois 3398-2"
+      },
+      {
+        "label": "Title",
+        "value": "Texte divinatoire."
+      },
+      {
+        "label": "Language",
+        "value": "chinois"
+      },
+      {
+        "label": "Format",
+        "value": "Livret de 14 feuillets compos\u00e9 de 6 bifeuillets de 30,6 cm, pli\u00e9s en 2 (feuillets 2 \u00e0 13) et de 2 feuillets simples (feuillets 1 et 14). Pap. \u00e9pais, \u00e0 verg. verticales, chamois. Taches de gras et d'humidit\u00e9. - 20,5 \u00d7 15,3 cm"
+      },
+      {
+        "label": "Relation",
+        "value": "Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc88298/cd0e45804"
+      },
+      {
+        "label": "Type",
+        "value": "Manuscrit"
+      }
+    ],
+    "canvas_count": 15
+  },
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "page_0000",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f1/full/max/0/default.jpg",
+      "filename": "page_0000.jpg",
+      "order": 1,
+      "width": 2044,
+      "height": 2190,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0001",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f2/full/max/0/default.jpg",
+      "filename": "page_0001.jpg",
+      "order": 2,
+      "width": 3055,
+      "height": 2178,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0002",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f3/full/max/0/default.jpg",
+      "filename": "page_0002.jpg",
+      "order": 3,
+      "width": 3173,
+      "height": 2179,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0003",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f4/full/max/0/default.jpg",
+      "filename": "page_0003.jpg",
+      "order": 4,
+      "width": 3065,
+      "height": 2174,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0004",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f5/full/max/0/default.jpg",
+      "filename": "page_0004.jpg",
+      "order": 5,
+      "width": 3201,
+      "height": 2190,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0005",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f6/full/max/0/default.jpg",
+      "filename": "page_0005.jpg",
+      "order": 6,
+      "width": 3042,
+      "height": 2211,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0006",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f7/full/max/0/default.jpg",
+      "filename": "page_0006.jpg",
+      "order": 7,
+      "width": 3191,
+      "height": 2195,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0007",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f8/full/max/0/default.jpg",
+      "filename": "page_0007.jpg",
+      "order": 8,
+      "width": 3087,
+      "height": 2198,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0008",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f9/full/max/0/default.jpg",
+      "filename": "page_0008.jpg",
+      "order": 9,
+      "width": 3183,
+      "height": 2167,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0009",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f10/full/max/0/default.jpg",
+      "filename": "page_0009.jpg",
+      "order": 10,
+      "width": 3076,
+      "height": 2188,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0010",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f11/full/max/0/default.jpg",
+      "filename": "page_0010.jpg",
+      "order": 11,
+      "width": 3189,
+      "height": 2196,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0011",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f12/full/max/0/default.jpg",
+      "filename": "page_0011.jpg",
+      "order": 12,
+      "width": 3044,
+      "height": 2196,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0012",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f13/full/max/0/default.jpg",
+      "filename": "page_0012.jpg",
+      "order": 13,
+      "width": 3186,
+      "height": 2179,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0013",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f14/full/max/0/default.jpg",
+      "filename": "page_0013.jpg",
+      "order": 14,
+      "width": 2965,
+      "height": 2176,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0014",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83002453/f15/full/max/0/default.jpg",
+      "filename": "page_0014.jpg",
+      "order": 15,
+      "width": 1620,
+      "height": 2181,
+      "label": "NP"
+    }
+  ],
+  "doc_id": "gallica_pelliot_chinois_3398_2"
+}

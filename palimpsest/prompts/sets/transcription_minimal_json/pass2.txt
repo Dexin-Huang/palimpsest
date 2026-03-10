@@ -47,6 +47,6 @@ Rules:
 - Use square brackets with best-guess alternatives for uncertain readings, such as `[hill/heil/hail]`.
 - Use a bracketed single guess with `?` when only one reading is plausible but still doubtful, such as `[dominus?]`.
 - Use parentheses for supplied restorations of damaged but locally reconstructable text, such as `(dominus)`.
-- If nothing plausible can be read, use `[?]` or `[??]`.
+- If the reading is very weak, still give the most plausible visible candidate or candidates in `[]` rather than a bare unknown marker.
 - Replace any legacy `[////]`, `[damaged]`, or `[illegible]` placeholders from the draft with one of the notation forms above.
 - If the draft already captured a region correctly, do not rewrite it unnecessarily.

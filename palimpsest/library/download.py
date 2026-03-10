@@ -12,6 +12,10 @@ from .io import atomic_write_json, read_json
 from .metadata import update_metadata
 from .registry import now_iso
 
+REQUEST_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Palimpsest library/download)",
+}
+
 
 def _timestamp() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -29,7 +33,7 @@ def _download_file(url: str, dest: Path, timeout: float) -> tuple[int, str]:
     dest.parent.mkdir(parents=True, exist_ok=True)
     h = hashlib.sha256()
     size = 0
-    with requests.get(url, stream=True, timeout=timeout) as resp:
+    with requests.get(url, stream=True, timeout=timeout, headers=REQUEST_HEADERS) as resp:
         resp.raise_for_status()
         with dest.open("wb") as handle:
             for chunk in resp.iter_content(chunk_size=1024 * 1024):

@@ -1,0 +1,61 @@
+{
+  "manifest_url": "https://digi.vatlib.it/iiif/MSS_Vat.estr.or.16/manifest.json",
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "f001r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Vat.estr.or.16/Vat.estr.or.16_0007_fa_0001r.jp2/full/max/0/default.jpg",
+      "filename": "f001r.jpg",
+      "order": 1,
+      "width": 1260,
+      "height": 2155,
+      "label": "1r"
+    },
+    {
+      "page_id": "f001v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Vat.estr.or.16/Vat.estr.or.16_0008_fa_0001v.jp2/full/max/0/default.jpg",
+      "filename": "f001v.jpg",
+      "order": 2,
+      "width": 1260,
+      "height": 2155,
+      "label": "1v"
+    },
+    {
+      "page_id": "f002r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Vat.estr.or.16/Vat.estr.or.16_0009_fa_0002r.jp2/full/max/0/default.jpg",
+      "filename": "f002r.jpg",
+      "order": 3,
+      "width": 1260,
+      "height": 2155,
+      "label": "2r"
+    },
+    {
+      "page_id": "f002v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Vat.estr.or.16/Vat.estr.or.16_0010_fa_0002v.jp2/full/max/0/default.jpg",
+      "filename": "f002v.jpg",
+      "order": 4,
+      "width": 1260,
+      "height": 2155,
+      "label": "2v"
+    },
+    {
+      "page_id": "f003r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Vat.estr.or.16/Vat.estr.or.16_0011_fa_0003r.jp2/full/max/0/default.jpg",
+      "filename": "f003r.jpg",
+      "order": 5,
+      "width": 1260,
+      "height": 2155,
+      "label": "3r"
+    },
+    {
+      "page_id": "f003v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Vat.estr.or.16/Vat.estr.or.16_0012_fa_0003v.jp2/full/max/0/default.jpg",
+      "filename": "f003v.jpg",
+      "order": 6,
+      "width": 1260,
+      "height": 2155,
+      "label": "3v"
+    }
+  ],
+  "doc_id": "vatican_vat_estr_or_16_scout"
+}

@@ -85,6 +85,6 @@ Rules:
 - Preserve uncertainty explicitly; use square brackets with best-guess alternatives such as "[hill/heil/hail]" for uncertain readings.
 - If only one reading is plausible but still doubtful, use a bracketed guess with a question mark, such as "[dominus?]".
 - Use parentheses for supplied restorations of damaged but locally reconstructable text, such as "(dominus)".
-- If nothing plausible can be read, use "[?]" or "[??]".
+- If the reading is very weak, still give the most plausible visible candidate or candidates in `[]` rather than a bare unknown marker.
 - Replace any legacy "[////]", "[damaged]", or "[illegible]" placeholders from the draft with one of the notation forms above.
 - System-managed provenance fields may be overwritten later, but they must still be present in the JSON.

@@ -175,7 +175,6 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
     region_orientations_path = str((packet_dir / "layout_probe" / "region_orientations.json").resolve())
     section_resolution_path = str((packet_dir / "layout_probe" / "section_resolution.json").resolve())
     box_cleanup_path = str((packet_dir / "layout_probe" / "box_cleanup.json").resolve())
-    overlap_resolution_path = str((packet_dir / "layout_probe" / "overlap_resolution.json").resolve())
     page_assembly_path = str((packet_dir / "layout_probe" / "page_assembly.json").resolve())
     if "edition_pdf" not in files:
         files["edition_pdf"] = PacketFileRef(
@@ -224,7 +223,6 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
         "region_orientations": (region_orientations_path, "Region orientation and quick-read hints"),
         "section_resolution": (section_resolution_path, "Canonical text ownership per coarse region"),
         "box_cleanup": (box_cleanup_path, "Targeted cleanup for overlapping region pairs"),
-        "overlap_resolution": (overlap_resolution_path, "Ownership decisions for overlapping coarse regions"),
         "page_assembly": (page_assembly_path, "Deterministic assembly from region reads"),
     }
     for key, (default_path, default_note) in layout_defaults.items():

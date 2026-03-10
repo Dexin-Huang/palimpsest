@@ -28,6 +28,10 @@ import requests
 from palimpsest.config import DEFAULT_MODEL_SCHOLAR_AGENT, DEFAULT_MODEL_TRIAGE
 from palimpsest.library.iiif import extract_canvases, extract_manifest_summary
 
+REQUEST_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Palimpsest discovery)",
+}
+
 
 def now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -71,7 +75,7 @@ def fetch_manifest(url: str, retries: int = 3, delay: float = 1.0) -> dict | Non
     """Fetch IIIF manifest with retries."""
     for attempt in range(retries):
         try:
-            resp = requests.get(url, timeout=30)
+            resp = requests.get(url, timeout=30, headers=REQUEST_HEADERS)
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()
@@ -572,15 +576,19 @@ def cmd_sources_ingest(args: argparse.Namespace) -> None:
             source_catalog=source_catalog,
         )
 
-        existing = db.get_manuscript(ref.manuscript_id)
+        existing_by_id = db.get_manuscript(ref.manuscript_id)
+        existing_by_shelfmark = db.get_manuscript_by_shelfmark(ref.shelfmark)
+        existing = existing_by_id or existing_by_shelfmark
+        target_manuscript_id = existing.id if existing else ref.manuscript_id
+
         if existing and not args.update_existing:
             skipped += 1
-            db.ensure_opportunity(ref.manuscript_id)
+            db.ensure_opportunity(target_manuscript_id)
             continue
 
         if existing:
             db.update_manuscript(
-                ref.manuscript_id,
+                target_manuscript_id,
                 {
                     "iiif_manifest_url": ms.iiif_manifest_url,
                     "canvas_count": ms.canvas_count,
@@ -599,8 +607,8 @@ def cmd_sources_ingest(args: argparse.Namespace) -> None:
             db.add_manuscript(ms, agent=f"{args.source}_sources_ingest")
             added += 1
 
-        db.ensure_opportunity(ref.manuscript_id)
-        ingested_ids.append(ref.manuscript_id)
+        db.ensure_opportunity(target_manuscript_id)
+        ingested_ids.append(target_manuscript_id)
         print(f"  - {safe_console_text(ref.shelfmark)}")
 
     print(f"Added {added}, updated {updated}, skipped {skipped}")

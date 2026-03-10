@@ -30,7 +30,8 @@ repeatable way to turn a page image into:
   everything at once.
 - Builds `page.packet` workspaces for front-to-back scholarly work.
 - Synthesizes several page witnesses into section-level interpretation.
-- Renders edition PDFs deterministically with `tectonic`.
+- Renders linked HTML folios and book readers from structured page data.
+- Keeps PDF rendering as a deterministic downstream export, not the primary edition surface.
 
 ## Operating Model
 
@@ -56,7 +57,7 @@ repeatable way to turn a page image into:
    of forcing one page to explain the whole manuscript.
 
 7. `Render`
-   Compile a stable PDF edition from the packet's LaTeX source.
+   Build a linked folio or book from structured page output, with PDF as a downstream export when needed.
 
 ## Design Principles
 
@@ -157,14 +158,15 @@ python -m palimpsest page packet --image library/<doc_id>/images/<page>.jpg
 Canonical page pipeline inside `page packet` / `page refresh-packet`:
 
 ```text
-layout-probe -> region-read -> section-resolution -> box-cleanup -> assemble -> render-html
+layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble -> render-html
 ```
 
 This is intentionally region-first:
 - `layout-probe` finds coarse inclusive boxes
 - `region-read` transcribes each box in full
 - `section-resolution` assigns canonical text to each box
-- `box-cleanup` only touches genuinely overlapping box pairs
+- `validate` flags structural boundary problems before repair
+- `box-cleanup` only touches genuinely implicated neighboring box pairs
 - `assemble` builds the page witness object
 - `render-html` turns that into the linked folio view
 
@@ -206,7 +208,7 @@ python -m palimpsest scholar packet \
   --task render_edition
 ```
 
-Compile the PDF deterministically:
+Compile the PDF deterministically when you actually need a print artifact:
 
 ```bash
 python -m palimpsest page render --packet library/<doc_id>/experiments/<page>_packet/packet.json
@@ -302,11 +304,13 @@ This project is early, active, and opinionated.
 The current stable path is:
 
 - discover from curated public sources
-- prepare pages deterministically
-- read one page into a witness memo
+- map one page into coarse semantic boxes
+- transcribe each box in full
+- validate and repair only the implicated boundaries
+- assemble one canonical page witness
 - move page by page with packet continuity
 - synthesize every few pages
-- render edition PDFs deterministically
+- render linked HTML folios/books deterministically
 
 The repo already includes working manuscript dossiers and packet artifacts from
 real runs. It is intended to be used as a live research system, not just a

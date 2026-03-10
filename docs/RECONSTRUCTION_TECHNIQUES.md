@@ -10,7 +10,7 @@ We should improve the pipeline in this order and only fan changes out once `f004
 
 ## Canonical pipeline
 
-`layout-probe -> region-read -> section-resolution -> box-cleanup -> assemble -> render-html`
+`layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble -> render-html`
 
 ## Technique ladder
 
@@ -59,9 +59,21 @@ This is where the system decides:
 
 This should operate at the level of whole boxes, not pairwise lines.
 
-### 4. Targeted box-pair cleanup
+### 4. Deterministic validators
 
-Only if needed, send implicated neighboring pairs to a cheap model.
+Run cheap structural checks before repair:
+
+- `header_spill_into_main`
+- `marginalia_script_contamination`
+- `page_number_noise`
+- `truncation_risk`
+- `duplicate_short_line_spill`
+
+These decide whether a page needs repair without manual inspection.
+
+### 5. Targeted box-pair cleanup
+
+Only if validators flag a problem, send implicated neighboring pairs to a cheap model.
 
 Typical pairs:
 
@@ -79,18 +91,6 @@ This is the current best tool for:
 - header spill into main text
 - Chinese spill into Latin marginalia
 - page-number junk
-
-### 5. Deterministic validators
-
-Add cheap rule-based checks before or after cleanup:
-
-- `header_spill_into_main`
-- `marginalia_script_contamination`
-- `page_number_noise`
-- `truncation_risk`
-- `duplicate_short_line_spill`
-
-These should decide whether a page needs repair without manual inspection.
 
 ### 6. Lightweight visual QA
 

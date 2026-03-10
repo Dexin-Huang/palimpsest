@@ -10,6 +10,7 @@ __pycache__/
 
 # Scratch / temp
 scratch/
+tmp/
 *.stackdump
 .claude/
 
@@ -34,6 +35,9 @@ discovery/registry/*.jsonl
 library/**/images/
 library/**/runs/
 library/**/experiments/
+library/**/packet_site_proto/
+library/**/site_proto/
+library/**/reader_site/
 library/**/temp_docres_input/
 library/**/images_cleaned*/
 library/**/temp_binarization/

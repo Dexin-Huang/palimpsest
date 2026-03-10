@@ -184,36 +184,6 @@ class PageAssembly(BaseModel):
     units: List[PageAssemblyUnit] = Field(default_factory=list)
 
 
-class OverlapResolutionDecision(BaseModel):
-    """Adjudication for one candidate duplicate/overlap pair."""
-
-    candidate_id: str
-    region_a: str
-    region_b: str
-    pair_index_a: int
-    pair_index_b: int
-    relation: Literal[
-        "region_a_owns",
-        "region_b_owns",
-        "shared_duplicate",
-        "shared_continuation",
-        "uncertain",
-    ]
-    canonical_region_id: Optional[str] = Field(default=None)
-    canonical_text: Optional[str] = Field(default=None)
-    reason: Optional[str] = Field(default=None)
-
-
-class OverlapResolution(BaseModel):
-    """Page-level overlap adjudication for coarse, intentionally overlapping regions."""
-
-    artifact_type: Literal["page.overlap_resolution"] = Field(default="page.overlap_resolution")
-    created_at: str
-    doc_id: str
-    page_id: str
-    decisions: List[OverlapResolutionDecision] = Field(default_factory=list)
-
-
 class SectionResolutionAssignment(BaseModel):
     """Canonicalized text ownership for one coarse region."""
 

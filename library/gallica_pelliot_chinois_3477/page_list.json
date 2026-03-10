@@ -1,0 +1,91 @@
+{
+  "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83074575/manifest.json",
+  "manifest_label": "BnF. D\u00e9partement des Manuscrits. Pelliot chinois 3477",
+  "manifest_summary": {
+    "label": "BnF. D\u00e9partement des Manuscrits. Pelliot chinois 3477",
+    "title": "Xuan gan mo jing \u7384 \u611f \u8108 \u7d93.",
+    "title_is_shelfmark": false,
+    "shelfmark": "Biblioth\u00e8que nationale de France. D\u00e9partement des Manuscrits. Pelliot chinois 3477",
+    "author": null,
+    "contributor": null,
+    "date": null,
+    "language": "chinois",
+    "place": null,
+    "description": "Xuan gan mo jing \u7384 \u611f \u8108 \u7d93.",
+    "metadata_field_count": 10,
+    "metadata_entries": [
+      {
+        "label": "Repository",
+        "value": ""
+      },
+      {
+        "label": "Digitised by",
+        "value": "Biblioth\u00e8que nationale de France"
+      },
+      {
+        "label": "Source Images",
+        "value": "https://gallica.bnf.fr/ark:/12148/btv1b83074575"
+      },
+      {
+        "label": "Metadata Source",
+        "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b83074575"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "Biblioth\u00e8que nationale de France. D\u00e9partement des Manuscrits. Pelliot chinois 3477"
+      },
+      {
+        "label": "Title",
+        "value": "Xuan gan mo jing \u7384 \u611f \u8108 \u7d93."
+      },
+      {
+        "label": "Language",
+        "value": "chinois"
+      },
+      {
+        "label": "Format",
+        "value": "Rouleau de 3 ff. dont 2 de 40,5 cm (f. 3 : 14,5 cm). Pap. \u00e0 p\u00e2te irr\u00e9guli\u00e8re, \u00e0 grosses verg., chamois. Importantes taches de gras sur la f. 1. Importantes d\u00e9chirures \u00e0 la partie inf. au d\u00e9b. \u00c9chancrures aux bords sup. et inf. Nombreux trous et fentes. - 27 \u00d7 83 cm"
+      },
+      {
+        "label": "Relation",
+        "value": "Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc1201206"
+      },
+      {
+        "label": "Type",
+        "value": "Manuscrit"
+      }
+    ],
+    "canvas_count": 3
+  },
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "page_0000",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83074575/f1/full/max/0/default.jpg",
+      "filename": "page_0000.jpg",
+      "order": 1,
+      "width": 3168,
+      "height": 2600,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0001",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83074575/f2/full/max/0/default.jpg",
+      "filename": "page_0001.jpg",
+      "order": 2,
+      "width": 3006,
+      "height": 2270,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0002",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83074575/f3/full/max/0/default.jpg",
+      "filename": "page_0002.jpg",
+      "order": 3,
+      "width": 1638,
+      "height": 2270,
+      "label": "NP"
+    }
+  ],
+  "doc_id": "gallica_pelliot_chinois_3477"
+}

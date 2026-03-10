@@ -30,7 +30,7 @@ back while building:
 
 Recommended sequence:
 
-`image -> page prepare -> page.packet -> layout-probe -> region-read -> section-resolution -> box-cleanup -> assemble -> witness fill -> section synthesis -> edition render`
+`image -> page prepare -> page.packet -> layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble -> witness fill -> section synthesis -> edition render`
 
 Where:
 
@@ -49,13 +49,14 @@ The page packet should behave like a careful scholar's folder for one page.
 
 The canonical reconstruction lane is:
 
-`layout-probe -> region-read -> section-resolution -> box-cleanup -> assemble`
+`layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble`
 
 Meaning:
 - coarse inclusive boxes first
 - full transcription per box
 - canonical ownership per box
-- targeted cleanup only for genuinely overlapping box pairs
+- cheap structural validation before repair
+- targeted cleanup only for genuinely implicated neighboring box pairs
 - deterministic page assembly after that
 
 It should contain:
@@ -344,17 +345,19 @@ That separation keeps the workflow disciplined.
 
 The first edition layout should stay simple.
 
-Facing-page model:
-- left side: witness / diplomatic text
-- right side: translation and interpretation
+Reader model:
+- book cover
+- contents
+- one folio spread per page unit
+- ending page
 
-The page packet should generate a minimal LaTeX skeleton for this.
+The packet should generate structured `folio.render` data for this first.
 
 Important:
-- LaTeX is a render target
+- HTML is the primary edition surface
+- PDF is a downstream export
 - the packet is the working source bundle
-- `tectonic` is the default local renderer for packet editions
-- font policy prefers environment override, then bundled fonts, then system fallback
+- the renderer should assemble from structured packet data, not scrape ad hoc markdown forever
 
 ---
 

@@ -1,0 +1,43 @@
+You are repairing the boundary between two neighboring text regions on a manuscript page.
+
+Page: {PAGE_ID}
+
+You are given:
+- the full page image
+- an overlay showing the two implicated regions
+- close views of region A and region B
+- the current text for region A and region B
+- any validator issue context already detected for this pair
+
+Your job is to return the clean canonical text for each region.
+
+Rules:
+- Do not invent text.
+- Do not summarize.
+- Do not normalize punctuation or add punctuation that is not visibly present.
+- Keep the result witness-bound to the page image and the provided region texts.
+- If a word is uncertain, give best visible candidates in square brackets, like `[民/王]`.
+- If you supply a local restoration for damage, use parentheses, like `(民)`.
+- Never use `[?]`, `[??]`, `[////]`, `[damaged]`, or `[illegible]` if there is any plausible visible candidate.
+- If there is no real overlap, return the regions unchanged and set `relation` to `no_overlap`.
+- If the validator issue context says `header_spill_into_main`, do not casually return `no_overlap`.
+- In a `header_spill_into_main` case, remove short spill text from the start of `main_text` and keep only compact title text in `header`.
+- `header` should keep only header text.
+- `main_text` should keep continuous prose or verse.
+- `marginalia` should keep marginalia only.
+- `page_number` should keep only the page mark.
+- Prefer a clean separation of ownership, even if one region is slightly inclusive.
+
+Return JSON only:
+{
+  "pair_id": "string",
+  "region_a": "string",
+  "region_b": "string",
+  "relation": "no_overlap|region_a_owns_overlap|region_b_owns_overlap|shared|uncertain",
+  "cleaned_source_block_a": "cleaned text for region A only",
+  "cleaned_source_block_b": "cleaned text for region B only",
+  "reason": "brief explanation"
+}
+
+Pair:
+{PAIR_JSON}

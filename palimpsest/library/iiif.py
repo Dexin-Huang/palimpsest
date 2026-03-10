@@ -5,6 +5,10 @@ from typing import Any
 
 import requests
 
+REQUEST_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Palimpsest library/IIIF)",
+}
+
 
 def normalize_manifest_text(value: Any) -> str:
     """Flatten common IIIF text structures to a plain string."""
@@ -66,7 +70,7 @@ def extract_manifest_summary(manifest: dict) -> dict:
 
 
 def fetch_manifest(url: str) -> dict:
-    resp = requests.get(url, timeout=30)
+    resp = requests.get(url, timeout=30, headers=REQUEST_HEADERS)
     resp.raise_for_status()
     return resp.json()
 

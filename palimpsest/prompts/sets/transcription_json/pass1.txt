@@ -83,6 +83,6 @@ Rules:
 - If a line or span is uncertain but a few readings are plausible, use square brackets with best-guess alternatives such as "[hill/heil/hail]".
 - If only one reading is plausible but still doubtful, use a bracketed guess with a question mark, such as "[dominus?]".
 - If a span is damaged but a local restoration is probable, use parentheses for the supplied guess, such as "(dominus)".
-- If no plausible guess survives, use "[?]" or "[??]" rather than "illegible".
+- If the reading is very weak, still give the most plausible visible candidate or candidates in `[]` rather than a bare unknown marker.
 - Never use "[////]", "[damaged]", or "[illegible]".
 - System-managed provenance fields may be overwritten later, but they must still be present in the JSON.

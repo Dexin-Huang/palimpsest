@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from difflib import SequenceMatcher
 import json
-from itertools import combinations
+from difflib import SequenceMatcher
 from pathlib import Path
 import re
 
@@ -25,8 +24,6 @@ from palimpsest.models import (
     RegionOrientation,
     RegionReadPair,
     SectionResolutionAssignment,
-    OverlapResolution,
-    OverlapResolutionDecision,
 )
 
 
@@ -67,14 +64,6 @@ class PageAssemblyArtifact:
 
 
 @dataclass
-class OverlapResolutionArtifact:
-    probe_dir: Path
-    resolution_json_path: Path
-    meta_path: Path
-    model: str
-
-
-@dataclass
 class SectionResolutionArtifact:
     probe_dir: Path
     resolution_json_path: Path
@@ -96,6 +85,24 @@ class PageValidationArtifact:
     validation_json_path: Path
     validation_md_path: Path
     meta_path: Path
+
+
+@dataclass
+class BlobRefinementArtifact:
+    probe_dir: Path
+    blob_json_path: Path
+    blob_overlay_path: Path
+    refined_crops_dir: Path
+    meta_path: Path
+
+
+@dataclass
+class VisualPairRepairArtifact:
+    probe_dir: Path
+    decision_json_path: Path
+    overlay_path: Path
+    meta_path: Path
+    model: str
 
 
 def _utc_now() -> str:
@@ -321,24 +328,6 @@ def _line_similarity(a: str, b: str) -> float:
     return SequenceMatcher(a=na, b=nb).ratio()
 
 
-def _context_excerpt(lines: list[str], index: int, *, radius: int = 2) -> str:
-    if not lines:
-        return ""
-    start = max(0, index - radius)
-    end = min(len(lines), index + radius + 1)
-    return "\n".join(line for line in lines[start:end] if line.strip())
-
-
-def _role_ownership_rank(role: str) -> int:
-    ranks = {
-        "main_text": 0,
-        "marginalia": 1,
-        "header": 2,
-        "page_number": 3,
-    }
-    return ranks.get(role, 9)
-
-
 def _bbox_px(width: int, height: int, bbox_norm: tuple[float, float, float, float]) -> tuple[int, int, int, int]:
     x, y, w, h = bbox_norm
     left = max(0, min(width, round(x * width)))
@@ -346,6 +335,16 @@ def _bbox_px(width: int, height: int, bbox_norm: tuple[float, float, float, floa
     right = max(left + 1, min(width, round((x + w) * width)))
     bottom = max(top + 1, min(height, round((y + h) * height)))
     return left, top, right, bottom
+
+
+def _bbox_norm_from_px(width: int, height: int, bbox_px: tuple[int, int, int, int]) -> tuple[float, float, float, float]:
+    left, top, right, bottom = bbox_px
+    return _clamp_bbox(
+        left / max(width, 1),
+        top / max(height, 1),
+        max(1, right - left) / max(width, 1),
+        max(1, bottom - top) / max(height, 1),
+    )
 
 
 def _draw_overlay(image_path: Path, layout: LayoutProbe, out_path: Path) -> None:
@@ -383,6 +382,64 @@ def _draw_overlay(image_path: Path, layout: LayoutProbe, out_path: Path) -> None
         image.save(out_path, format="PNG")
 
 
+def _draw_pair_overlay(
+    image_path: Path,
+    *,
+    bbox_a: tuple[float, float, float, float],
+    bbox_b: tuple[float, float, float, float],
+    label_a: str,
+    label_b: str,
+    out_path: Path,
+) -> None:
+    with Image.open(image_path).convert("RGB") as image:
+        width, height = image.size
+        draw = ImageDraw.Draw(image)
+        font = ImageFont.load_default()
+
+        left_a, top_a, right_a, bottom_a = _bbox_px(width, height, bbox_a)
+        left_b, top_b, right_b, bottom_b = _bbox_px(width, height, bbox_b)
+
+        draw.rectangle((left_a, top_a, right_a, bottom_a), outline="#ff4d4f", width=5)
+        draw.rectangle((left_b, top_b, right_b, bottom_b), outline="#52c41a", width=5)
+
+        for left, top, label, color in (
+            (left_a, top_a, label_a, "#ff4d4f"),
+            (left_b, top_b, label_b, "#52c41a"),
+        ):
+            text_box = draw.textbbox((left, top), label, font=font)
+            draw.rectangle(text_box, fill=(255, 255, 255))
+            draw.text((left, top), label, fill=color, font=font)
+
+        image.save(out_path, format="PNG")
+
+
+def _bbox_intersection_area(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> int:
+    left = max(a[0], b[0])
+    top = max(a[1], b[1])
+    right = min(a[2], b[2])
+    bottom = min(a[3], b[3])
+    if right <= left or bottom <= top:
+        return 0
+    return (right - left) * (bottom - top)
+
+
+def _expand_bbox_px(
+    bbox: tuple[int, int, int, int],
+    *,
+    width: int,
+    height: int,
+    pad_x: int,
+    pad_y: int,
+) -> tuple[int, int, int, int]:
+    left, top, right, bottom = bbox
+    return (
+        max(0, left - pad_x),
+        max(0, top - pad_y),
+        min(width, right + pad_x),
+        min(height, bottom + pad_y),
+    )
+
+
 def _save_crops(image_path: Path, layout: LayoutProbe, crops_dir: Path) -> list[dict]:
     crops_dir.mkdir(parents=True, exist_ok=True)
     saved: list[dict] = []
@@ -404,6 +461,20 @@ def _save_crops(image_path: Path, layout: LayoutProbe, crops_dir: Path) -> list[
                 "crop_path": str(crop_path),
             })
     return saved
+
+
+def _region_crop_path(probe_dir: Path, region_id: str, *, use_blob_refined_crops: bool = False) -> Path | None:
+    if use_blob_refined_crops:
+        png_path = probe_dir / "blob_refined_crops" / f"{region_id}.png"
+        if png_path.exists():
+            return png_path
+    jpg_path = probe_dir / "crops" / f"{region_id}.jpg"
+    if jpg_path.exists():
+        return jpg_path
+    png_path = probe_dir / "crops" / f"{region_id}.png"
+    if png_path.exists():
+        return png_path
+    return None
 
 
 def _run_region_orientation(
@@ -431,7 +502,10 @@ def _run_region_orientation(
         model=model,
         contents=[
             prompt_text,
-            types.Part.from_bytes(data=crop_path.read_bytes(), mime_type="image/jpeg"),
+            types.Part.from_bytes(
+                data=crop_path.read_bytes(),
+                mime_type="image/png" if crop_path.suffix.lower() == ".png" else "image/jpeg",
+            ),
         ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -471,16 +545,6 @@ def _write_region_orientations(probe_dir: Path, orientations: list[RegionOrienta
     return reads_path
 
 
-def _load_overlap_resolution(probe_dir: Path) -> OverlapResolution | None:
-    path = probe_dir / "overlap_resolution.json"
-    if not path.exists():
-        return None
-    try:
-        return OverlapResolution.model_validate_json(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
-
 def _load_section_resolution(probe_dir: Path) -> PageSectionResolution | None:
     path = probe_dir / "section_resolution.json"
     if not path.exists():
@@ -501,110 +565,14 @@ def _load_box_cleanup(probe_dir: Path) -> PageBoxCleanup | None:
         return None
 
 
-def _overlap_candidate_payload(layout: LayoutProbe, reads: dict[str, RegionOrientation]) -> list[dict]:
-    candidate_payload: list[dict] = []
-    for region_a, region_b in combinations(layout.regions, 2):
-        if region_a.ignore_for_reconstruction or region_b.ignore_for_reconstruction:
-            continue
-        if region_a.reconstruction_priority == "ignore" or region_b.reconstruction_priority == "ignore":
-            continue
-        if region_a.page_side and region_b.page_side and region_a.page_side != region_b.page_side:
-            continue
-        overlap_ratio = _bbox_overlap_ratio(region_a.bbox_norm, region_b.bbox_norm)
-        if overlap_ratio < 0.08:
-            continue
-        read_a = reads.get(region_a.region_id)
-        read_b = reads.get(region_b.region_id)
-        if not read_a or not read_b:
-            continue
-        lines_a = read_a.diplomatic_lines or [pair.source for pair in read_a.pairs if pair.source]
-        lines_b = read_b.diplomatic_lines or [pair.source for pair in read_b.pairs if pair.source]
-        for idx_a, pair_a in enumerate(read_a.pairs):
-            if not pair_a.source.strip():
-                continue
-            for idx_b, pair_b in enumerate(read_b.pairs):
-                if not pair_b.source.strip():
-                    continue
-                similarity = _line_similarity(pair_a.source, pair_b.source)
-                if similarity < 0.52:
-                    continue
-                candidate_payload.append(
-                    {
-                        "candidate_id": f"{region_a.region_id}:{idx_a}-{region_b.region_id}:{idx_b}",
-                        "region_a": region_a.region_id,
-                        "region_b": region_b.region_id,
-                        "pair_index_a": idx_a,
-                        "pair_index_b": idx_b,
-                        "label_a": region_a.label,
-                        "label_b": region_b.label,
-                        "role_a": region_a.role,
-                        "role_b": region_b.role,
-                        "reading_order_a": region_a.reading_order,
-                        "reading_order_b": region_b.reading_order,
-                        "page_side_a": region_a.page_side,
-                        "page_side_b": region_b.page_side,
-                        "column_index_a": region_a.column_index,
-                        "column_index_b": region_b.column_index,
-                        "bbox_a": list(region_a.bbox_norm),
-                        "bbox_b": list(region_b.bbox_norm),
-                        "overlap_ratio": round(overlap_ratio, 4),
-                        "similarity": round(similarity, 4),
-                        "source_a": pair_a.source,
-                        "source_b": pair_b.source,
-                        "context_a": _context_excerpt(lines_a, idx_a),
-                        "context_b": _context_excerpt(lines_b, idx_b),
-                        "region_source_block_a": read_a.source_block or "\n".join(lines_a),
-                        "region_source_block_b": read_b.source_block or "\n".join(lines_b),
-                        "translation_a": pair_a.translation,
-                        "translation_b": pair_b.translation,
-                    }
-                )
-    # Keep best candidate per exact region pair + line pair by similarity.
-    deduped: dict[str, dict] = {}
-    for item in candidate_payload:
-        key = item["candidate_id"]
-        current = deduped.get(key)
-        if current is None or item["similarity"] > current["similarity"]:
-            deduped[key] = item
-    return list(deduped.values())
-
-
-def _fallback_overlap_decisions(layout: LayoutProbe, candidates: list[dict]) -> OverlapResolution:
-    region_lookup = {region.region_id: region for region in layout.regions}
-    decisions: list[OverlapResolutionDecision] = []
-    for item in candidates:
-        region_a = region_lookup[item["region_a"]]
-        region_b = region_lookup[item["region_b"]]
-        if _role_ownership_rank(region_a.role) < _role_ownership_rank(region_b.role):
-            canonical = region_a.region_id
-            relation = "region_a_owns"
-        elif _role_ownership_rank(region_b.role) < _role_ownership_rank(region_a.role):
-            canonical = region_b.region_id
-            relation = "region_b_owns"
-        else:
-            order_a = region_a.reading_order or 9999
-            order_b = region_b.reading_order or 9999
-            canonical = region_a.region_id if order_a <= order_b else region_b.region_id
-            relation = "shared_duplicate"
-        decisions.append(
-            OverlapResolutionDecision(
-                candidate_id=item["candidate_id"],
-                region_a=item["region_a"],
-                region_b=item["region_b"],
-                pair_index_a=item["pair_index_a"],
-                pair_index_b=item["pair_index_b"],
-                relation=relation,
-                canonical_region_id=canonical,
-                canonical_text=item["source_a"] if canonical == item["region_a"] else item["source_b"],
-                reason="Deterministic fallback based on role priority and reading order.",
-            )
-        )
-    return OverlapResolution(
-        created_at=_utc_now(),
-        doc_id=layout.doc_id,
-        page_id=layout.page_id,
-        decisions=decisions,
-    )
+def _load_page_validation(probe_dir: Path) -> PageValidation | None:
+    path = probe_dir / "page_validation.json"
+    if not path.exists():
+        return None
+    try:
+        return PageValidation.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 
 def _section_resolution_payload(layout: LayoutProbe, reads: dict[str, RegionOrientation]) -> list[dict]:
@@ -905,6 +873,58 @@ def _fallback_box_cleanup(section_resolution: PageSectionResolution) -> PageBoxC
     )
 
 
+def _issue_context_for_pair(validation: PageValidation | None, pair_key: set[str]) -> list[dict]:
+    if validation is None:
+        return []
+    matches: list[dict] = []
+    for issue in validation.issues:
+        issue_regions = set(issue.region_ids)
+        if issue_regions == pair_key or pair_key.issubset(issue_regions):
+            matches.append(
+                {
+                    "issue_id": issue.issue_id,
+                    "issue_type": issue.issue_type,
+                    "severity": issue.severity,
+                    "message": issue.message,
+                    "evidence": list(issue.evidence),
+                }
+            )
+    return matches
+
+
+def _compact_lines(text: str) -> list[str]:
+    return [re.sub(r"\s+", "", line) for line in str(text or "").splitlines() if line.strip()]
+
+
+def _trim_header_spill(header_text: str, main_text: str) -> tuple[str, str, list[str]]:
+    header_lines = [line for line in str(header_text or "").splitlines() if line.strip()]
+    main_lines = [line for line in str(main_text or "").splitlines() if line.strip()]
+    notes: list[str] = []
+
+    kept_header: list[str] = []
+    for line in header_lines:
+        compact = re.sub(r"\s+", "", line)
+        if compact and len(compact) <= 3:
+            kept_header.append(line)
+        else:
+            break
+    if kept_header:
+        header_lines = kept_header
+
+    trimmed = False
+    while main_lines:
+        compact = re.sub(r"\s+", "", main_lines[0])
+        if compact and len(compact) <= 2:
+            main_lines.pop(0)
+            trimmed = True
+            continue
+        break
+    if trimmed:
+        notes.append("Dropped short leading spill line(s) from main text.")
+
+    return "\n".join(header_lines), "\n".join(main_lines), notes
+
+
 def run_box_cleanup(
     probe_dir: Path,
     *,
@@ -914,6 +934,7 @@ def run_box_cleanup(
     probe_dir = probe_dir.resolve()
     layout = _load_layout_probe(probe_dir)
     section_resolution = _load_section_resolution(probe_dir)
+    validation = _load_page_validation(probe_dir)
     if section_resolution is None:
         raise FileNotFoundError(f"No section_resolution.json found in {probe_dir}")
 
@@ -948,7 +969,35 @@ def run_box_cleanup(
     prompt_text, prompt_path = _resolve_prompt_text(prompt_file, "page_box_cleanup")
     client = genai.Client()
     decisions: list[BoxCleanupDecision] = []
+    current_blocks = {
+        assignment.region_id: str(assignment.source_block or "")
+        for assignment in section_resolution.assignments
+    }
+    blob_refined_dir = probe_dir / "blob_refined_crops"
+    blob_refined_ready = blob_refined_dir.exists()
     for candidate in candidates:
+        pair_key = {candidate["region_a"], candidate["region_b"]}
+        issue_context = _issue_context_for_pair(validation, pair_key)
+        candidate["source_block_a"] = current_blocks.get(candidate["region_a"], candidate["source_block_a"])
+        candidate["source_block_b"] = current_blocks.get(candidate["region_b"], candidate["source_block_b"])
+        if issue_context:
+            if not blob_refined_ready:
+                run_blob_refinement(probe_dir)
+                blob_refined_ready = True
+            visual_artifact = run_visual_pair_repair(
+                probe_dir,
+                region_a=candidate["region_a"],
+                region_b=candidate["region_b"],
+                model=model,
+                use_blob_refined_crops=blob_refined_ready,
+                source_block_a=candidate["source_block_a"],
+                source_block_b=candidate["source_block_b"],
+            )
+            decision = BoxCleanupDecision.model_validate_json(visual_artifact.decision_json_path.read_text(encoding="utf-8"))
+            decisions.append(decision)
+            current_blocks[decision.region_a] = decision.cleaned_source_block_a
+            current_blocks[decision.region_b] = decision.cleaned_source_block_b
+            continue
         final_prompt = (
             prompt_text
             .replace("{PAGE_ID}", layout.page_id)
@@ -969,10 +1018,12 @@ def run_box_cleanup(
             payload.setdefault("pair_id", candidate["pair_id"])
             payload.setdefault("region_a", candidate["region_a"])
             payload.setdefault("region_b", candidate["region_b"])
-            decisions.append(BoxCleanupDecision.model_validate(payload))
+            decision = BoxCleanupDecision.model_validate(payload)
+            decisions.append(decision)
+            current_blocks[decision.region_a] = decision.cleaned_source_block_a
+            current_blocks[decision.region_b] = decision.cleaned_source_block_b
         except Exception:
-            decisions.append(
-                BoxCleanupDecision(
+            decision = BoxCleanupDecision(
                     pair_id=candidate["pair_id"],
                     region_a=candidate["region_a"],
                     region_b=candidate["region_b"],
@@ -981,7 +1032,9 @@ def run_box_cleanup(
                     cleaned_source_block_b=candidate["source_block_b"],
                     reason="Fallback preserved original blocks.",
                 )
-            )
+            decisions.append(decision)
+            current_blocks[decision.region_a] = decision.cleaned_source_block_a
+            current_blocks[decision.region_b] = decision.cleaned_source_block_b
 
     cleanup = PageBoxCleanup(
         created_at=_utc_now(),
@@ -1013,97 +1066,157 @@ def run_box_cleanup(
     )
 
 
-def run_overlap_resolution(
+def run_visual_pair_repair(
     probe_dir: Path,
     *,
+    region_a: str,
+    region_b: str,
     model: str = DEFAULT_MODEL_TRIAGE,
     prompt_file: Path | None = None,
-) -> OverlapResolutionArtifact:
+    use_blob_refined_crops: bool = False,
+    source_block_a: str | None = None,
+    source_block_b: str | None = None,
+) -> VisualPairRepairArtifact:
     probe_dir = probe_dir.resolve()
     layout = _load_layout_probe(probe_dir)
     reads = {item.region_id: item for item in _load_region_orientations(probe_dir)}
-    candidates = _overlap_candidate_payload(layout, reads)
+    section_resolution = _load_section_resolution(probe_dir)
+    validation = _load_page_validation(probe_dir)
+    if section_resolution is None:
+        section_resolution = _fallback_section_resolution(layout, reads)
 
-    resolution_json_path = probe_dir / "overlap_resolution.json"
-    meta_path = probe_dir / "overlap_resolution_meta.json"
+    pair_key = {region_a, region_b}
+    candidate = None
+    for item in _box_cleanup_candidates(layout, section_resolution):
+        if {item["region_a"], item["region_b"]} == pair_key:
+            candidate = item
+            break
+    if candidate is None:
+        raise ValueError(f"No cleanup candidate found for pair {region_a}, {region_b}")
 
-    if not candidates:
-        resolution = OverlapResolution(
-            created_at=_utc_now(),
-            doc_id=layout.doc_id,
-            page_id=layout.page_id,
-            decisions=[],
-        )
-        resolution_json_path.write_text(resolution.model_dump_json(indent=2), encoding="utf-8")
-        meta_path.write_text(
-            json.dumps(
-                {
-                    "generated_at": _utc_now(),
-                    "probe_dir": str(probe_dir),
-                    "resolution_json_path": str(resolution_json_path),
-                    "model": None,
-                    "candidate_count": 0,
-                },
-                indent=2,
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
-        return OverlapResolutionArtifact(
-            probe_dir=probe_dir,
-            resolution_json_path=resolution_json_path,
-            meta_path=meta_path,
-            model=model,
-        )
+    issue_context = _issue_context_for_pair(validation, pair_key)
+    candidate["issue_context"] = issue_context
+    if source_block_a is not None:
+        candidate["source_block_a"] = source_block_a
+    if source_block_b is not None:
+        candidate["source_block_b"] = source_block_b
 
-    prompt_text, prompt_path = _resolve_prompt_text(prompt_file, "page_overlap_resolution")
-    prompt_text = (
+    prompt_text, prompt_path = _resolve_prompt_text(prompt_file, "page_visual_pair_repair")
+    final_prompt = (
         prompt_text
         .replace("{PAGE_ID}", layout.page_id)
-        .replace("{CANDIDATES_JSON}", json.dumps(candidates, indent=2, ensure_ascii=False))
+        .replace("{PAIR_JSON}", json.dumps(candidate, indent=2, ensure_ascii=False))
     )
 
-    client = genai.Client()
-    try:
-        response = client.models.generate_content(
-            model=model,
-            contents=[prompt_text],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1,
-                max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
-            ),
-        )
-        text, _ = _response_text(response)
-        payload = json.loads(_coerce_json_text(text))
-        payload.update({
-            "created_at": _utc_now(),
-            "doc_id": layout.doc_id,
-            "page_id": layout.page_id,
-        })
-        resolution = OverlapResolution.model_validate(payload)
-    except Exception:
-        resolution = _fallback_overlap_decisions(layout, candidates)
+    region_lookup = {region.region_id: region for region in layout.regions}
+    image_path = Path(layout.image_path).resolve()
+    repairs_dir = probe_dir / "visual_pair_repairs"
+    repairs_dir.mkdir(parents=True, exist_ok=True)
+    pair_slug = f"{candidate['region_a']}__{candidate['region_b']}"
+    overlay_path = repairs_dir / f"{pair_slug}_overlay.png"
+    _draw_pair_overlay(
+        image_path,
+        bbox_a=region_lookup[candidate["region_a"]].bbox_norm,
+        bbox_b=region_lookup[candidate["region_b"]].bbox_norm,
+        label_a=f"{candidate['region_a']} {candidate['label_a']}",
+        label_b=f"{candidate['region_b']} {candidate['label_b']}",
+        out_path=overlay_path,
+    )
 
-    resolution_json_path.write_text(resolution.model_dump_json(indent=2), encoding="utf-8")
+    crop_a = _region_crop_path(probe_dir, candidate["region_a"], use_blob_refined_crops=use_blob_refined_crops)
+    crop_b = _region_crop_path(probe_dir, candidate["region_b"], use_blob_refined_crops=use_blob_refined_crops)
+    if crop_a is None or crop_b is None:
+        raise FileNotFoundError(f"Missing crop(s) for pair {candidate['region_a']}, {candidate['region_b']}")
+
+    client = genai.Client()
+    response = client.models.generate_content(
+        model=model,
+        contents=[
+            final_prompt,
+            types.Part.from_bytes(data=image_path.read_bytes(), mime_type="image/jpeg"),
+            types.Part.from_bytes(data=overlay_path.read_bytes(), mime_type="image/png"),
+            types.Part.from_bytes(
+                data=crop_a.read_bytes(),
+                mime_type="image/png" if crop_a.suffix.lower() == ".png" else "image/jpeg",
+            ),
+            types.Part.from_bytes(
+                data=crop_b.read_bytes(),
+                mime_type="image/png" if crop_b.suffix.lower() == ".png" else "image/jpeg",
+            ),
+        ],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.1,
+            max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
+        ),
+    )
+    text, finish_reason = _response_text(response)
+    payload = json.loads(_coerce_json_text(text))
+    payload.setdefault("pair_id", candidate["pair_id"])
+    payload.setdefault("region_a", candidate["region_a"])
+    payload.setdefault("region_b", candidate["region_b"])
+    decision = BoxCleanupDecision.model_validate(payload)
+
+    if any(item["issue_type"] == "header_spill_into_main" for item in issue_context):
+        role_a = candidate["role_a"]
+        role_b = candidate["role_b"]
+        if {role_a, role_b} == {"header", "main_text"}:
+            if role_a == "header":
+                cleaned_a, cleaned_b, repair_notes = _trim_header_spill(
+                    decision.cleaned_source_block_a,
+                    decision.cleaned_source_block_b,
+                )
+                decision = BoxCleanupDecision(
+                    pair_id=decision.pair_id,
+                    region_a=decision.region_a,
+                    region_b=decision.region_b,
+                    relation="region_a_owns_overlap" if cleaned_b != decision.cleaned_source_block_b else decision.relation,
+                    cleaned_source_block_a=cleaned_a,
+                    cleaned_source_block_b=cleaned_b,
+                    reason=(decision.reason or "") + (" Post-clean: " + "; ".join(repair_notes) if repair_notes else ""),
+                )
+            else:
+                cleaned_b, cleaned_a, repair_notes = _trim_header_spill(
+                    decision.cleaned_source_block_b,
+                    decision.cleaned_source_block_a,
+                )
+                decision = BoxCleanupDecision(
+                    pair_id=decision.pair_id,
+                    region_a=decision.region_a,
+                    region_b=decision.region_b,
+                    relation="region_b_owns_overlap" if cleaned_a != decision.cleaned_source_block_a else decision.relation,
+                    cleaned_source_block_a=cleaned_a,
+                    cleaned_source_block_b=cleaned_b,
+                    reason=(decision.reason or "") + (" Post-clean: " + "; ".join(repair_notes) if repair_notes else ""),
+                )
+
+    decision_json_path = repairs_dir / f"{pair_slug}.json"
+    decision_json_path.write_text(decision.model_dump_json(indent=2), encoding="utf-8")
+    meta_path = repairs_dir / f"{pair_slug}_meta.json"
     meta_path.write_text(
         json.dumps(
             {
                 "generated_at": _utc_now(),
                 "probe_dir": str(probe_dir),
-                "resolution_json_path": str(resolution_json_path),
+                "decision_json_path": str(decision_json_path),
+                "overlay_path": str(overlay_path),
+                "image_path": str(image_path),
+                "crop_a_path": str(crop_a),
+                "crop_b_path": str(crop_b),
                 "model": model,
-                "candidate_count": len(candidates),
-                "prompt_path": str(prompt_path) if 'prompt_path' in locals() else None,
+                "prompt_path": str(prompt_path),
+                "finish_reason": finish_reason,
+                "use_blob_refined_crops": use_blob_refined_crops,
             },
             indent=2,
             ensure_ascii=False,
         ),
         encoding="utf-8",
     )
-    return OverlapResolutionArtifact(
+    return VisualPairRepairArtifact(
         probe_dir=probe_dir,
-        resolution_json_path=resolution_json_path,
+        decision_json_path=decision_json_path,
+        overlay_path=overlay_path,
         meta_path=meta_path,
         model=model,
     )
@@ -1161,6 +1274,7 @@ def run_region_reads(
         "reads_path": str(reads_path),
         "model": model,
         "region_ids": region_ids or [],
+        "crops_dir": str(crops_dir),
     }
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return RegionReadsArtifact(probe_dir=probe_dir, reads_path=reads_path, meta_path=meta_path, model=model)
@@ -1172,15 +1286,7 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
     reads = {item.region_id: item for item in _load_region_orientations(probe_dir)}
     section_resolution = _load_section_resolution(probe_dir)
     box_cleanup = _load_box_cleanup(probe_dir)
-    overlap_resolution = _load_overlap_resolution(probe_dir)
     suppressed_pairs: set[tuple[str, int]] = set()
-    if section_resolution is None and overlap_resolution is not None:
-        for decision in overlap_resolution.decisions:
-            canonical = decision.canonical_region_id
-            if canonical == decision.region_a:
-                suppressed_pairs.add((decision.region_b, decision.pair_index_b))
-            elif canonical == decision.region_b:
-                suppressed_pairs.add((decision.region_a, decision.pair_index_a))
 
     units: list[PageAssemblyUnit] = []
     counter = 1
@@ -1298,7 +1404,6 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
         "assembly_md_path": str(assembly_md_path),
         "section_resolution_path": str((probe_dir / "section_resolution.json").resolve()) if section_resolution is not None else None,
         "box_cleanup_path": str((probe_dir / "box_cleanup.json").resolve()) if box_cleanup is not None else None,
-        "overlap_resolution_path": str((probe_dir / "overlap_resolution.json").resolve()) if overlap_resolution is not None else None,
         "suppressed_pair_count": len(suppressed_pairs),
     }
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -1456,6 +1561,228 @@ def run_page_validate(probe_dir: Path) -> PageValidationArtifact:
         probe_dir=probe_dir,
         validation_json_path=validation_json_path,
         validation_md_path=validation_md_path,
+        meta_path=meta_path,
+    )
+
+
+def run_blob_refinement(
+    probe_dir: Path,
+    *,
+    threshold_block_size: int = 35,
+    threshold_c: int = 11,
+    min_blob_area: int = 10,
+    halo_px: int = 6,
+) -> BlobRefinementArtifact:
+    import cv2
+    import numpy as np
+
+    probe_dir = probe_dir.resolve()
+    layout = _load_layout_probe(probe_dir)
+    image_path = Path(layout.image_path).resolve()
+    image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
+    if image_bgr is None:
+        raise FileNotFoundError(f"Could not load image for blob refinement: {image_path}")
+
+    rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    ink_mask = cv2.adaptiveThreshold(
+        blurred,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        threshold_block_size,
+        threshold_c,
+    )
+    kernel = np.ones((2, 2), dtype=np.uint8)
+    ink_mask = cv2.morphologyEx(ink_mask, cv2.MORPH_OPEN, kernel)
+
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(ink_mask, connectivity=8)
+    height, width = gray.shape
+
+    active_regions = [
+        region
+        for region in layout.regions
+        if not region.ignore_for_reconstruction and region.reconstruction_priority != "ignore"
+    ]
+    region_boxes_px = {region.region_id: _bbox_px(width, height, region.bbox_norm) for region in active_regions}
+    region_boxes_halo_px = {
+        region.region_id: _expand_bbox_px(
+            region_boxes_px[region.region_id],
+            width=width,
+            height=height,
+            pad_x=halo_px,
+            pad_y=halo_px,
+        )
+        for region in active_regions
+    }
+    region_masks: dict[str, np.ndarray] = {
+        region.region_id: np.zeros((height, width), dtype=np.uint8) for region in active_regions
+    }
+
+    blob_rows: list[dict] = []
+    region_blob_counts = {region.region_id: 0 for region in active_regions}
+
+    for label_idx in range(1, num_labels):
+        area = int(stats[label_idx, cv2.CC_STAT_AREA])
+        if area < min_blob_area:
+            continue
+
+        x = int(stats[label_idx, cv2.CC_STAT_LEFT])
+        y = int(stats[label_idx, cv2.CC_STAT_TOP])
+        w = int(stats[label_idx, cv2.CC_STAT_WIDTH])
+        h = int(stats[label_idx, cv2.CC_STAT_HEIGHT])
+        blob_bbox_px = (x, y, x + w, y + h)
+        cx, cy = centroids[label_idx]
+
+        candidate_scores: list[tuple[float, str, dict]] = []
+        for region in active_regions:
+            coarse_bbox = region_boxes_px[region.region_id]
+            halo_bbox = region_boxes_halo_px[region.region_id]
+            exact_intersection = _bbox_intersection_area(blob_bbox_px, coarse_bbox)
+            halo_intersection = _bbox_intersection_area(blob_bbox_px, halo_bbox)
+            centroid_inside = (
+                coarse_bbox[0] <= cx <= coarse_bbox[2]
+                and coarse_bbox[1] <= cy <= coarse_bbox[3]
+            )
+            if halo_intersection <= 0 and not centroid_inside:
+                continue
+
+            score = (exact_intersection * 10.0) + halo_intersection + (25.0 if centroid_inside else 0.0)
+            detail = {
+                "region_id": region.region_id,
+                "exact_intersection_px": int(exact_intersection),
+                "halo_intersection_px": int(halo_intersection),
+                "centroid_inside": bool(centroid_inside),
+            }
+            candidate_scores.append((score, region.region_id, detail))
+
+        if not candidate_scores:
+            continue
+
+        candidate_scores.sort(key=lambda item: item[0], reverse=True)
+        owner_region_id = candidate_scores[0][1]
+        owner_mask = (labels == label_idx)
+        region_masks[owner_region_id][owner_mask] = 255
+        region_blob_counts[owner_region_id] += 1
+
+        blob_rows.append(
+            {
+                "blob_id": f"b{label_idx:04d}",
+                "bbox_norm": list(_bbox_norm_from_px(width, height, blob_bbox_px)),
+                "bbox_px": [x, y, x + w, y + h],
+                "area_px": area,
+                "centroid_px": [round(float(cx), 2), round(float(cy), 2)],
+                "owner_region_id": owner_region_id,
+                "candidate_region_ids": [item[1] for item in candidate_scores],
+                "candidate_scores": [item[2] for item in candidate_scores[:4]],
+            }
+        )
+
+    refined_crops_dir = probe_dir / "blob_refined_crops"
+    refined_crops_dir.mkdir(parents=True, exist_ok=True)
+    region_rows: list[dict] = []
+
+    for region in active_regions:
+        coarse_bbox_px = region_boxes_px[region.region_id]
+        mask = region_masks[region.region_id]
+        ys, xs = np.where(mask > 0)
+        if len(xs) == 0 or len(ys) == 0:
+            refined_bbox_px = coarse_bbox_px
+            refined_mask = np.zeros((coarse_bbox_px[3] - coarse_bbox_px[1], coarse_bbox_px[2] - coarse_bbox_px[0]), dtype=np.uint8)
+            crop_rgb = np.full((refined_mask.shape[0], refined_mask.shape[1], 3), 255, dtype=np.uint8)
+        else:
+            refined_bbox_px = _expand_bbox_px(
+                (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1),
+                width=width,
+                height=height,
+                pad_x=2,
+                pad_y=2,
+            )
+            left, top, right, bottom = refined_bbox_px
+            refined_mask = mask[top:bottom, left:right]
+            crop_rgb = np.full((bottom - top, right - left, 3), 255, dtype=np.uint8)
+            source_slice = rgb[top:bottom, left:right]
+            keep = refined_mask > 0
+            crop_rgb[keep] = source_slice[keep]
+
+        refined_path = refined_crops_dir / f"{region.region_id}.png"
+        Image.fromarray(crop_rgb).save(refined_path, format="PNG")
+        region_rows.append(
+            {
+                "region_id": region.region_id,
+                "label": region.label,
+                "role": region.role,
+                "page_side": region.page_side,
+                "column_index": region.column_index,
+                "coarse_bbox_norm": list(region.bbox_norm),
+                "coarse_bbox_px": list(coarse_bbox_px),
+                "refined_bbox_norm": list(_bbox_norm_from_px(width, height, refined_bbox_px)),
+                "refined_bbox_px": list(refined_bbox_px),
+                "assigned_blob_count": region_blob_counts[region.region_id],
+                "refined_crop_path": str(refined_path),
+            }
+        )
+
+    overlay = Image.fromarray(rgb.copy())
+    draw = ImageDraw.Draw(overlay)
+    font = ImageFont.load_default()
+    color_map = {
+        "main_text": "#ff4d4f",
+        "header": "#faad14",
+        "marginalia": "#52c41a",
+        "page_number": "#13c2c2",
+        "other": "#1677ff",
+    }
+
+    for region_row in region_rows:
+        coarse = tuple(region_row["coarse_bbox_px"])
+        refined = tuple(region_row["refined_bbox_px"])
+        color = color_map.get(region_row["role"], color_map["other"])
+        draw.rectangle(coarse, outline="#bfbfbf", width=2)
+        draw.rectangle(refined, outline=color, width=4)
+        label = f"{region_row['region_id']} blobs={region_row['assigned_blob_count']}"
+        text_box = draw.textbbox((refined[0], refined[1]), label, font=font)
+        draw.rectangle(text_box, fill=(255, 255, 255))
+        draw.text((refined[0], refined[1]), label, fill=color, font=font)
+
+    blob_overlay_path = probe_dir / "blob_overlay.png"
+    overlay.save(blob_overlay_path, format="PNG")
+
+    blob_json_path = probe_dir / "blob_refinement.json"
+    payload = {
+        "created_at": _utc_now(),
+        "doc_id": layout.doc_id,
+        "page_id": layout.page_id,
+        "image_path": str(image_path),
+        "probe_dir": str(probe_dir),
+        "threshold_block_size": threshold_block_size,
+        "threshold_c": threshold_c,
+        "min_blob_area": min_blob_area,
+        "halo_px": halo_px,
+        "blob_count": len(blob_rows),
+        "regions": region_rows,
+        "blobs": blob_rows,
+    }
+    blob_json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    meta_path = probe_dir / "blob_refinement_meta.json"
+    meta = {
+        "generated_at": _utc_now(),
+        "probe_dir": str(probe_dir),
+        "blob_json_path": str(blob_json_path),
+        "blob_overlay_path": str(blob_overlay_path),
+        "refined_crops_dir": str(refined_crops_dir),
+        "blob_count": len(blob_rows),
+        "region_count": len(region_rows),
+    }
+    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    return BlobRefinementArtifact(
+        probe_dir=probe_dir,
+        blob_json_path=blob_json_path,
+        blob_overlay_path=blob_overlay_path,
+        refined_crops_dir=refined_crops_dir,
         meta_path=meta_path,
     )
 

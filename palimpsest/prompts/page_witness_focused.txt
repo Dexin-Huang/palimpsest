@@ -18,7 +18,7 @@ Return markdown with exactly this heading grammar:
 - If a reading is uncertain but a few readings are plausible, use square brackets with the best guesses in order, such as `[hill/heil/hail]`.
 - If only one reading is plausible but still doubtful, use a bracketed guess with a question mark, such as `[dominus?]`.
 - If the text is physically damaged but a local restoration is probable, use parentheses for the supplied guess, such as `(dominus)`.
-- If nothing plausible can be read, use `[?]` or `[??]` rather than `illegible`.
+- Even when the reading is very weak, give the most plausible visible candidate or candidates in `[]` rather than a bare unknown marker.
 
 ## Reading Unit 2
 - Only include this second unit if the page clearly has a second visible text region.
@@ -44,7 +44,7 @@ Rules:
 - Keep witness text and commentary separate.
 - Keep the heading grammar stable. Do not replace it with a different outline.
 - Never use `[////]`, `[damaged]`, or `[illegible]`.
-- Use this fallback order for doubtful text: best visible guesses in `[]`, supplied restoration in `()`, then `[?]` only if no honest guess remains.
+- Use this fallback order for doubtful text: best visible guesses in `[]`, supplied restoration in `()`, then more tentative visible guesses in `[]` if necessary. Never leave a bare `[?]` or `[??]`.
 - Do not provide a full translation or a broad thematic interpretation.
 - Do not identify the exact source work, chapter, controversy, or author unless the page itself names it or the identification is directly supported by visible evidence on the page.
 - If a reading is only probable, say so.
