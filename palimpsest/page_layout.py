@@ -840,8 +840,14 @@ def _box_cleanup_candidates(layout: LayoutProbe, section_resolution: PageSection
             continue
         if region_a.page_side and region_b.page_side and region_a.page_side != region_b.page_side:
             continue
+
+        header_main_neighbor = (
+            {a.role, b.role} == {"header", "main_text"}
+            and a.page_side == b.page_side
+            and a.column_index == b.column_index
+        )
         overlap_ratio = _bbox_overlap_ratio(region_a.bbox_norm, region_b.bbox_norm)
-        if overlap_ratio < 0.03:
+        if overlap_ratio < 0.03 and not header_main_neighbor:
             continue
 
         text_a = str(a.source_block or "").strip()
@@ -851,7 +857,7 @@ def _box_cleanup_candidates(layout: LayoutProbe, section_resolution: PageSection
         similarity = _line_similarity(compact_a, compact_b) if compact_a and compact_b else 0.0
         shared = _shared_substring_size(compact_a, compact_b)
 
-        if similarity < 0.08 and shared < 2:
+        if similarity < 0.08 and shared < 2 and not header_main_neighbor:
             continue
 
         candidates.append(
@@ -872,6 +878,7 @@ def _box_cleanup_candidates(layout: LayoutProbe, section_resolution: PageSection
                 "overlap_ratio": round(overlap_ratio, 4),
                 "text_similarity": round(similarity, 4),
                 "shared_substring_size": shared,
+                "header_main_neighbor": header_main_neighbor,
                 "source_block_a": text_a,
                 "source_block_b": text_b,
             }
