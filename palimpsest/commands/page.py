@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import time
 
 from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
@@ -19,6 +20,73 @@ from palimpsest.page_reading import run_page_reading, run_section_synthesis
 from palimpsest.packet_scholar import repair_packet_json
 from palimpsest.packet_render import render_packet_edition
 from palimpsest.packet_web import render_packet_folio_html
+
+
+def _run_layout_pipeline(
+    *,
+    image_path: Path,
+    probe_dir: Path,
+    layout_model: str,
+    region_model: str,
+    overlap_model: str,
+    run_regions: bool,
+    run_overlap: bool,
+    run_assembly: bool,
+    retries: int = 2,
+):
+    probe_artifact = None
+    region_artifact = None
+    overlap_artifact = None
+    assembly_artifact = None
+
+    def _retry(stage_name: str, fn):
+        last_exc = None
+        for attempt in range(retries + 1):
+            try:
+                if attempt == 0:
+                    print(f"{stage_name}: running", flush=True)
+                return fn()
+            except Exception as exc:  # pragma: no cover - defensive runtime retry path
+                last_exc = exc
+                if attempt >= retries:
+                    raise
+                print(f"{stage_name}: retry {attempt + 1}/{retries} after {exc.__class__.__name__}", flush=True)
+                time.sleep(min(2 + attempt, 5))
+        raise last_exc  # pragma: no cover
+
+    probe_artifact = _retry(
+        "layout_probe",
+        lambda: run_page_layout_probe(
+            image_path,
+            out_dir=probe_dir,
+            model=layout_model,
+            orient_model=region_model,
+            orient_regions=False,
+        ),
+    )
+
+    if run_regions:
+        region_artifact = _retry(
+            "region_read",
+            lambda: run_region_reads(
+                probe_artifact.output_dir,
+                model=region_model,
+            ),
+        )
+
+    if run_overlap:
+        overlap_artifact = _retry(
+            "resolve_overlap",
+            lambda: run_overlap_resolution(
+                probe_artifact.output_dir,
+                model=overlap_model,
+            ),
+        )
+
+    if run_assembly:
+        assembly_artifact = run_page_assembly(probe_artifact.output_dir)
+
+    return probe_artifact, region_artifact, overlap_artifact, assembly_artifact
 
 
 def cmd_prepare(args: argparse.Namespace) -> None:
@@ -68,26 +136,28 @@ def cmd_packet(args: argparse.Namespace) -> None:
     if packet.continuity.window_synthesis_path:
         print(f"window_synthesis: {packet.continuity.window_synthesis_path}")
     if not args.no_layout_probe:
-        probe_artifact = run_page_layout_probe(
-            Path(args.image),
-            out_dir=packet_path.parent / "layout_probe",
-            model=args.layout_model,
-            orient_model=args.orient_model,
-            orient_regions=not args.no_orient,
+        probe_artifact, region_artifact, overlap_artifact, assembly_artifact = _run_layout_pipeline(
+            image_path=Path(args.image),
+            probe_dir=packet_path.parent / "layout_probe",
+            layout_model=args.layout_model,
+            region_model=args.orient_model,
+            overlap_model=args.overlap_model,
+            run_regions=not args.no_orient,
+            run_overlap=not args.skip_overlap_resolution,
+            run_assembly=True,
+            retries=args.retries,
         )
-        if not args.skip_overlap_resolution:
-            overlap_artifact = run_overlap_resolution(
-                probe_artifact.output_dir,
-                model=args.overlap_model,
-            )
-        assembly_artifact = run_page_assembly(probe_artifact.output_dir)
         packet = attach_layout_probe(packet_path, probe_artifact.output_dir)
         print(f"layout_probe: {probe_artifact.layout_json_path}")
         print(f"layout_overlay: {probe_artifact.overlay_path}")
-        print(f"region_orientations: {probe_artifact.orientations_path}")
-        if not args.skip_overlap_resolution:
+        if region_artifact is not None:
+            print(f"region_orientations: {region_artifact.reads_path}")
+        else:
+            print(f"region_orientations: {probe_artifact.orientations_path}")
+        if overlap_artifact is not None:
             print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
-        print(f"page_assembly: {assembly_artifact.assembly_json_path}")
+        if assembly_artifact is not None:
+            print(f"page_assembly: {assembly_artifact.assembly_json_path}")
     print(f"next_action: {packet.workflow.next_action}")
 
 
@@ -150,27 +220,36 @@ def cmd_refresh_packet(args: argparse.Namespace) -> None:
     probe_dir = packet_path.parent / "layout_probe"
 
     if not args.skip_layout_probe:
-        probe_artifact = run_page_layout_probe(
-            Path(packet.source_image_path),
-            out_dir=probe_dir,
-            model=args.layout_model,
-            orient_model=args.orient_model,
-            orient_regions=not args.no_orient,
+        probe_artifact, region_artifact, overlap_artifact, assembly_artifact = _run_layout_pipeline(
+            image_path=Path(packet.source_image_path),
+            probe_dir=probe_dir,
+            layout_model=args.layout_model,
+            region_model=args.orient_model,
+            overlap_model=args.overlap_model,
+            run_regions=not args.no_orient,
+            run_overlap=not args.skip_overlap_resolution,
+            run_assembly=not args.skip_assembly,
+            retries=args.retries,
         )
         print(f"layout_probe: {probe_artifact.layout_json_path}")
         print(f"layout_overlay: {probe_artifact.overlay_path}")
-        print(f"region_orientations: {probe_artifact.orientations_path}")
+        if region_artifact is not None:
+            print(f"region_orientations: {region_artifact.reads_path}")
+        if overlap_artifact is not None:
+            print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
+        if assembly_artifact is not None:
+            print(f"page_assembly: {assembly_artifact.assembly_json_path}")
+    else:
+        if not args.skip_overlap_resolution:
+            overlap_artifact = run_overlap_resolution(
+                probe_dir,
+                model=args.overlap_model,
+            )
+            print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
 
-    if not args.skip_overlap_resolution:
-        overlap_artifact = run_overlap_resolution(
-            probe_dir,
-            model=args.overlap_model,
-        )
-        print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
-
-    if not args.skip_assembly:
-        assembly_artifact = run_page_assembly(probe_dir)
-        print(f"page_assembly: {assembly_artifact.assembly_json_path}")
+        if not args.skip_assembly:
+            assembly_artifact = run_page_assembly(probe_dir)
+            print(f"page_assembly: {assembly_artifact.assembly_json_path}")
 
     packet = attach_layout_probe(packet_path, probe_dir)
     print(f"packet: {packet_path}")
@@ -300,6 +379,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=DEFAULT_MODEL_TRIAGE,
         help=f"Model for overlap adjudication (default: {DEFAULT_MODEL_TRIAGE})",
     )
+    packet.add_argument("--retries", type=int, default=2, help="Retry count for model-backed packet build stages")
     packet.set_defaults(func=cmd_packet)
 
     ingest = sub.add_parser("ingest-reading", help="Deterministically ingest a page read markdown into a page packet")
@@ -372,6 +452,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=DEFAULT_MODEL_TRIAGE,
         help=f"Model for overlap adjudication (default: {DEFAULT_MODEL_TRIAGE})",
     )
+    refresh_packet.add_argument("--retries", type=int, default=2, help="Retry count for model-backed refresh stages")
     refresh_packet.set_defaults(func=cmd_refresh_packet)
 
     layout_probe = sub.add_parser("layout-probe", help="Run a fast layout+bbox probe and generate overlay/crops")
