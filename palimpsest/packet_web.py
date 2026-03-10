@@ -674,14 +674,79 @@ def _load_page_assembly(packet: PagePacket) -> PageAssembly | None:
 
 
 def _build_witness_content_from_assembly(assembly: PageAssembly) -> WitnessContent:
+    def _pairs_from_blocks(unit: PageAssemblyUnit) -> list[SentencePair]:
+        source_lines = [line.strip() for line in (unit.source_block or "").splitlines() if line.strip()]
+        translation_lines = [line.strip() for line in (unit.translation_block or "").splitlines() if line.strip()]
+        if not source_lines:
+            return []
+        if translation_lines and len(source_lines) == len(translation_lines):
+            return [
+                SentencePair(
+                    source=source_line,
+                    translation=translation_line,
+                    unit_id=unit.unit_id,
+                    region_id=unit.region_id,
+                    bbox_norm=unit.bbox_norm,
+                )
+                for source_line, translation_line in zip(source_lines, translation_lines)
+            ]
+        return [
+            SentencePair(
+                source=source_line,
+                translation="",
+                unit_id=unit.unit_id,
+                region_id=unit.region_id,
+                bbox_norm=unit.bbox_norm,
+            )
+            for source_line in source_lines
+        ]
+
+    ordered_units = sorted(
+        assembly.units,
+        key=lambda unit: (
+            9999 if unit.reading_order is None else unit.reading_order,
+            unit.page_side or "",
+            9999 if unit.column_index is None else unit.column_index,
+            unit.unit_id,
+        ),
+    )
+
+    header_map: dict[tuple[str | None, int | None], tuple[str, str]] = {}
+    marginalia: list[MarginaliaEntry] = []
     columns: list[ColumnWitness] = []
-    for unit in assembly.units:
-        assembly_pairs = unit.pairs or []
-        header_zh = unit.label
-        header_en = ""
-        if assembly_pairs and unit.role == "header":
-            header_zh = assembly_pairs[0].source or unit.label
-            header_en = assembly_pairs[0].translation or ""
+
+    for unit in ordered_units:
+        pairs = _pairs_from_blocks(unit)
+        key = (unit.page_side, unit.column_index)
+
+        if unit.role == "header":
+            header_lines = [pair.source.strip() for pair in pairs if pair.source.strip()]
+            header_text = "\n".join(header_lines) if header_lines else (unit.source_block or unit.label)
+            header_translation_lines = [pair.translation.strip() for pair in pairs if pair.translation.strip()]
+            header_translation = "\n".join(header_translation_lines)
+            header_map[key] = (header_text, header_translation)
+            continue
+
+        if unit.role == "page_number":
+            continue
+
+        if unit.role == "marginalia":
+            marginalia_text = unit.source_block or "\n".join(pair.source for pair in pairs if pair.source.strip())
+            if marginalia_text.strip():
+                marginalia.append(
+                    MarginaliaEntry(
+                        script="unknown",
+                        position=f"{unit.page_side or 'page'} margin",
+                        text=marginalia_text,
+                        note=unit.label,
+                    )
+                )
+            continue
+
+        header_zh, header_en = header_map.get(key, ("", ""))
+        if not header_zh:
+            header_zh = unit.label
+
         columns.append(
             ColumnWitness(
                 header_zh=header_zh,
@@ -691,16 +756,8 @@ def _build_witness_content_from_assembly(assembly: PageAssembly) -> WitnessConte
                 role=unit.role,
                 bbox_norm=unit.bbox_norm,
                 page_side=unit.page_side,
-                pairs=[
-                    SentencePair(
-                        source=pair.source,
-                        translation=pair.translation,
-                        unit_id=unit.unit_id,
-                        region_id=unit.region_id,
-                        bbox_norm=unit.bbox_norm,
-                    )
-                    for pair in assembly_pairs
-                ] or [
+                pairs=pairs
+                or [
                     SentencePair(
                         source=line,
                         translation="",
@@ -709,10 +766,12 @@ def _build_witness_content_from_assembly(assembly: PageAssembly) -> WitnessConte
                         bbox_norm=unit.bbox_norm,
                     )
                     for line in unit.diplomatic_lines
+                    if line.strip()
                 ],
             )
         )
-    return WitnessContent(columns=columns, marginalia=[])
+
+    return WitnessContent(columns=columns, marginalia=marginalia)
 
 
 def _build_image_regions_from_assembly(assembly: PageAssembly) -> list[FolioRenderImageRegion]:

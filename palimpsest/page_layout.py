@@ -14,11 +14,15 @@ from PIL import Image, ImageDraw, ImageFont
 
 from palimpsest.config import DEFAULT_MODEL_VISION, DEFAULT_MODEL_READING, DEFAULT_MODEL_TRIAGE
 from palimpsest.models import (
+    BoxCleanupDecision,
     LayoutProbe,
+    PageBoxCleanup,
     PageAssembly,
     PageAssemblyUnit,
+    PageSectionResolution,
     RegionOrientation,
     RegionReadPair,
+    SectionResolutionAssignment,
     OverlapResolution,
     OverlapResolutionDecision,
 )
@@ -64,6 +68,22 @@ class PageAssemblyArtifact:
 class OverlapResolutionArtifact:
     probe_dir: Path
     resolution_json_path: Path
+    meta_path: Path
+    model: str
+
+
+@dataclass
+class SectionResolutionArtifact:
+    probe_dir: Path
+    resolution_json_path: Path
+    meta_path: Path
+    model: str
+
+
+@dataclass
+class BoxCleanupArtifact:
+    probe_dir: Path
+    cleanup_json_path: Path
     meta_path: Path
     model: str
 
@@ -120,6 +140,34 @@ def _coerce_json_text(text: str) -> str:
     return cleaned.strip()
 
 
+def _normalize_region_payload(payload) -> dict:
+    if isinstance(payload, dict):
+        return payload
+    if isinstance(payload, str):
+        return {"source_block": payload}
+    if isinstance(payload, list):
+        if len(payload) == 1 and isinstance(payload[0], dict):
+            return payload[0]
+        lines: list[str] = []
+        for item in payload:
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    lines.append(text)
+                continue
+            if isinstance(item, dict):
+                block = str(item.get("source_block") or "").strip()
+                if block:
+                    lines.extend(line for line in block.splitlines() if line.strip())
+                    continue
+                source = str(item.get("source") or "").strip()
+                if source:
+                    lines.append(source)
+        if lines:
+            return {"source_block": "\n".join(lines)}
+    raise ValueError(f"Unsupported region payload type: {type(payload).__name__}")
+
+
 def _image_page_unit(image_path: Path) -> str:
     with Image.open(image_path) as image:
         width, height = image.size
@@ -161,31 +209,30 @@ def _expanded_region_bbox(layout: LayoutProbe, region) -> tuple[float, float, fl
     wb = wy + wh
     mid_x = wx + (ww / 2.0)
 
-    # Default to no-op for low-priority ancillary boxes.
+    # Do not expand every region by default.
+    # Only role-specific rules below should enlarge boxes.
     pad_x = 0.0
     pad_y = 0.0
     extra_top = 0.0
     extra_bottom = 0.0
 
     if region.role == "main_text":
-        pad_x = max(0.018, w * 0.08)
-        pad_y = max(0.018, h * 0.04)
+        pad_x = max(pad_x, max(0.018, w * 0.08))
+        pad_y = max(pad_y, max(0.018, h * 0.04))
         extra_top = max(0.01, h * 0.015)
         extra_bottom = max(0.02, h * 0.03)
     elif region.role == "header":
-        pad_x = max(0.02, w * 0.25)
-        pad_y = max(0.012, h * 0.18)
+        pad_x = max(pad_x, max(0.02, w * 0.25))
+        pad_y = max(pad_y, max(0.012, h * 0.18))
         extra_top = max(0.005, h * 0.06)
         extra_bottom = max(0.012, h * 0.12)
     elif region.role == "marginalia":
-        pad_x = max(0.012, w * 0.08)
-        pad_y = max(0.012, h * 0.08)
+        pad_x = max(pad_x, max(0.012, w * 0.08))
+        pad_y = max(pad_y, max(0.012, h * 0.08))
         extra_bottom = max(0.01, h * 0.05)
     elif region.role == "page_number":
-        pad_x = max(0.006, w * 0.2)
-        pad_y = max(0.006, h * 0.2)
-    else:
-        return region.bbox_norm
+        pad_x = max(pad_x, max(0.006, w * 0.2))
+        pad_y = max(pad_y, max(0.006, h * 0.2))
 
     left = x - pad_x
     top = y - pad_y - extra_top
@@ -262,6 +309,14 @@ def _line_similarity(a: str, b: str) -> float:
     if na == nb:
         return 1.0
     return SequenceMatcher(a=na, b=nb).ratio()
+
+
+def _context_excerpt(lines: list[str], index: int, *, radius: int = 2) -> str:
+    if not lines:
+        return ""
+    start = max(0, index - radius)
+    end = min(len(lines), index + radius + 1)
+    return "\n".join(line for line in lines[start:end] if line.strip())
 
 
 def _role_ownership_rank(role: str) -> int:
@@ -375,7 +430,7 @@ def _run_region_orientation(
         ),
     )
     text, _ = _response_text(response)
-    payload = json.loads(_coerce_json_text(text))
+    payload = _normalize_region_payload(json.loads(_coerce_json_text(text)))
     payload.update({
         "page_id": page_id,
         "region_id": region_id,
@@ -416,9 +471,28 @@ def _load_overlap_resolution(probe_dir: Path) -> OverlapResolution | None:
         return None
 
 
+def _load_section_resolution(probe_dir: Path) -> PageSectionResolution | None:
+    path = probe_dir / "section_resolution.json"
+    if not path.exists():
+        return None
+    try:
+        return PageSectionResolution.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _load_box_cleanup(probe_dir: Path) -> PageBoxCleanup | None:
+    path = probe_dir / "box_cleanup.json"
+    if not path.exists():
+        return None
+    try:
+        return PageBoxCleanup.model_validate_json(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
 def _overlap_candidate_payload(layout: LayoutProbe, reads: dict[str, RegionOrientation]) -> list[dict]:
     candidate_payload: list[dict] = []
-    region_lookup = {region.region_id: region for region in layout.regions}
     for region_a, region_b in combinations(layout.regions, 2):
         if region_a.ignore_for_reconstruction or region_b.ignore_for_reconstruction:
             continue
@@ -433,6 +507,8 @@ def _overlap_candidate_payload(layout: LayoutProbe, reads: dict[str, RegionOrien
         read_b = reads.get(region_b.region_id)
         if not read_a or not read_b:
             continue
+        lines_a = read_a.diplomatic_lines or [pair.source for pair in read_a.pairs if pair.source]
+        lines_b = read_b.diplomatic_lines or [pair.source for pair in read_b.pairs if pair.source]
         for idx_a, pair_a in enumerate(read_a.pairs):
             if not pair_a.source.strip():
                 continue
@@ -455,12 +531,20 @@ def _overlap_candidate_payload(layout: LayoutProbe, reads: dict[str, RegionOrien
                         "role_b": region_b.role,
                         "reading_order_a": region_a.reading_order,
                         "reading_order_b": region_b.reading_order,
+                        "page_side_a": region_a.page_side,
+                        "page_side_b": region_b.page_side,
+                        "column_index_a": region_a.column_index,
+                        "column_index_b": region_b.column_index,
                         "bbox_a": list(region_a.bbox_norm),
                         "bbox_b": list(region_b.bbox_norm),
                         "overlap_ratio": round(overlap_ratio, 4),
                         "similarity": round(similarity, 4),
                         "source_a": pair_a.source,
                         "source_b": pair_b.source,
+                        "context_a": _context_excerpt(lines_a, idx_a),
+                        "context_b": _context_excerpt(lines_b, idx_b),
+                        "region_source_block_a": read_a.source_block or "\n".join(lines_a),
+                        "region_source_block_b": read_b.source_block or "\n".join(lines_b),
                         "translation_a": pair_a.translation,
                         "translation_b": pair_b.translation,
                     }
@@ -510,6 +594,405 @@ def _fallback_overlap_decisions(layout: LayoutProbe, candidates: list[dict]) -> 
         doc_id=layout.doc_id,
         page_id=layout.page_id,
         decisions=decisions,
+    )
+
+
+def _section_resolution_payload(layout: LayoutProbe, reads: dict[str, RegionOrientation]) -> list[dict]:
+    payload: list[dict] = []
+    for region in sorted(layout.regions, key=lambda item: ((item.reading_order or 9999), item.region_id)):
+        if region.ignore_for_reconstruction or region.reconstruction_priority == "ignore":
+            continue
+        read = reads.get(region.region_id)
+        if not read or not (read.source_block or read.diplomatic_lines):
+            continue
+        payload.append(
+            {
+                "region_id": region.region_id,
+                "label": region.label,
+                "role": region.role,
+                "page_side": region.page_side,
+                "column_index": region.column_index,
+                "reading_order": region.reading_order,
+                "bbox_norm": list(region.bbox_norm),
+                "source_block": read.source_block or "\n".join(read.diplomatic_lines),
+            }
+        )
+    return payload
+
+
+def _fallback_section_resolution(layout: LayoutProbe, reads: dict[str, RegionOrientation]) -> PageSectionResolution:
+    assignments: list[SectionResolutionAssignment] = []
+    for region in sorted(layout.regions, key=lambda item: ((item.reading_order or 9999), item.region_id)):
+        if region.ignore_for_reconstruction or region.reconstruction_priority == "ignore":
+            continue
+        read = reads.get(region.region_id)
+        if not read or not (read.source_block or read.diplomatic_lines):
+            continue
+        lines = [line for line in (read.diplomatic_lines or []) if str(line).strip()]
+        if not lines and read.source_block:
+            lines = [line for line in read.source_block.splitlines() if line.strip()]
+
+        if region.role == "header":
+            kept: list[str] = []
+            for line in lines:
+                compact = re.sub(r"\s+", "", line)
+                if not compact:
+                    continue
+                if len(compact) <= 2:
+                    kept.append(compact)
+                else:
+                    break
+            source_block = "\n".join(kept)
+            render_in_witness = bool(source_block)
+        elif region.role == "page_number":
+            digits = [re.sub(r"\s+", "", line) for line in lines if re.sub(r"\s+", "", line)]
+            source_block = "\n".join(digits[:1])
+            render_in_witness = False
+        else:
+            source_block = read.source_block or "\n".join(lines)
+            render_in_witness = True
+
+        assignments.append(
+            SectionResolutionAssignment(
+                region_id=region.region_id,
+                label=region.label,
+                role=region.role,
+                page_side=region.page_side,
+                column_index=region.column_index,
+                render_in_witness=render_in_witness,
+                source_block=source_block,
+                notes=["Deterministic fallback section assignment."],
+            )
+        )
+
+    return PageSectionResolution(
+        created_at=_utc_now(),
+        doc_id=layout.doc_id,
+        page_id=layout.page_id,
+        assignments=assignments,
+    )
+
+
+def run_section_resolution(
+    probe_dir: Path,
+    *,
+    model: str = DEFAULT_MODEL_TRIAGE,
+    prompt_file: Path | None = None,
+) -> SectionResolutionArtifact:
+    probe_dir = probe_dir.resolve()
+    layout = _load_layout_probe(probe_dir)
+    reads = {item.region_id: item for item in _load_region_orientations(probe_dir)}
+    sections = _section_resolution_payload(layout, reads)
+
+    resolution_json_path = probe_dir / "section_resolution.json"
+    meta_path = probe_dir / "section_resolution_meta.json"
+
+    if not sections:
+        resolution = PageSectionResolution(
+            created_at=_utc_now(),
+            doc_id=layout.doc_id,
+            page_id=layout.page_id,
+            assignments=[],
+        )
+        resolution_json_path.write_text(resolution.model_dump_json(indent=2), encoding="utf-8")
+        meta_path.write_text(
+            json.dumps(
+                {
+                    "generated_at": _utc_now(),
+                    "probe_dir": str(probe_dir),
+                    "resolution_json_path": str(resolution_json_path),
+                    "model": None,
+                    "section_count": 0,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return SectionResolutionArtifact(
+            probe_dir=probe_dir,
+            resolution_json_path=resolution_json_path,
+            meta_path=meta_path,
+            model=model,
+        )
+
+    prompt_text, prompt_path = _resolve_prompt_text(prompt_file, "page_section_resolution")
+    prompt_text = (
+        prompt_text
+        .replace("{PAGE_ID}", layout.page_id)
+        .replace("{SECTIONS_JSON}", json.dumps(sections, indent=2, ensure_ascii=False))
+    )
+
+    client = genai.Client()
+    try:
+        response = client.models.generate_content(
+            model=model,
+            contents=[prompt_text],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1,
+                max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
+            ),
+        )
+        text, _ = _response_text(response)
+        payload = json.loads(_coerce_json_text(text))
+        payload.update({
+            "created_at": _utc_now(),
+            "doc_id": layout.doc_id,
+            "page_id": layout.page_id,
+        })
+        resolution = PageSectionResolution.model_validate(payload)
+    except Exception:
+        resolution = _fallback_section_resolution(layout, reads)
+
+    resolved_by_region = {item.region_id: item for item in resolution.assignments}
+    normalized_assignments: list[SectionResolutionAssignment] = []
+    for section in sections:
+        candidate = resolved_by_region.get(section["region_id"])
+        source_block = candidate.source_block if candidate is not None else section["source_block"]
+        render_in_witness = candidate.render_in_witness if candidate is not None else (section["role"] != "page_number")
+        notes = list(candidate.notes) if candidate is not None else []
+
+        if section["role"] == "header":
+            header_lines = [line for line in str(source_block or "").splitlines() if line.strip()]
+            kept_header_lines: list[str] = []
+            for line in header_lines:
+                compact = re.sub(r"\s+", "", line)
+                if not compact:
+                    continue
+                if len(compact) <= 3:
+                    kept_header_lines.append(line)
+                else:
+                    break
+            if kept_header_lines != header_lines:
+                notes = notes + ["Header trimmed to compact title lines only."]
+            source_block = "\n".join(kept_header_lines)
+
+        if section["role"] == "main_text" and not str(source_block or "").strip():
+            source_block = section["source_block"]
+            notes = notes + ["Main text restored from source transcription because model returned empty text."]
+
+        normalized_assignments.append(
+            SectionResolutionAssignment(
+                region_id=section["region_id"],
+                label=section["label"],
+                role=section["role"],
+                page_side=section["page_side"],
+                column_index=section["column_index"],
+                render_in_witness=render_in_witness,
+                source_block=str(source_block or ""),
+                notes=notes,
+            )
+        )
+
+    resolution = PageSectionResolution(
+        created_at=resolution.created_at,
+        doc_id=resolution.doc_id,
+        page_id=resolution.page_id,
+        assignments=normalized_assignments,
+    )
+
+    resolution_json_path.write_text(resolution.model_dump_json(indent=2), encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(
+            {
+                "generated_at": _utc_now(),
+                "probe_dir": str(probe_dir),
+                "resolution_json_path": str(resolution_json_path),
+                "model": model,
+                "section_count": len(sections),
+                "prompt_path": str(prompt_path) if 'prompt_path' in locals() else None,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return SectionResolutionArtifact(
+        probe_dir=probe_dir,
+        resolution_json_path=resolution_json_path,
+        meta_path=meta_path,
+        model=model,
+    )
+
+
+def _compact_text_for_match(text: str) -> str:
+    return "".join(ch for ch in text if not ch.isspace() and ch not in "[](){}<>.,;:!?\"'`-_=+|/\\")
+
+
+def _shared_substring_size(a: str, b: str) -> int:
+    if not a or not b:
+        return 0
+    return SequenceMatcher(None, a, b).find_longest_match(0, len(a), 0, len(b)).size
+
+
+def _box_cleanup_candidates(layout: LayoutProbe, section_resolution: PageSectionResolution) -> list[dict]:
+    region_lookup = {region.region_id: region for region in layout.regions}
+    assignments = [
+        item for item in section_resolution.assignments
+        if item.render_in_witness and item.role != "page_number" and str(item.source_block or "").strip()
+    ]
+    candidates: list[dict] = []
+    for a, b in combinations(assignments, 2):
+        region_a = region_lookup.get(a.region_id)
+        region_b = region_lookup.get(b.region_id)
+        if region_a is None or region_b is None:
+            continue
+        if region_a.page_side and region_b.page_side and region_a.page_side != region_b.page_side:
+            continue
+        overlap_ratio = _bbox_overlap_ratio(region_a.bbox_norm, region_b.bbox_norm)
+        if overlap_ratio < 0.03:
+            continue
+
+        text_a = str(a.source_block or "").strip()
+        text_b = str(b.source_block or "").strip()
+        compact_a = _compact_text_for_match(text_a)
+        compact_b = _compact_text_for_match(text_b)
+        similarity = _line_similarity(compact_a, compact_b) if compact_a and compact_b else 0.0
+        shared = _shared_substring_size(compact_a, compact_b)
+
+        if similarity < 0.08 and shared < 2:
+            continue
+
+        candidates.append(
+            {
+                "pair_id": f"{a.region_id}:{b.region_id}",
+                "region_a": a.region_id,
+                "region_b": b.region_id,
+                "label_a": a.label,
+                "label_b": b.label,
+                "role_a": a.role,
+                "role_b": b.role,
+                "page_side_a": a.page_side,
+                "page_side_b": b.page_side,
+                "column_index_a": a.column_index,
+                "column_index_b": b.column_index,
+                "bbox_a": list(region_a.bbox_norm),
+                "bbox_b": list(region_b.bbox_norm),
+                "overlap_ratio": round(overlap_ratio, 4),
+                "text_similarity": round(similarity, 4),
+                "shared_substring_size": shared,
+                "source_block_a": text_a,
+                "source_block_b": text_b,
+            }
+        )
+    return candidates
+
+
+def _fallback_box_cleanup(section_resolution: PageSectionResolution) -> PageBoxCleanup:
+    return PageBoxCleanup(
+        created_at=_utc_now(),
+        doc_id=section_resolution.doc_id,
+        page_id=section_resolution.page_id,
+        decisions=[],
+    )
+
+
+def run_box_cleanup(
+    probe_dir: Path,
+    *,
+    model: str = DEFAULT_MODEL_TRIAGE,
+    prompt_file: Path | None = None,
+) -> BoxCleanupArtifact:
+    probe_dir = probe_dir.resolve()
+    layout = _load_layout_probe(probe_dir)
+    section_resolution = _load_section_resolution(probe_dir)
+    if section_resolution is None:
+        raise FileNotFoundError(f"No section_resolution.json found in {probe_dir}")
+
+    candidates = _box_cleanup_candidates(layout, section_resolution)
+    cleanup_json_path = probe_dir / "box_cleanup.json"
+    meta_path = probe_dir / "box_cleanup_meta.json"
+
+    if not candidates:
+        cleanup = _fallback_box_cleanup(section_resolution)
+        cleanup_json_path.write_text(cleanup.model_dump_json(indent=2), encoding="utf-8")
+        meta_path.write_text(
+            json.dumps(
+                {
+                    "generated_at": _utc_now(),
+                    "probe_dir": str(probe_dir),
+                    "cleanup_json_path": str(cleanup_json_path),
+                    "model": None,
+                    "candidate_count": 0,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return BoxCleanupArtifact(
+            probe_dir=probe_dir,
+            cleanup_json_path=cleanup_json_path,
+            meta_path=meta_path,
+            model=model,
+        )
+
+    prompt_text, prompt_path = _resolve_prompt_text(prompt_file, "page_box_cleanup")
+    client = genai.Client()
+    decisions: list[BoxCleanupDecision] = []
+    for candidate in candidates:
+        final_prompt = (
+            prompt_text
+            .replace("{PAGE_ID}", layout.page_id)
+            .replace("{PAIR_JSON}", json.dumps(candidate, indent=2, ensure_ascii=False))
+        )
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=[final_prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.1,
+                    max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
+                ),
+            )
+            text, _ = _response_text(response)
+            payload = json.loads(_coerce_json_text(text))
+            payload.setdefault("pair_id", candidate["pair_id"])
+            payload.setdefault("region_a", candidate["region_a"])
+            payload.setdefault("region_b", candidate["region_b"])
+            decisions.append(BoxCleanupDecision.model_validate(payload))
+        except Exception:
+            decisions.append(
+                BoxCleanupDecision(
+                    pair_id=candidate["pair_id"],
+                    region_a=candidate["region_a"],
+                    region_b=candidate["region_b"],
+                    relation="uncertain",
+                    cleaned_source_block_a=candidate["source_block_a"],
+                    cleaned_source_block_b=candidate["source_block_b"],
+                    reason="Fallback preserved original blocks.",
+                )
+            )
+
+    cleanup = PageBoxCleanup(
+        created_at=_utc_now(),
+        doc_id=layout.doc_id,
+        page_id=layout.page_id,
+        decisions=decisions,
+    )
+    cleanup_json_path.write_text(cleanup.model_dump_json(indent=2), encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(
+            {
+                "generated_at": _utc_now(),
+                "probe_dir": str(probe_dir),
+                "cleanup_json_path": str(cleanup_json_path),
+                "model": model,
+                "candidate_count": len(candidates),
+                "prompt_path": str(prompt_path) if 'prompt_path' in locals() else None,
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return BoxCleanupArtifact(
+        probe_dir=probe_dir,
+        cleanup_json_path=cleanup_json_path,
+        meta_path=meta_path,
+        model=model,
     )
 
 
@@ -623,13 +1106,11 @@ def run_region_reads(
 
     selected = {item for item in (region_ids or [])}
     existing = {item.region_id: item for item in _load_region_orientations(probe_dir)}
-    reads: list[RegionOrientation] = []
+    reads_path = probe_dir / "region_orientations.json"
     for region in layout.regions:
         if region.ignore_for_reconstruction or region.reconstruction_priority == "ignore":
             continue
         if selected and region.region_id not in selected:
-            if region.region_id in existing:
-                reads.append(existing[region.region_id])
             continue
         if not region.contains_text and region.role not in {"header", "page_number", "marginalia"}:
             continue
@@ -648,10 +1129,12 @@ def run_region_reads(
             model=model,
         )
         existing[region.region_id] = read
+        partial_order = [item.region_id for item in layout.regions if item.region_id in existing]
+        partial_reads = [existing[item_id] for item_id in partial_order]
+        _write_region_orientations(probe_dir, partial_reads)
 
     ordered_region_ids = [region.region_id for region in layout.regions if region.region_id in existing]
-    for region_id in ordered_region_ids:
-        reads.append(existing[region_id])
+    reads = [existing[region_id] for region_id in ordered_region_ids]
 
     reads_path = _write_region_orientations(probe_dir, reads)
     meta_path = probe_dir / "region_reads_meta.json"
@@ -670,9 +1153,11 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
     probe_dir = probe_dir.resolve()
     layout = _load_layout_probe(probe_dir)
     reads = {item.region_id: item for item in _load_region_orientations(probe_dir)}
+    section_resolution = _load_section_resolution(probe_dir)
+    box_cleanup = _load_box_cleanup(probe_dir)
     overlap_resolution = _load_overlap_resolution(probe_dir)
     suppressed_pairs: set[tuple[str, int]] = set()
-    if overlap_resolution is not None:
+    if section_resolution is None and overlap_resolution is not None:
         for decision in overlap_resolution.decisions:
             canonical = decision.canonical_region_id
             if canonical == decision.region_a:
@@ -682,12 +1167,28 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
 
     units: list[PageAssemblyUnit] = []
     counter = 1
+    section_assignments = {
+        item.region_id: item
+        for item in (section_resolution.assignments if section_resolution is not None else [])
+    }
+    if box_cleanup is not None:
+        for decision in box_cleanup.decisions:
+            assignment_a = section_assignments.get(decision.region_a)
+            assignment_b = section_assignments.get(decision.region_b)
+            if assignment_a is not None:
+                assignment_a.source_block = decision.cleaned_source_block_a
+            if assignment_b is not None:
+                assignment_b.source_block = decision.cleaned_source_block_b
     for region in sorted(layout.regions, key=lambda item: ((item.reading_order or 9999), item.region_id)):
         if region.ignore_for_reconstruction or region.reconstruction_priority == "ignore":
             continue
         read = reads.get(region.region_id)
+        assignment = section_assignments.get(region.region_id)
         kept_pairs = []
-        if read:
+        if assignment is not None:
+            lines = [line for line in assignment.source_block.splitlines() if line.strip()]
+            kept_pairs = [RegionReadPair(source=line, translation="") for line in lines]
+        elif read:
             for idx, pair in enumerate(read.pairs):
                 if (region.region_id, idx) in suppressed_pairs:
                     continue
@@ -706,9 +1207,15 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
                 line_flow=read.line_flow if read else None,
                 start_edge=read.start_edge if read else None,
                 summary=read.summary if read else region.notes,
-                pairs=kept_pairs if read else [],
-                diplomatic_lines=[pair.source for pair in kept_pairs] if read else [],
-                notes=list(read.notes) if read else ([region.notes] if region.notes else []),
+                source_block=assignment.source_block if assignment is not None else (read.source_block if read else None),
+                translation_block=read.translation_block if read and assignment is None else None,
+                pairs=kept_pairs if (read or assignment is not None) else [],
+                diplomatic_lines=[] if (read or assignment is not None) else [],
+                notes=(
+                    list(assignment.notes)
+                    if assignment is not None
+                    else (list(read.notes) if read else ([region.notes] if region.notes else []))
+                ),
             )
         )
         counter += 1
@@ -747,6 +1254,14 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
                 markdown_lines.append(f"=> {pair.translation}")
             if pair.note:
                 markdown_lines.append(f"   note: {pair.note}")
+        if unit.source_block:
+            markdown_lines.append("")
+            markdown_lines.append("Source Block:")
+            markdown_lines.append(unit.source_block)
+        if unit.translation_block:
+            markdown_lines.append("")
+            markdown_lines.append("Translation Block:")
+            markdown_lines.append(unit.translation_block)
         if not unit.pairs:
             for line in unit.diplomatic_lines:
                 markdown_lines.append(line)
@@ -764,6 +1279,8 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
         "probe_dir": str(probe_dir),
         "assembly_json_path": str(assembly_json_path),
         "assembly_md_path": str(assembly_md_path),
+        "section_resolution_path": str((probe_dir / "section_resolution.json").resolve()) if section_resolution is not None else None,
+        "box_cleanup_path": str((probe_dir / "box_cleanup.json").resolve()) if box_cleanup is not None else None,
         "overlap_resolution_path": str((probe_dir / "overlap_resolution.json").resolve()) if overlap_resolution is not None else None,
         "suppressed_pair_count": len(suppressed_pairs),
     }

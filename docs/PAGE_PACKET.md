@@ -30,7 +30,7 @@ back while building:
 
 Recommended sequence:
 
-`image -> page prepare -> page.packet -> witness fill -> section synthesis -> edition render`
+`image -> page prepare -> page.packet -> layout-probe -> region-read -> section-resolution -> box-cleanup -> assemble -> witness fill -> section synthesis -> edition render`
 
 Where:
 
@@ -46,6 +46,17 @@ Where:
 ## 2. Design Rule
 
 The page packet should behave like a careful scholar's folder for one page.
+
+The canonical reconstruction lane is:
+
+`layout-probe -> region-read -> section-resolution -> box-cleanup -> assemble`
+
+Meaning:
+- coarse inclusive boxes first
+- full transcription per box
+- canonical ownership per box
+- targeted cleanup only for genuinely overlapping box pairs
+- deterministic page assembly after that
 
 It should contain:
 - the prepared image

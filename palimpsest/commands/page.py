@@ -9,7 +9,9 @@ from palimpsest.config import DEFAULT_MODEL_TRIAGE
 from palimpsest.config import DEFAULT_MODEL_VISION
 from palimpsest.page_continuity import run_page_handoff, run_window_synthesis
 from palimpsest.page_layout import (
+    run_box_cleanup,
     run_overlap_resolution,
+    run_section_resolution,
     run_page_assembly,
     run_page_layout_probe,
     run_region_reads,
@@ -31,11 +33,15 @@ def _run_layout_pipeline(
     overlap_model: str,
     run_regions: bool,
     run_overlap: bool,
+    run_section_resolution_stage: bool,
+    run_box_cleanup_stage: bool,
     run_assembly: bool,
     retries: int = 2,
 ):
     probe_artifact = None
     region_artifact = None
+    section_artifact = None
+    box_cleanup_artifact = None
     overlap_artifact = None
     assembly_artifact = None
 
@@ -74,6 +80,24 @@ def _run_layout_pipeline(
             ),
         )
 
+    if run_section_resolution_stage:
+        section_artifact = _retry(
+            "section_resolution",
+            lambda: run_section_resolution(
+                probe_artifact.output_dir,
+                model=overlap_model,
+            ),
+        )
+
+    if run_box_cleanup_stage:
+        box_cleanup_artifact = _retry(
+            "box_cleanup",
+            lambda: run_box_cleanup(
+                probe_artifact.output_dir,
+                model=overlap_model,
+            ),
+        )
+
     if run_overlap:
         overlap_artifact = _retry(
             "resolve_overlap",
@@ -86,7 +110,7 @@ def _run_layout_pipeline(
     if run_assembly:
         assembly_artifact = run_page_assembly(probe_artifact.output_dir)
 
-    return probe_artifact, region_artifact, overlap_artifact, assembly_artifact
+    return probe_artifact, region_artifact, section_artifact, box_cleanup_artifact, overlap_artifact, assembly_artifact
 
 
 def cmd_prepare(args: argparse.Namespace) -> None:
@@ -119,6 +143,7 @@ def cmd_read(args: argparse.Namespace) -> None:
 
 
 def cmd_packet(args: argparse.Namespace) -> None:
+    skip_cleanup = args.skip_overlap_resolution or getattr(args, "skip_cleanup", False)
     packet, packet_path = create_page_packet(
         Path(args.image),
         out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
@@ -136,14 +161,16 @@ def cmd_packet(args: argparse.Namespace) -> None:
     if packet.continuity.window_synthesis_path:
         print(f"window_synthesis: {packet.continuity.window_synthesis_path}")
     if not args.no_layout_probe:
-        probe_artifact, region_artifact, overlap_artifact, assembly_artifact = _run_layout_pipeline(
+        probe_artifact, region_artifact, section_artifact, box_cleanup_artifact, overlap_artifact, assembly_artifact = _run_layout_pipeline(
             image_path=Path(args.image),
             probe_dir=packet_path.parent / "layout_probe",
             layout_model=args.layout_model,
             region_model=args.orient_model,
             overlap_model=args.overlap_model,
             run_regions=not args.no_orient,
-            run_overlap=not args.skip_overlap_resolution,
+            run_overlap=False,
+            run_section_resolution_stage=not skip_cleanup,
+            run_box_cleanup_stage=not skip_cleanup,
             run_assembly=True,
             retries=args.retries,
         )
@@ -154,6 +181,10 @@ def cmd_packet(args: argparse.Namespace) -> None:
             print(f"region_orientations: {region_artifact.reads_path}")
         else:
             print(f"region_orientations: {probe_artifact.orientations_path}")
+        if section_artifact is not None:
+            print(f"section_resolution: {section_artifact.resolution_json_path}")
+        if box_cleanup_artifact is not None:
+            print(f"box_cleanup: {box_cleanup_artifact.cleanup_json_path}")
         if overlap_artifact is not None:
             print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
         if assembly_artifact is not None:
@@ -215,19 +246,22 @@ def cmd_render_html(args: argparse.Namespace) -> None:
 
 
 def cmd_refresh_packet(args: argparse.Namespace) -> None:
+    skip_cleanup = args.skip_overlap_resolution or getattr(args, "skip_cleanup", False)
     packet_path = Path(args.packet).resolve()
     packet = repair_packet_json(packet_path)
     probe_dir = packet_path.parent / "layout_probe"
 
     if not args.skip_layout_probe:
-        probe_artifact, region_artifact, overlap_artifact, assembly_artifact = _run_layout_pipeline(
+        probe_artifact, region_artifact, section_artifact, box_cleanup_artifact, overlap_artifact, assembly_artifact = _run_layout_pipeline(
             image_path=Path(packet.source_image_path),
             probe_dir=probe_dir,
             layout_model=args.layout_model,
             region_model=args.orient_model,
             overlap_model=args.overlap_model,
             run_regions=not args.no_orient,
-            run_overlap=not args.skip_overlap_resolution,
+            run_overlap=False,
+            run_section_resolution_stage=not skip_cleanup,
+            run_box_cleanup_stage=not skip_cleanup,
             run_assembly=not args.skip_assembly,
             retries=args.retries,
         )
@@ -235,17 +269,26 @@ def cmd_refresh_packet(args: argparse.Namespace) -> None:
         print(f"layout_overlay: {probe_artifact.overlay_path}")
         if region_artifact is not None:
             print(f"region_orientations: {region_artifact.reads_path}")
+        if section_artifact is not None:
+            print(f"section_resolution: {section_artifact.resolution_json_path}")
+        if box_cleanup_artifact is not None:
+            print(f"box_cleanup: {box_cleanup_artifact.cleanup_json_path}")
         if overlap_artifact is not None:
             print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
         if assembly_artifact is not None:
             print(f"page_assembly: {assembly_artifact.assembly_json_path}")
     else:
-        if not args.skip_overlap_resolution:
-            overlap_artifact = run_overlap_resolution(
+        if not skip_cleanup:
+            section_artifact = run_section_resolution(
                 probe_dir,
                 model=args.overlap_model,
             )
-            print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
+            print(f"section_resolution: {section_artifact.resolution_json_path}")
+            box_cleanup_artifact = run_box_cleanup(
+                probe_dir,
+                model=args.overlap_model,
+            )
+            print(f"box_cleanup: {box_cleanup_artifact.cleanup_json_path}")
 
         if not args.skip_assembly:
             assembly_artifact = run_page_assembly(probe_dir)
@@ -345,6 +388,17 @@ def cmd_resolve_overlap(args: argparse.Namespace) -> None:
     print(f"model: {artifact.model}")
 
 
+def cmd_box_cleanup(args: argparse.Namespace) -> None:
+    artifact = run_box_cleanup(
+        Path(args.probe_dir),
+        model=args.model,
+        prompt_file=Path(args.prompt_file).resolve() if args.prompt_file else None,
+    )
+    print(f"box_cleanup: {artifact.cleanup_json_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"model: {artifact.model}")
+
+
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("page", help="Prepare, packetize, read, and synthesize page-level witness artifacts")
     sub = parser.add_subparsers(dest="page_cmd", required=True)
@@ -372,12 +426,13 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         default=DEFAULT_MODEL_READING,
         help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
     )
-    packet.add_argument("--no-orient", action="store_true", help="Skip region orientation reads during the layout probe")
-    packet.add_argument("--skip-overlap-resolution", action="store_true", help="Skip overlap adjudication between inclusive regions")
+    packet.add_argument("--no-orient", action="store_true", help="Skip region transcription reads during the layout probe")
+    packet.add_argument("--skip-overlap-resolution", action="store_true", help="Skip canonical box cleanup stages (section-resolution and box-cleanup)")
+    packet.add_argument("--skip-cleanup", action="store_true", help="Alias for --skip-overlap-resolution")
     packet.add_argument(
         "--overlap-model",
         default=DEFAULT_MODEL_TRIAGE,
-        help=f"Model for overlap adjudication (default: {DEFAULT_MODEL_TRIAGE})",
+        help=f"Model for canonical box cleanup (default: {DEFAULT_MODEL_TRIAGE})",
     )
     packet.add_argument("--retries", type=int, default=2, help="Retry count for model-backed packet build stages")
     packet.set_defaults(func=cmd_packet)
@@ -433,7 +488,8 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     refresh_packet.add_argument("--out-dir", help="Optional output directory for HTML folio artifacts")
     refresh_packet.add_argument("--title", help="Optional book/manuscript title override")
     refresh_packet.add_argument("--skip-layout-probe", action="store_true", help="Reuse existing layout probe artifacts")
-    refresh_packet.add_argument("--skip-overlap-resolution", action="store_true", help="Reuse existing overlap resolution artifact")
+    refresh_packet.add_argument("--skip-overlap-resolution", action="store_true", help="Reuse existing canonical box cleanup artifacts")
+    refresh_packet.add_argument("--skip-cleanup", action="store_true", help="Alias for --skip-overlap-resolution")
     refresh_packet.add_argument("--skip-assembly", action="store_true", help="Reuse existing page assembly artifact")
     refresh_packet.add_argument("--render-html", action="store_true", help="Render HTML after refreshing the packet")
     refresh_packet.add_argument(
@@ -485,6 +541,16 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         help=f"Model for crop-level region reads (default: {DEFAULT_MODEL_READING})",
     )
     region_read.set_defaults(func=cmd_region_read)
+
+    box_cleanup = sub.add_parser("box-cleanup", help="Cleanly separate text between actually overlapping region pairs")
+    box_cleanup.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
+    box_cleanup.add_argument("--prompt-file", help="Optional prompt file override")
+    box_cleanup.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_TRIAGE,
+        help=f"Model for targeted box cleanup (default: {DEFAULT_MODEL_TRIAGE})",
+    )
+    box_cleanup.set_defaults(func=cmd_box_cleanup)
 
     resolve_overlap = sub.add_parser("resolve-overlap", help="Adjudicate duplicate text across overlapping coarse regions")
     resolve_overlap.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")

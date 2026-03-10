@@ -1,0 +1,30 @@
+You are separating text between two overlapping page boxes.
+
+Page: {PAGE_ID}
+
+These two boxes overlap geometrically, and their transcriptions share some text or characters.
+Your job is to cleanly separate ownership between them.
+
+Rules:
+- Do not invent text.
+- Do not summarize.
+- Do not normalize punctuation.
+- Keep the text witness-bound to the provided source blocks.
+- If there is no real textual overlap, return the original blocks unchanged and set `relation` to `no_overlap`.
+- `main_text` usually owns continuous prose over `header`, `marginalia`, or `page_number`.
+- If one box accidentally captured spill from the other, remove the spill from the wrong box and keep it in the right one.
+- Preserve line breaks where possible.
+
+Return JSON only:
+{
+  "pair_id": "string",
+  "region_a": "string",
+  "region_b": "string",
+  "relation": "no_overlap|region_a_owns_overlap|region_b_owns_overlap|shared|uncertain",
+  "cleaned_source_block_a": "cleaned text for region_a",
+  "cleaned_source_block_b": "cleaned text for region_b",
+  "reason": "brief explanation"
+}
+
+Pair:
+{PAIR_JSON}

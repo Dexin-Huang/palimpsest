@@ -154,6 +154,20 @@ Create the page packet:
 python -m palimpsest page packet --image library/<doc_id>/images/<page>.jpg
 ```
 
+Canonical page pipeline inside `page packet` / `page refresh-packet`:
+
+```text
+layout-probe -> region-read -> section-resolution -> box-cleanup -> assemble -> render-html
+```
+
+This is intentionally region-first:
+- `layout-probe` finds coarse inclusive boxes
+- `region-read` transcribes each box in full
+- `section-resolution` assigns canonical text to each box
+- `box-cleanup` only touches genuinely overlapping box pairs
+- `assemble` builds the page witness object
+- `render-html` turns that into the linked folio view
+
 Read the page witness:
 
 ```bash

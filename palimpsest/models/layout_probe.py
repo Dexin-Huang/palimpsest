@@ -87,6 +87,8 @@ class RegionOrientation(BaseModel):
     start_edge: Optional[str] = Field(default=None)
     script_hint: Optional[str] = Field(default=None)
     summary: Optional[str] = Field(default=None)
+    source_block: Optional[str] = Field(default=None)
+    translation_block: Optional[str] = Field(default=None)
     pairs: List["RegionReadPair"] = Field(default_factory=list)
     diplomatic_lines: List[str] = Field(default_factory=list)
     notes: List[str] = Field(default_factory=list)
@@ -108,10 +110,18 @@ class RegionOrientation(BaseModel):
 
     @model_validator(mode="after")
     def _sync_pair_lines(self):
+        if self.source_block and not self.diplomatic_lines:
+            self.diplomatic_lines = [line for line in self.source_block.splitlines() if line.strip()]
         if self.pairs and not self.diplomatic_lines:
             self.diplomatic_lines = [pair.source for pair in self.pairs if pair.source]
         elif self.diplomatic_lines and not self.pairs:
             self.pairs = [RegionReadPair(source=line, translation="") for line in self.diplomatic_lines]
+        if not self.source_block and self.diplomatic_lines:
+            self.source_block = "\n".join(self.diplomatic_lines)
+        if not self.translation_block and self.pairs:
+            translations = [pair.translation for pair in self.pairs if pair.translation]
+            if translations:
+                self.translation_block = "\n".join(translations)
         return self
 
 
@@ -139,16 +149,26 @@ class PageAssemblyUnit(BaseModel):
     line_flow: Optional[str] = Field(default=None)
     start_edge: Optional[str] = Field(default=None)
     summary: Optional[str] = Field(default=None)
+    source_block: Optional[str] = Field(default=None)
+    translation_block: Optional[str] = Field(default=None)
     pairs: List[RegionReadPair] = Field(default_factory=list)
     diplomatic_lines: List[str] = Field(default_factory=list)
     notes: List[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _sync_pair_lines(self):
+        if self.source_block and not self.diplomatic_lines:
+            self.diplomatic_lines = [line for line in self.source_block.splitlines() if line.strip()]
         if self.pairs and not self.diplomatic_lines:
             self.diplomatic_lines = [pair.source for pair in self.pairs if pair.source]
         elif self.diplomatic_lines and not self.pairs:
             self.pairs = [RegionReadPair(source=line, translation="") for line in self.diplomatic_lines]
+        if not self.source_block and self.diplomatic_lines:
+            self.source_block = "\n".join(self.diplomatic_lines)
+        if not self.translation_block and self.pairs:
+            translations = [pair.translation for pair in self.pairs if pair.translation]
+            if translations:
+                self.translation_block = "\n".join(translations)
         return self
 
 
@@ -192,3 +212,48 @@ class OverlapResolution(BaseModel):
     doc_id: str
     page_id: str
     decisions: List[OverlapResolutionDecision] = Field(default_factory=list)
+
+
+class SectionResolutionAssignment(BaseModel):
+    """Canonicalized text ownership for one coarse region."""
+
+    region_id: str
+    label: str
+    role: str
+    page_side: Optional[Literal["left", "right", "center", "full"]] = Field(default=None)
+    column_index: Optional[int] = Field(default=None)
+    render_in_witness: bool = Field(default=True)
+    source_block: str = Field(default="")
+    notes: List[str] = Field(default_factory=list)
+
+
+class PageSectionResolution(BaseModel):
+    """Page-level canonical region text assignment after inclusive-box transcription."""
+
+    artifact_type: Literal["page.section_resolution"] = Field(default="page.section_resolution")
+    created_at: str
+    doc_id: str
+    page_id: str
+    assignments: List[SectionResolutionAssignment] = Field(default_factory=list)
+
+
+class BoxCleanupDecision(BaseModel):
+    """Cleaned ownership split for one overlapping pair of coarse regions."""
+
+    pair_id: str
+    region_a: str
+    region_b: str
+    relation: Literal["no_overlap", "region_a_owns_overlap", "region_b_owns_overlap", "shared", "uncertain"]
+    cleaned_source_block_a: str = Field(default="")
+    cleaned_source_block_b: str = Field(default="")
+    reason: Optional[str] = Field(default=None)
+
+
+class PageBoxCleanup(BaseModel):
+    """Targeted cleanup for overlapping coarse region pairs."""
+
+    artifact_type: Literal["page.box_cleanup"] = Field(default="page.box_cleanup")
+    created_at: str
+    doc_id: str
+    page_id: str
+    decisions: List[BoxCleanupDecision] = Field(default_factory=list)

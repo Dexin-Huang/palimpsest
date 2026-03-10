@@ -173,6 +173,8 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
     layout_probe_path = str((packet_dir / "layout_probe" / "layout_probe.json").resolve())
     layout_overlay_path = str((packet_dir / "layout_probe" / "layout_overlay.png").resolve())
     region_orientations_path = str((packet_dir / "layout_probe" / "region_orientations.json").resolve())
+    section_resolution_path = str((packet_dir / "layout_probe" / "section_resolution.json").resolve())
+    box_cleanup_path = str((packet_dir / "layout_probe" / "box_cleanup.json").resolve())
     overlap_resolution_path = str((packet_dir / "layout_probe" / "overlap_resolution.json").resolve())
     page_assembly_path = str((packet_dir / "layout_probe" / "page_assembly.json").resolve())
     if "edition_pdf" not in files:
@@ -220,6 +222,8 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
         "layout_probe": (layout_probe_path, "Coarse layout probe for region-first reconstruction"),
         "layout_overlay": (layout_overlay_path, "Overlay preview of coarse layout regions"),
         "region_orientations": (region_orientations_path, "Region orientation and quick-read hints"),
+        "section_resolution": (section_resolution_path, "Canonical text ownership per coarse region"),
+        "box_cleanup": (box_cleanup_path, "Targeted cleanup for overlapping region pairs"),
         "overlap_resolution": (overlap_resolution_path, "Ownership decisions for overlapping coarse regions"),
         "page_assembly": (page_assembly_path, "Deterministic assembly from region reads"),
     }
@@ -383,7 +387,7 @@ def build_packet_scholar_prompt(
                 "",
                 "Specific objective for fill_witness:",
                 "- If witness_source.md exists, use it to populate witness.md faithfully.",
-                "- Preserve witness uncertainty markers such as [hill/heil/hail], (dominus), or [??].",
+                "- Preserve witness uncertainty markers such as [hill/heil/hail], [dominus?], or (dominus). Never reduce uncertainty to a bare [??].",
                 "- Keep witness.md structured with Header / Page Number / Marginalia / Main Text markers.",
                 "- Do not put commentary, glosses, or modern explanation inside Main Text.",
                 "- Then update packet.json so witness status becomes draft and workflow.next_action becomes fill_notes.",
@@ -432,7 +436,7 @@ def build_packet_scholar_prompt(
                 "- Keep page 1 close to the witness. Do not let commentary crowd it.",
                 "- Keep the layout cinematic but disciplined, closer to an exhibition spread than a plain article.",
                 "- Escape LaTeX-special characters when needed.",
-                "- Preserve witness uncertainty markers such as [hill/heil/hail], (dominus), or [??] in the witness layer.",
+                "- Preserve witness uncertainty markers such as [hill/heil/hail], [dominus?], or (dominus) in the witness layer. Never reduce uncertainty to a bare [??].",
                 "- Keep the existing LaTeX preamble portable. Do not hard-code fonts if fallback logic already exists.",
                 "- Preserve or use the BEGIN/END content markers if they exist in edition_spread.tex.",
                 "- Do not remove the source-image include unless the file is actually missing.",
