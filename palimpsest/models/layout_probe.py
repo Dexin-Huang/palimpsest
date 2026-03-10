@@ -257,3 +257,30 @@ class PageBoxCleanup(BaseModel):
     doc_id: str
     page_id: str
     decisions: List[BoxCleanupDecision] = Field(default_factory=list)
+
+
+class PageValidationIssue(BaseModel):
+    """A structural issue detected in an assembled page."""
+
+    issue_id: str
+    issue_type: Literal[
+        "header_spill_into_main",
+        "marginalia_script_contamination",
+        "page_number_noise",
+    ]
+    severity: Literal["low", "medium", "high"] = Field(default="medium")
+    region_ids: List[str] = Field(default_factory=list)
+    message: str
+    evidence: List[str] = Field(default_factory=list)
+
+
+class PageValidation(BaseModel):
+    """Cheap page-level structural QA after assembly."""
+
+    artifact_type: Literal["page.validation"] = Field(default="page.validation")
+    created_at: str
+    doc_id: str
+    page_id: str
+    status: Literal["clean", "needs_repair"] = Field(default="clean")
+    score: int = Field(default=0)
+    issues: List[PageValidationIssue] = Field(default_factory=list)

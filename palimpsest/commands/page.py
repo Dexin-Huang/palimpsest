@@ -15,6 +15,7 @@ from palimpsest.page_layout import (
     run_page_assembly,
     run_page_layout_probe,
     run_region_reads,
+    run_page_validate,
 )
 from palimpsest.page_packet import attach_layout_probe, create_page_packet, ingest_page_reading
 from palimpsest.page_prepare import prepare_image
@@ -399,6 +400,13 @@ def cmd_box_cleanup(args: argparse.Namespace) -> None:
     print(f"model: {artifact.model}")
 
 
+def cmd_validate(args: argparse.Namespace) -> None:
+    artifact = run_page_validate(Path(args.probe_dir))
+    print(f"validation_json: {artifact.validation_json_path}")
+    print(f"validation_md: {artifact.validation_md_path}")
+    print(f"meta: {artifact.meta_path}")
+
+
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("page", help="Prepare, packetize, read, and synthesize page-level witness artifacts")
     sub = parser.add_subparsers(dest="page_cmd", required=True)
@@ -551,6 +559,10 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         help=f"Model for targeted box cleanup (default: {DEFAULT_MODEL_TRIAGE})",
     )
     box_cleanup.set_defaults(func=cmd_box_cleanup)
+
+    validate = sub.add_parser("validate", help="Run cheap structural QA against the assembled page")
+    validate.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
+    validate.set_defaults(func=cmd_validate)
 
     resolve_overlap = sub.add_parser("resolve-overlap", help="Adjudicate duplicate text across overlapping coarse regions")
     resolve_overlap.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")

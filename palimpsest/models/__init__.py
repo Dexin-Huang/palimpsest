@@ -74,6 +74,8 @@ from .layout_probe import (
     PageSectionResolution,
     BoxCleanupDecision,
     PageBoxCleanup,
+    PageValidationIssue,
+    PageValidation,
     OverlapResolutionDecision,
     OverlapResolution,
 )
@@ -149,6 +151,8 @@ __all__ = [
     "PageSectionResolution",
     "BoxCleanupDecision",
     "PageBoxCleanup",
+    "PageValidationIssue",
+    "PageValidation",
     "OverlapResolutionDecision",
     "OverlapResolution",
     "ContinuityStatus",
