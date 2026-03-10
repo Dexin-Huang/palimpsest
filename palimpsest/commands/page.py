@@ -10,6 +10,7 @@ from palimpsest.page_layout import run_page_assembly, run_page_layout_probe, run
 from palimpsest.page_packet import attach_layout_probe, create_page_packet, ingest_page_reading
 from palimpsest.page_prepare import prepare_image
 from palimpsest.page_reading import run_page_reading, run_section_synthesis
+from palimpsest.packet_scholar import repair_packet_json
 from palimpsest.packet_render import render_packet_edition
 from palimpsest.packet_web import render_packet_folio_html
 
@@ -68,10 +69,12 @@ def cmd_packet(args: argparse.Namespace) -> None:
             orient_model=args.orient_model,
             orient_regions=not args.no_orient,
         )
+        assembly_artifact = run_page_assembly(probe_artifact.output_dir)
         packet = attach_layout_probe(packet_path, probe_artifact.output_dir)
         print(f"layout_probe: {probe_artifact.layout_json_path}")
         print(f"layout_overlay: {probe_artifact.overlay_path}")
         print(f"region_orientations: {probe_artifact.orientations_path}")
+        print(f"page_assembly: {assembly_artifact.assembly_json_path}")
     print(f"next_action: {packet.workflow.next_action}")
 
 
@@ -126,6 +129,43 @@ def cmd_render_html(args: argparse.Namespace) -> None:
     print(f"html: {artifact.html_path}")
     print(f"folio_render: {artifact.folio_render_path}")
     print(f"meta: {artifact.meta_path}")
+
+
+def cmd_refresh_packet(args: argparse.Namespace) -> None:
+    packet_path = Path(args.packet).resolve()
+    packet = repair_packet_json(packet_path)
+    probe_dir = packet_path.parent / "layout_probe"
+
+    if not args.skip_layout_probe:
+        probe_artifact = run_page_layout_probe(
+            Path(packet.source_image_path),
+            out_dir=probe_dir,
+            model=args.layout_model,
+            orient_model=args.orient_model,
+            orient_regions=not args.no_orient,
+        )
+        print(f"layout_probe: {probe_artifact.layout_json_path}")
+        print(f"layout_overlay: {probe_artifact.overlay_path}")
+        print(f"region_orientations: {probe_artifact.orientations_path}")
+
+    if not args.skip_assembly:
+        assembly_artifact = run_page_assembly(probe_dir)
+        print(f"page_assembly: {assembly_artifact.assembly_json_path}")
+
+    packet = attach_layout_probe(packet_path, probe_dir)
+    print(f"packet: {packet_path}")
+
+    if args.render_html:
+        artifact = render_packet_folio_html(
+            packet_path,
+            out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
+            book_title=args.title,
+        )
+        print(f"html: {artifact.html_path}")
+        print(f"folio_render: {artifact.folio_render_path}")
+        print(f"meta: {artifact.meta_path}")
+
+    print(f"next_action: {packet.workflow.next_action}")
 
 
 def cmd_handoff(args: argparse.Namespace) -> None:
@@ -270,6 +310,26 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     render_html.add_argument("--out-dir", help="Optional output directory for HTML folio artifacts")
     render_html.add_argument("--title", help="Optional book/manuscript title override")
     render_html.set_defaults(func=cmd_render_html)
+
+    refresh_packet = sub.add_parser("refresh-packet", help="Backfill layout/assembly for an existing packet and optionally rerender HTML")
+    refresh_packet.add_argument("--packet", required=True, help="Path to packet.json")
+    refresh_packet.add_argument("--out-dir", help="Optional output directory for HTML folio artifacts")
+    refresh_packet.add_argument("--title", help="Optional book/manuscript title override")
+    refresh_packet.add_argument("--skip-layout-probe", action="store_true", help="Reuse existing layout probe artifacts")
+    refresh_packet.add_argument("--skip-assembly", action="store_true", help="Reuse existing page assembly artifact")
+    refresh_packet.add_argument("--render-html", action="store_true", help="Render HTML after refreshing the packet")
+    refresh_packet.add_argument(
+        "--layout-model",
+        default=DEFAULT_MODEL_VISION,
+        help=f"Vision model for the layout probe (default: {DEFAULT_MODEL_VISION})",
+    )
+    refresh_packet.add_argument(
+        "--orient-model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
+    )
+    refresh_packet.add_argument("--no-orient", action="store_true", help="Skip region orientation reads during the layout probe")
+    refresh_packet.set_defaults(func=cmd_refresh_packet)
 
     layout_probe = sub.add_parser("layout-probe", help="Run a fast layout+bbox probe and generate overlay/crops")
     layout_probe.add_argument("--image", required=True, help="Source image to probe")
