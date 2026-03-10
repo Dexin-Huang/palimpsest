@@ -4,9 +4,15 @@ import argparse
 from pathlib import Path
 
 from palimpsest.config import DEFAULT_MODEL_READING
+from palimpsest.config import DEFAULT_MODEL_TRIAGE
 from palimpsest.config import DEFAULT_MODEL_VISION
 from palimpsest.page_continuity import run_page_handoff, run_window_synthesis
-from palimpsest.page_layout import run_page_assembly, run_page_layout_probe, run_region_reads
+from palimpsest.page_layout import (
+    run_overlap_resolution,
+    run_page_assembly,
+    run_page_layout_probe,
+    run_region_reads,
+)
 from palimpsest.page_packet import attach_layout_probe, create_page_packet, ingest_page_reading
 from palimpsest.page_prepare import prepare_image
 from palimpsest.page_reading import run_page_reading, run_section_synthesis
@@ -69,11 +75,18 @@ def cmd_packet(args: argparse.Namespace) -> None:
             orient_model=args.orient_model,
             orient_regions=not args.no_orient,
         )
+        if not args.skip_overlap_resolution:
+            overlap_artifact = run_overlap_resolution(
+                probe_artifact.output_dir,
+                model=args.overlap_model,
+            )
         assembly_artifact = run_page_assembly(probe_artifact.output_dir)
         packet = attach_layout_probe(packet_path, probe_artifact.output_dir)
         print(f"layout_probe: {probe_artifact.layout_json_path}")
         print(f"layout_overlay: {probe_artifact.overlay_path}")
         print(f"region_orientations: {probe_artifact.orientations_path}")
+        if not args.skip_overlap_resolution:
+            print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
         print(f"page_assembly: {assembly_artifact.assembly_json_path}")
     print(f"next_action: {packet.workflow.next_action}")
 
@@ -147,6 +160,13 @@ def cmd_refresh_packet(args: argparse.Namespace) -> None:
         print(f"layout_probe: {probe_artifact.layout_json_path}")
         print(f"layout_overlay: {probe_artifact.overlay_path}")
         print(f"region_orientations: {probe_artifact.orientations_path}")
+
+    if not args.skip_overlap_resolution:
+        overlap_artifact = run_overlap_resolution(
+            probe_dir,
+            model=args.overlap_model,
+        )
+        print(f"overlap_resolution: {overlap_artifact.resolution_json_path}")
 
     if not args.skip_assembly:
         assembly_artifact = run_page_assembly(probe_dir)
@@ -235,6 +255,17 @@ def cmd_assemble(args: argparse.Namespace) -> None:
     print(f"meta: {artifact.meta_path}")
 
 
+def cmd_resolve_overlap(args: argparse.Namespace) -> None:
+    artifact = run_overlap_resolution(
+        Path(args.probe_dir),
+        model=args.model,
+        prompt_file=Path(args.prompt_file).resolve() if args.prompt_file else None,
+    )
+    print(f"overlap_resolution: {artifact.resolution_json_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"model: {artifact.model}")
+
+
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("page", help="Prepare, packetize, read, and synthesize page-level witness artifacts")
     sub = parser.add_subparsers(dest="page_cmd", required=True)
@@ -263,6 +294,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
     )
     packet.add_argument("--no-orient", action="store_true", help="Skip region orientation reads during the layout probe")
+    packet.add_argument("--skip-overlap-resolution", action="store_true", help="Skip overlap adjudication between inclusive regions")
+    packet.add_argument(
+        "--overlap-model",
+        default=DEFAULT_MODEL_TRIAGE,
+        help=f"Model for overlap adjudication (default: {DEFAULT_MODEL_TRIAGE})",
+    )
     packet.set_defaults(func=cmd_packet)
 
     ingest = sub.add_parser("ingest-reading", help="Deterministically ingest a page read markdown into a page packet")
@@ -316,6 +353,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     refresh_packet.add_argument("--out-dir", help="Optional output directory for HTML folio artifacts")
     refresh_packet.add_argument("--title", help="Optional book/manuscript title override")
     refresh_packet.add_argument("--skip-layout-probe", action="store_true", help="Reuse existing layout probe artifacts")
+    refresh_packet.add_argument("--skip-overlap-resolution", action="store_true", help="Reuse existing overlap resolution artifact")
     refresh_packet.add_argument("--skip-assembly", action="store_true", help="Reuse existing page assembly artifact")
     refresh_packet.add_argument("--render-html", action="store_true", help="Render HTML after refreshing the packet")
     refresh_packet.add_argument(
@@ -329,6 +367,11 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
     )
     refresh_packet.add_argument("--no-orient", action="store_true", help="Skip region orientation reads during the layout probe")
+    refresh_packet.add_argument(
+        "--overlap-model",
+        default=DEFAULT_MODEL_TRIAGE,
+        help=f"Model for overlap adjudication (default: {DEFAULT_MODEL_TRIAGE})",
+    )
     refresh_packet.set_defaults(func=cmd_refresh_packet)
 
     layout_probe = sub.add_parser("layout-probe", help="Run a fast layout+bbox probe and generate overlay/crops")
@@ -361,6 +404,16 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         help=f"Model for crop-level region reads (default: {DEFAULT_MODEL_READING})",
     )
     region_read.set_defaults(func=cmd_region_read)
+
+    resolve_overlap = sub.add_parser("resolve-overlap", help="Adjudicate duplicate text across overlapping coarse regions")
+    resolve_overlap.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
+    resolve_overlap.add_argument("--prompt-file", help="Optional prompt file override")
+    resolve_overlap.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_TRIAGE,
+        help=f"Model for overlap adjudication (default: {DEFAULT_MODEL_TRIAGE})",
+    )
+    resolve_overlap.set_defaults(func=cmd_resolve_overlap)
 
     assemble = sub.add_parser("assemble", help="Assemble region reads from a layout probe into one page object")
     assemble.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")

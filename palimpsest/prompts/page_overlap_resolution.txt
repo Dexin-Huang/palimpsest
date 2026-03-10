@@ -1,0 +1,34 @@
+You are adjudicating duplicate text captured by intentionally coarse, overlapping page regions.
+
+Page: {PAGE_ID}
+
+The regions are allowed to overlap. Do NOT try to invent new text. Your job is only to decide whether two region pairs are duplicates and, if so, which region should canonically own the text in the final page assembly.
+
+Decision rules:
+- Prefer the region whose role is more semantically primary.
+- `main_text` should usually own text over `marginalia`, `header`, or `page_number`.
+- Prefer the region where the text is more complete and more naturally placed.
+- If both regions contain the same text and either could own it, choose one canonical owner anyway.
+- Use `shared_continuation` only when the two pairs are not duplicates and should both remain because they are adjacent or partially continuous.
+- Use `uncertain` only when you genuinely cannot tell.
+- Do not rewrite the text. Keep `canonical_text` witness-bound to one of the candidate texts.
+
+Return JSON only with this shape:
+{
+  "decisions": [
+    {
+      "candidate_id": "string",
+      "region_a": "string",
+      "region_b": "string",
+      "pair_index_a": 0,
+      "pair_index_b": 0,
+      "relation": "region_a_owns|region_b_owns|shared_duplicate|shared_continuation|uncertain",
+      "canonical_region_id": "region id or null",
+      "canonical_text": "one of the provided source strings or null",
+      "reason": "brief explanation"
+    }
+  ]
+}
+
+Candidates:
+{CANDIDATES_JSON}

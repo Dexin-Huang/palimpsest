@@ -70,6 +70,8 @@ from .layout_probe import (
     RegionOrientation,
     PageAssemblyUnit,
     PageAssembly,
+    OverlapResolutionDecision,
+    OverlapResolution,
 )
 from .continuity import (
     ContinuityStatus,
@@ -139,6 +141,8 @@ __all__ = [
     "RegionOrientation",
     "PageAssemblyUnit",
     "PageAssembly",
+    "OverlapResolutionDecision",
+    "OverlapResolution",
     "ContinuityStatus",
     "ContinuityItem",
     "PageLink",

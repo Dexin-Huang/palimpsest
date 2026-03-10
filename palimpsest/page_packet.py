@@ -280,6 +280,7 @@ def create_page_packet(
     layout_probe_path = target_dir / "layout_probe" / "layout_probe.json"
     layout_overlay_path = target_dir / "layout_probe" / "layout_overlay.png"
     region_orientations_path = target_dir / "layout_probe" / "region_orientations.json"
+    overlap_resolution_path = target_dir / "layout_probe" / "overlap_resolution.json"
     page_assembly_path = target_dir / "layout_probe" / "page_assembly.json"
 
     if not witness_path.exists():
@@ -339,6 +340,7 @@ def create_page_packet(
             "layout_probe": PacketFileRef(kind="layout_probe", path=str(layout_probe_path), status="empty"),
             "layout_overlay": PacketFileRef(kind="layout_overlay", path=str(layout_overlay_path), status="empty"),
             "region_orientations": PacketFileRef(kind="region_orientations", path=str(region_orientations_path), status="empty"),
+            "overlap_resolution": PacketFileRef(kind="overlap_resolution", path=str(overlap_resolution_path), status="empty"),
             "page_assembly": PacketFileRef(kind="page_assembly", path=str(page_assembly_path), status="empty"),
         },
         continuity=PacketContinuity(
@@ -383,6 +385,7 @@ def attach_layout_probe(packet_path: Path, probe_dir: Path) -> PagePacket:
         "layout_probe": probe_dir / "layout_probe.json",
         "layout_overlay": probe_dir / "layout_overlay.png",
         "region_orientations": probe_dir / "region_orientations.json",
+        "overlap_resolution": probe_dir / "overlap_resolution.json",
         "page_assembly": probe_dir / "page_assembly.json",
     }
 
