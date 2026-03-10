@@ -195,7 +195,13 @@ def _certainty_for_zone(zone: Zone, text: str) -> str:
         return "illegible"
     if re.search(r"\[[/\s]{2,}\]", text):
         return "illegible"
+    if re.search(r"\[(?:[^\[\]\s/][^\[\]]*/[^\[\]]+)\]", text):
+        return "uncertain"
+    if re.search(r"\[\?+\]", text):
+        return "uncertain"
     if zone.notes and any(note.type in {"supplied", "editorial_supply"} for note in zone.notes):
+        return "supplied"
+    if re.search(r"\([^()\n]+\)", text):
         return "supplied"
     score = None
     if zone.confidence:

@@ -48,5 +48,9 @@ Rules:
 - Set `reading_direction` to `ltr`, `rtl`, `ttb`, or `btt`.
 - Use `type` values such as: line, rubric, marginalia, interlinear, header, footer, page_number, caption, diagram_label, table_cell, unknown.
 - Use `structure.region_role` values such as: main_text, marginalia, header, footer, page_number, interlinear, paratext, table, diagram.
-- If a line or span is unreadable, use bracketed slash guesses such as `[////]` or `[////////]` to preserve the approximate unreadable width.
+- If a line or span is uncertain but a few readings are plausible, use square brackets with the best guesses in order, such as `[hill/heil/hail]`.
+- If only one reading is plausible but still doubtful, use a bracketed guess with a question mark, such as `[dominus?]`.
+- If a span is damaged but a local restoration is probable, use parentheses for the supplied guess, such as `(dominus)`.
+- If no plausible guess survives, use `[?]` or `[??]` rather than `illegible`.
+- Never use `[////]`, `[damaged]`, or `[illegible]`.
 - If there is no readable text, emit one placeholder zone with empty `source_diplomatic` and `type = "unknown"`.

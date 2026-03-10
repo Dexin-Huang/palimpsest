@@ -10,6 +10,7 @@ import re
 import shutil
 
 from palimpsest.models import (
+    ColumnWitness,
     FolioRender,
     FolioRenderCover,
     FolioRenderImagePanel,
@@ -17,7 +18,15 @@ from palimpsest.models import (
     FolioRenderSection,
     FolioRenderSpread,
     FolioRenderTextPanel,
+    InterpretationBlock,
+    InterpretationContent,
+    MarginaliaEntry,
+    NoteBlock,
     PagePacket,
+    QuestionEntry,
+    SentencePair,
+    TermEntry,
+    WitnessContent,
 )
 from palimpsest.packet_scholar import repair_packet_json
 
@@ -48,6 +57,8 @@ class RenderedPacketHtmlArtifact:
 class RenderedPacketSiteArtifact:
     doc_id: str
     index_path: Path
+    contents_path: Path
+    ending_path: Path
     folio_paths: list[Path]
     meta_path: Path
 
@@ -346,6 +357,540 @@ def _groups_to_template_sections(
     ]
 
 
+# ═══════════════════════════════════════
+# Structured content parsers
+# ═══════════════════════════════════════
+
+_CHINESE_SENTENCE_RE = re.compile(r"[。！？]")
+_HEADER_RE = re.compile(r"\*\*Header\*\*:\s*(.+)")
+_MARGINALIA_LABEL_RE = re.compile(
+    r"\*\*Marginalia\*\*\s*\(([^,)]+),\s*([^)]+)\)\s*:"
+)
+_TERM_RE = re.compile(
+    r"\*\*(.+?)\*\*\s*(?:\(([^)]+)\))?\s*[:\-—]\s*(.+)"
+)
+_COLUMN_TITLE_RE = re.compile(
+    r"^(.+?):\s*(.+?)(?:\s*\((.+)\))?\s*$"
+)
+
+
+def _split_chinese_sentences(text: str) -> list[str]:
+    """Split continuous Chinese text into sentences by terminal punctuation."""
+    joined = re.sub(r"\s+", "", text)
+    sentences: list[str] = []
+    last = 0
+    for match in _CHINESE_SENTENCE_RE.finditer(joined):
+        end = match.end()
+        sentence = joined[last:end].strip()
+        if sentence:
+            sentences.append(sentence)
+        last = end
+    remainder = joined[last:].strip()
+    if remainder:
+        sentences.append(remainder)
+    return sentences
+
+
+def _extract_witness_column(section_body: str) -> tuple[str, str | None, list[str]]:
+    """Extract header, marginalia text, and main text lines from a witness column."""
+    header = ""
+    main_lines: list[str] = []
+    in_code_block = False
+    marginalia_text: str | None = None
+    marginalia_lines: list[str] = []
+    in_marginalia = False
+    past_main_text_label = False
+
+    for line in section_body.splitlines():
+        stripped = line.strip()
+
+        header_match = _HEADER_RE.match(stripped)
+        if header_match:
+            header = header_match.group(1).strip()
+            continue
+
+        if stripped.startswith("**Page Number**"):
+            continue
+
+        if _MARGINALIA_LABEL_RE.match(stripped):
+            in_marginalia = True
+            continue
+
+        if stripped == "```":
+            if in_marginalia and not in_code_block:
+                in_code_block = True
+                continue
+            elif in_code_block:
+                in_code_block = False
+                in_marginalia = False
+                marginalia_text = "\n".join(marginalia_lines)
+                continue
+
+        if in_code_block:
+            marginalia_lines.append(line)
+            continue
+
+        if stripped.startswith("**Main Text**"):
+            past_main_text_label = True
+            continue
+
+        if stripped == "---":
+            continue
+
+        if stripped and not in_marginalia:
+            main_lines.append(stripped)
+
+    raw_text = "\n".join(main_lines)
+    source_units = _split_chinese_sentences(raw_text)
+    if len(source_units) <= 1 and len(main_lines) > 1:
+        source_units = [line for line in main_lines if line.strip()]
+    return header, marginalia_text, source_units
+
+
+def _extract_translation_paragraphs(section_body: str) -> list[str]:
+    """Extract clean translation paragraphs from a translation column section."""
+    paragraphs: list[str] = []
+    in_code_block = False
+    skip_until_rule = False
+    current: list[str] = []
+
+    for line in section_body.splitlines():
+        stripped = line.strip()
+
+        if stripped.startswith("**[Page number"):
+            continue
+        if stripped.startswith("**Latin Marginalia**") or stripped.startswith("**Note**:"):
+            skip_until_rule = True
+            continue
+        if stripped == "```":
+            in_code_block = not in_code_block
+            if skip_until_rule:
+                continue
+        if in_code_block:
+            continue
+        if stripped == "---":
+            skip_until_rule = False
+            continue
+        if skip_until_rule:
+            continue
+        if stripped.startswith("**Main Text**"):
+            continue
+
+        if not stripped:
+            if current:
+                paragraphs.append(" ".join(current))
+                current = []
+        else:
+            current.append(stripped)
+
+    if current:
+        paragraphs.append(" ".join(current))
+
+    return [p for p in paragraphs if p.strip()]
+
+
+def _pair_sentences(
+    source_sentences: list[str],
+    translation_paragraphs: list[str],
+) -> list[SentencePair]:
+    """Pair Chinese sentences with translation paragraphs positionally."""
+    pairs: list[SentencePair] = []
+    n_source = len(source_sentences)
+    n_trans = len(translation_paragraphs)
+
+    if n_source == 0 and n_trans == 0:
+        return pairs
+
+    # If counts match, pair 1:1
+    if n_source == n_trans:
+        for src, trans in zip(source_sentences, translation_paragraphs):
+            pairs.append(SentencePair(source=src, translation=trans))
+        return pairs
+
+    # If more source than translation, group sources per translation
+    if n_source > n_trans and n_trans > 0:
+        per = n_source / n_trans
+        for i, trans in enumerate(translation_paragraphs):
+            start = int(i * per)
+            end = int((i + 1) * per) if i < n_trans - 1 else n_source
+            combined_source = "".join(source_sentences[start:end])
+            pairs.append(SentencePair(source=combined_source, translation=trans))
+        return pairs
+
+    # If more translation than source, group translations per source
+    if n_trans > n_source and n_source > 0:
+        per = n_trans / n_source
+        for i, src in enumerate(source_sentences):
+            start = int(i * per)
+            end = int((i + 1) * per) if i < n_source - 1 else n_trans
+            combined_trans = " ".join(translation_paragraphs[start:end])
+            pairs.append(SentencePair(source=src, translation=combined_trans))
+        return pairs
+
+    # Fallback: just zip what we have
+    for src, trans in zip(source_sentences, translation_paragraphs):
+        pairs.append(SentencePair(source=src, translation=trans))
+
+    # Append remainders
+    for src in source_sentences[n_trans:]:
+        pairs.append(SentencePair(source=src, translation=""))
+    for trans in translation_paragraphs[n_source:]:
+        pairs.append(SentencePair(source="", translation=trans))
+
+    return pairs
+
+
+def _match_column_sections(
+    witness_doc: MarkdownDocument,
+    translation_doc: MarkdownDocument,
+) -> list[tuple[MarkdownSection | None, MarkdownSection | None]]:
+    """Match witness and translation sections by column label."""
+    witness_columns = [s for s in witness_doc.sections if s.title.lower() != "layout notes"]
+    translation_columns = [
+        s for s in translation_doc.sections
+        if s.title.lower() not in {"translation notes", "interpretive restraint"}
+    ]
+
+    # Try matching by normalized column name
+    pairs: list[tuple[MarkdownSection | None, MarkdownSection | None]] = []
+    used_trans: set[int] = set()
+
+    for ws in witness_columns:
+        ws_key = ws.title.lower().strip()
+        matched = False
+        for i, ts in enumerate(translation_columns):
+            if i in used_trans:
+                continue
+            ts_key = ts.title.lower().split(":")[0].strip()
+            if ws_key == ts_key:
+                pairs.append((ws, ts))
+                used_trans.add(i)
+                matched = True
+                break
+        if not matched:
+            pairs.append((ws, None))
+
+    for i, ts in enumerate(translation_columns):
+        if i not in used_trans:
+            pairs.append((None, ts))
+
+    return pairs
+
+
+def _parse_column_header_en(translation_title: str) -> str:
+    """Extract English header from translation section title like 'Left Column: 天賦恒性 (Heaven Endows Constant Nature)'."""
+    def _clean(candidate: str) -> str:
+        value = candidate.strip()
+        if re.fullmatch(r"\[[^\]]+\]", value):
+            return ""
+        return value
+
+    match = _COLUMN_TITLE_RE.match(translation_title)
+    if match and match.group(3):
+        return _clean(match.group(3))
+    if match and match.group(2):
+        return _clean(match.group(2))
+    return _clean(translation_title)
+
+
+def _build_witness_content(
+    witness_doc: MarkdownDocument,
+    translation_doc: MarkdownDocument,
+) -> WitnessContent:
+    """Build structured witness content from witness and translation markdown."""
+    columns: list[ColumnWitness] = []
+    marginalia: list[MarginaliaEntry] = []
+
+    matched = _match_column_sections(witness_doc, translation_doc)
+
+    for ws, ts in matched:
+        if ws is None:
+            continue
+
+        header_zh, marg_text, source_sentences = _extract_witness_column(ws.body)
+        header_en = _parse_column_header_en(ts.title) if ts else ""
+
+        if ts:
+            trans_paragraphs = _extract_translation_paragraphs(ts.body)
+        else:
+            trans_paragraphs = []
+
+        pairs = _pair_sentences(source_sentences, trans_paragraphs)
+        columns.append(ColumnWitness(
+            header_zh=header_zh,
+            header_en=header_en,
+            pairs=pairs,
+        ))
+
+        if marg_text:
+            marg_match = _MARGINALIA_LABEL_RE.search(ws.body)
+            script = marg_match.group(1).strip() if marg_match else "unknown"
+            position = marg_match.group(2).strip() if marg_match else "unknown"
+
+            # Try to find note from translation
+            note = None
+            if ts:
+                note_match = re.search(r"\*\*Note\*\*:\s*(.+)", ts.body)
+                if note_match:
+                    note = note_match.group(1).strip()
+
+            marginalia.append(MarginaliaEntry(
+                script=script,
+                position=position,
+                text=marg_text,
+                note=note,
+            ))
+
+    return WitnessContent(columns=columns, marginalia=marginalia)
+
+
+def _parse_terms(terms_doc: MarkdownDocument) -> list[TermEntry]:
+    """Parse terms.md into structured term entries."""
+    entries: list[TermEntry] = []
+    category_map = {
+        "divine names": "divine_name",
+        "historical figures": "historical_figure",
+        "classical texts": "classical_text",
+        "people and beings": "being",
+        "works and texts": "text",
+        "places and institutions": "place_or_institution",
+        "technical terms": "technical_term",
+        "technical terms (neo-confucian)": "technical_term",
+        "political terms": "political_term",
+    }
+
+    for section in terms_doc.sections:
+        category = category_map.get(section.title.lower(), section.title.lower().replace(" ", "_"))
+        for line in section.body.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- ") and not stripped.startswith("* "):
+                continue
+            item = re.sub(r"^[-*]\s+", "", stripped)
+            match = _TERM_RE.match(item)
+            if match:
+                zh = match.group(1).strip()
+                paren = match.group(2)
+                gloss = match.group(3).strip().rstrip(".")
+
+                romanization = None
+                if paren:
+                    # Extract just the romanization, stripping line refs
+                    parts = [p.strip() for p in paren.split(",")]
+                    rom_parts = [p for p in parts if not re.match(r"^(line|lines|throughout)\b", p, re.IGNORECASE)]
+                    if rom_parts:
+                        romanization = rom_parts[0]
+
+                entries.append(TermEntry(
+                    zh=zh,
+                    romanization=romanization,
+                    gloss=gloss,
+                    category=category,
+                ))
+
+    return entries
+
+
+def _parse_questions(questions_doc: MarkdownDocument) -> list[QuestionEntry]:
+    """Parse questions.md into structured question entries."""
+    entries: list[QuestionEntry] = []
+    for section in questions_doc.sections:
+        category = section.title.lower().replace(" ", "_")
+        for line in section.body.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- ") and not stripped.startswith("* "):
+                continue
+            text = re.sub(r"^[-*]\s+", "", stripped)
+            if text:
+                entries.append(QuestionEntry(text=text, category=category))
+
+    return entries
+
+
+def _parse_interpretations(interpretation_doc: MarkdownDocument) -> list[InterpretationBlock]:
+    """Parse interpretation.md into structured blocks."""
+    blocks: list[InterpretationBlock] = []
+    for section in interpretation_doc.sections:
+        paragraphs: list[str] = []
+        for line_group in section.body.split("\n\n"):
+            cleaned = line_group.strip()
+            if cleaned and not cleaned.startswith("###"):
+                paragraphs.append(cleaned)
+        if paragraphs:
+            blocks.append(InterpretationBlock(title=section.title, paragraphs=paragraphs))
+    return blocks
+
+
+def _parse_notes(notes_doc: MarkdownDocument) -> list[NoteBlock]:
+    """Parse notes.md into structured note blocks."""
+    blocks: list[NoteBlock] = []
+    for section in notes_doc.sections:
+        items: list[str] = []
+        for line in section.body.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- ") or stripped.startswith("* "):
+                items.append(re.sub(r"^[-*]\s+", "", stripped))
+            elif stripped and not stripped.startswith("#"):
+                items.append(stripped)
+        if items:
+            blocks.append(NoteBlock(title=section.title, items=items))
+    return blocks
+
+
+def _build_interpretation_content(
+    interpretation_doc: MarkdownDocument,
+    notes_doc: MarkdownDocument,
+    terms_doc: MarkdownDocument,
+    questions_doc: MarkdownDocument,
+) -> InterpretationContent:
+    """Build structured interpretation content from markdown documents."""
+    return InterpretationContent(
+        interpretations=_parse_interpretations(interpretation_doc),
+        terms=_parse_terms(terms_doc),
+        questions=_parse_questions(questions_doc),
+        notes=_parse_notes(notes_doc),
+    )
+
+
+# ═══════════════════════════════════════
+# Structured HTML renderers
+# ═══════════════════════════════════════
+
+def _render_lacuna(text: str) -> str:
+    """Replace [////] markers with lacuna spans."""
+    return re.sub(
+        r"\[/{2,}\]",
+        '<span class="lacuna">&thinsp;[////]&thinsp;</span>',
+        escape(text),
+    )
+
+
+def _render_translation_inline(text: str) -> str:
+    """Render translation text with inline markdown to HTML."""
+    html = escape(text)
+    # Bold
+    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+    # Italic
+    html = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", html)
+    # [text unclear] and similar uncertain markers
+    html = re.sub(
+        r"\[([^\]]*(?:unclear|uncertain|continues)[^\]]*)\]",
+        r'<span class="uncertain">[\1]</span>',
+        html,
+        flags=re.IGNORECASE,
+    )
+    # Em-dash
+    html = html.replace("—", "&mdash;")
+    return html
+
+
+def _render_structured_witness_face(folio: FolioRender) -> str:
+    """Render the witness/translation face from structured content."""
+    wc = folio.spread.content.witness_content
+    if not wc:
+        return ""
+
+    parts: list[str] = []
+    parts.append('<div class="face face-witness">')
+    parts.append('  <div class="page-text-inner">')
+    parts.append('    <div class="page-header">')
+    parts.append(f'      <div class="page-header-label">{escape(folio.spread.content.header_label)}</div>')
+    parts.append(f'      <div class="page-header-title">{escape(folio.spread.content.header_title)}</div>')
+    parts.append('    </div>')
+
+    for col in wc.columns:
+        parts.append('    <div class="column-header">')
+        parts.append(f'      <div class="column-header-chinese">{escape(col.header_zh)}</div>')
+        if col.header_en:
+            parts.append(f'      <div class="column-header-english">{escape(col.header_en)}</div>')
+        parts.append('      <div class="column-rule"></div>')
+        parts.append('    </div>')
+
+        for pair in col.pairs:
+            source_html = _render_lacuna(pair.source) if pair.source else ""
+            trans_html = _render_translation_inline(pair.translation) if pair.translation else ""
+            parts.append('    <div class="pair">')
+            if source_html:
+                parts.append(f'      <div class="pair-source">{source_html}</div>')
+            if trans_html:
+                parts.append(f'      <div class="pair-translation">{trans_html}</div>')
+            parts.append('    </div>')
+
+    if wc.marginalia:
+        for marg in wc.marginalia:
+            parts.append('    <div class="marginalia-section">')
+            label = f"{escape(marg.script)} Marginalia &middot; {escape(marg.position)}"
+            parts.append(f'      <div class="marginalia-label">{label}</div>')
+            parts.append(f'      <div class="marginalia-text">{escape(marg.text)}</div>')
+            if marg.note:
+                parts.append(f'      <div class="marginalia-note">{escape(marg.note)}</div>')
+            parts.append('    </div>')
+
+    parts.append('  </div>')
+    parts.append('</div>')
+
+    return "\n".join(parts)
+
+
+def _render_structured_interpretation_face(folio: FolioRender) -> str:
+    """Render the interpretation/apparatus face from structured content."""
+    ic = folio.spread.interpretation.interpretation_content
+    if not ic:
+        return ""
+
+    parts: list[str] = []
+    parts.append('<div class="face face-interp">')
+    parts.append('  <div class="page-text-inner">')
+    parts.append('    <div class="page-header page-header-dark">')
+    parts.append(f'      <div class="page-header-label">{escape(folio.spread.interpretation.header_label)}</div>')
+    parts.append(f'      <div class="page-header-title">{escape(folio.spread.interpretation.header_title)}</div>')
+    parts.append('    </div>')
+
+    # Interpretation blocks
+    for block in ic.interpretations:
+        parts.append(f'    <div class="interpretation-label">{escape(block.title)}</div>')
+        for para in block.paragraphs:
+            parts.append(f'    <p class="interpretation-text">{_render_translation_inline(para)}</p>')
+
+    # Terms grid
+    if ic.terms:
+        parts.append('    <div class="terms-divider">')
+        parts.append('      <div class="terms-label">Key Terms</div>')
+        parts.append('      <div class="term-grid">')
+        for term in ic.terms:
+            rom = f" <em>{escape(term.romanization)}</em>" if term.romanization else ""
+            parts.append(
+                f'        <div class="term"><span class="term-zh">{escape(term.zh)}</span>{rom} &mdash; {escape(term.gloss)}</div>'
+            )
+        parts.append('      </div>')
+        parts.append('    </div>')
+
+    # Notes
+    if ic.notes:
+        parts.append('    <div class="terms-divider">')
+        parts.append('      <div class="terms-label">Notes</div>')
+        for block in ic.notes:
+            parts.append(f'      <div style="margin-bottom: 0.8rem;">')
+            parts.append(f'        <div style="font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--faded); margin-bottom: 0.3rem;">{escape(block.title)}</div>')
+            for item in block.items:
+                parts.append(f'        <p style="font-size: 0.68rem; line-height: 1.7; color: var(--faded-light); margin-bottom: 0.35rem;">{_render_translation_inline(item)}</p>')
+            parts.append('      </div>')
+        parts.append('    </div>')
+
+    # Questions
+    if ic.questions:
+        parts.append('    <div class="terms-divider">')
+        parts.append('      <div class="terms-label">Open Questions</div>')
+        for q in ic.questions:
+            parts.append(f'      <p style="font-size: 0.68rem; line-height: 1.7; color: var(--faded-light); margin-bottom: 0.5rem;">{_render_translation_inline(q.text)}</p>')
+        parts.append('    </div>')
+
+    parts.append('    <div class="colophon"><div class="colophon-text">Palimpsest Edition</div></div>')
+    parts.append('  </div>')
+    parts.append('</div>')
+
+    return "\n".join(parts)
+
+
 def _build_folio_render(
     *,
     packet: PagePacket,
@@ -356,6 +901,8 @@ def _build_folio_render(
     home_href: str | None,
     content_sections: list[FolioTemplateSection],
     interpretation_sections: list[FolioTemplateSection],
+    witness_content: WitnessContent | None = None,
+    interpretation_content: InterpretationContent | None = None,
 ) -> FolioRender:
     display_page = _display_page_id(packet.page_id)
     content_render_sections = [
@@ -392,11 +939,13 @@ def _build_folio_render(
                 header_label="Witness & Translation",
                 header_title=display_page,
                 sections=content_render_sections,
+                witness_content=witness_content,
             ),
             interpretation=FolioRenderTextPanel(
                 header_label="Interpretation & Apparatus",
                 header_title=display_page,
                 sections=interpretation_render_sections,
+                interpretation_content=interpretation_content,
             ),
         ),
         navigation=FolioRenderNavigation(
@@ -420,6 +969,9 @@ def _render_cover_piece(folio: FolioRender) -> str:
 
 
 def _render_content_piece(folio: FolioRender) -> str:
+    if folio.spread.content.witness_content:
+        return _render_structured_witness_face(folio)
+
     sections_html = _render_template_sections(
         [
             FolioTemplateSection(kind=section.kind, title=section.title, body_html=section.body_html, wide=section.wide)
@@ -446,6 +998,9 @@ def _render_content_piece(folio: FolioRender) -> str:
 def _render_interpretation_piece(
     folio: FolioRender,
 ) -> str:
+    if folio.spread.interpretation.interpretation_content:
+        return _render_structured_interpretation_face(folio)
+
     sections_html = _render_template_sections(
         [
             FolioTemplateSection(kind=section.kind, title=section.title, body_html=section.body_html, wide=section.wide)
@@ -577,7 +1132,6 @@ def _site_css() -> str:
     justify-content: center;
     background: var(--panel-bg);
     overflow: hidden;
-    position: relative;
   }
   .cover::before {
     content: '';
@@ -900,17 +1454,32 @@ def _site_css() -> str:
     border-radius: 2px;
     font-size: 0.95em;
   }
+  .face-interp { color: var(--panel-fg); }
+  .face-interp p,
+  .face-interp ul,
+  .face-interp ol,
+  .face-interp li {
+    color: var(--faded-light);
+  }
+  .face-interp strong { color: var(--panel-fg); }
+  .face-interp em { color: var(--faded-light); }
+  .face-interp pre {
+    background: rgba(240,235,224,0.06);
+    border-left-color: var(--accent);
+    color: var(--faded-light);
+  }
+  .face-interp code {
+    background: rgba(240,235,224,0.08);
+    color: var(--panel-fg);
+  }
+  .face-interp hr {
+    background: rgba(200,191,168,0.12);
+  }
   .face-interp .section-card {
     border-top-color: rgba(200,191,168,0.12);
   }
   .face-interp .section-card-title {
     color: var(--panel-fg);
-  }
-  .face-interp .section-card-body p,
-  .face-interp .section-card-body ul,
-  .face-interp .section-card-body ol,
-  .face-interp .section-card-body li {
-    color: var(--faded-light);
   }
   .face-interp .subsection-card {
     border-left-color: rgba(200,191,168,0.16);
@@ -918,15 +1487,123 @@ def _site_css() -> str:
   .face-interp .subsection-card-title {
     color: var(--parchment);
   }
-  .face-interp .subsection-card-body p,
-  .face-interp .subsection-card-body ul,
-  .face-interp .subsection-card-body ol,
-  .face-interp .subsection-card-body li {
+  /* ─── Structured witness: column headers ─── */
+  .column-header { margin-top: 2rem; margin-bottom: 1.2rem; }
+  .column-header:first-child { margin-top: 0; }
+  .column-header-chinese {
+    font-size: 1.1rem;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    margin-bottom: 0.15rem;
+  }
+  .column-header-english {
+    font-size: 0.55rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--faded);
+  }
+  .column-rule {
+    width: 36px;
+    height: 2px;
+    background: var(--accent);
+    margin-top: 0.5rem;
+    border-radius: 1px;
+  }
+
+  /* ─── Sentence pairs ─── */
+  .pair {
+    padding: 0.65rem 0;
+    border-bottom: 1px solid var(--rule-light);
+    transition: background 0.25s ease;
+  }
+  .pair:hover {
+    background: var(--glow);
+    margin-left: -0.6rem; margin-right: -0.6rem;
+    padding-left: 0.6rem; padding-right: 0.6rem;
+    border-radius: 2px;
+  }
+  .pair:last-of-type { border-bottom: none; }
+  .pair-source {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--ink);
+    margin-bottom: 0.2rem;
+  }
+  .pair-translation {
+    font-size: 0.76rem;
+    line-height: 1.6;
+    color: var(--faded);
+    font-style: italic;
+  }
+  .pair-translation em { font-style: normal; color: var(--ink-soft); }
+  .pair-translation .uncertain {
+    color: var(--accent);
+    font-style: normal;
+    font-size: 0.68rem;
+  }
+  .lacuna { color: var(--accent); font-weight: 600; letter-spacing: 0.04em; }
+
+  /* ─── Marginalia ─── */
+  .marginalia-section {
+    margin-top: 1.8rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--rule);
+  }
+  .marginalia-label {
+    font-size: 0.5rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--faded);
+    margin-bottom: 0.6rem;
+  }
+  .marginalia-text {
+    font-size: 0.72rem;
+    line-height: 1.75;
+    color: var(--faded);
+    font-style: italic;
+  }
+  .marginalia-note {
+    margin-top: 0.4rem;
+    font-size: 0.65rem;
+    line-height: 1.55;
     color: var(--faded-light);
+    font-style: normal;
   }
-  .face-interp .section-card-body code {
-    background: rgba(240,235,224,0.08);
+
+  /* ─── Interpretation face structured blocks ─── */
+  .interpretation-label {
+    font-size: 0.5rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--faded);
+    margin-bottom: 0.8rem;
   }
+  .interpretation-text {
+    font-size: 0.74rem;
+    line-height: 1.75;
+    color: var(--panel-fg);
+  }
+  .interpretation-text + .interpretation-text { margin-top: 0.7rem; }
+  .terms-divider {
+    margin-top: 1.2rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(200,191,168,0.12);
+  }
+  .terms-label {
+    font-size: 0.45rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--faded);
+    margin-bottom: 0.6rem;
+  }
+  .term-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem 1.5rem;
+  }
+  .term { font-size: 0.65rem; line-height: 1.45; color: var(--faded-light); }
+  .term-zh { color: var(--panel-fg); margin-right: 0.2em; }
+
   .colophon {
     margin-top: 1.5rem;
     text-align: center;
@@ -1005,6 +1682,28 @@ def _site_css() -> str:
 """
 
 
+def _html_shell(*, title: str, body: str, extra_css: str = "") -> str:
+    return "\n".join(
+        [
+            "<!DOCTYPE html>",
+            '<html lang="en">',
+            "<head>",
+            '  <meta charset="UTF-8">',
+            '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+            f"  <title>{escape(title)}</title>",
+            "  <style>",
+            _site_css(),
+            extra_css,
+            "  </style>",
+            "</head>",
+            "<body>",
+            body,
+            "</body>",
+            "</html>",
+        ]
+    )
+
+
 def _render_folio_html(
     *,
     packet: PagePacket,
@@ -1013,6 +1712,7 @@ def _render_folio_html(
     prev_href: str | None,
     next_href: str | None,
     home_href: str | None,
+    include_cover: bool = True,
 ) -> tuple[str, FolioRender]:
     witness_doc = _parse_markdown_document(_read_text(packet.files.get("witness").path if packet.files.get("witness") else None))
     translation_doc = _parse_markdown_document(_read_text(packet.files.get("translation").path if packet.files.get("translation") else None))
@@ -1076,6 +1776,11 @@ def _render_folio_html(
         ),
     ]
 
+    witness_content = _build_witness_content(witness_doc, translation_doc)
+    interpretation_content = _build_interpretation_content(
+        interpretation_doc, notes_doc, terms_doc, questions_doc
+    )
+
     folio = _build_folio_render(
         packet=packet,
         book_title=book_title,
@@ -1085,6 +1790,8 @@ def _render_folio_html(
         home_href=home_href,
         content_sections=content_sections,
         interpretation_sections=interpretation_sections,
+        witness_content=witness_content,
+        interpretation_content=interpretation_content,
     )
     cover_piece = _render_cover_piece(folio)
     content_piece = _render_content_piece(folio)
@@ -1093,7 +1800,7 @@ def _render_folio_html(
     folio_links = "\n".join(
         link
         for link in [
-            f'<a class="folio-link" href="{escape(folio.navigation.home_href)}">Book Index</a>' if folio.navigation.home_href else "",
+            f'<a class="folio-link" href="{escape(folio.navigation.home_href)}">Contents</a>' if folio.navigation.home_href else "",
             f'<a class="folio-link" href="{escape(folio.navigation.prev_href)}">&larr; Previous Folio</a>' if folio.navigation.prev_href else "",
             f'<a class="folio-link" href="{escape(folio.navigation.next_href)}">Next Folio &rarr;</a>' if folio.navigation.next_href else "",
         ]
@@ -1112,10 +1819,8 @@ def _render_folio_html(
 </head>
 <body>
 <div class="book">
-  <div class="page cover active" data-page="0">
-    {cover_piece}
-  </div>
-  <div class="page" data-page="1">
+  {f'<div class="page cover active" data-page="0">{cover_piece}</div>' if include_cover else ''}
+  <div class="page{' active' if not include_cover else ''}" data-page="1">
     {spread_piece}
   </div>
 </div>
@@ -1188,6 +1893,7 @@ def render_packet_folio_html(
     prev_href: str | None = None,
     next_href: str | None = None,
     home_href: str | None = None,
+    include_cover: bool = True,
 ) -> RenderedPacketHtmlArtifact:
     packet = repair_packet_json(Path(packet_path))
     packet_path = Path(packet_path).resolve()
@@ -1208,6 +1914,7 @@ def render_packet_folio_html(
         prev_href=prev_href,
         next_href=next_href,
         home_href=home_href,
+        include_cover=include_cover,
     )
     html_path.write_text(html, encoding="utf-8")
     folio_render_path.write_text(folio_render.model_dump_json(indent=2), encoding="utf-8")
@@ -1230,6 +1937,7 @@ def render_packet_folio_html(
         "previous_href": prev_href,
         "next_href": next_href,
         "home_href": home_href,
+        "include_cover": include_cover,
     }
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
@@ -1256,6 +1964,9 @@ def build_packet_book_site(
     book_title = title or doc_id.replace("_", " ")
 
     out_dir = out_dir.resolve()
+    title_path = out_dir / "index.html"
+    contents_path = out_dir / "contents.html"
+    ending_path = out_dir / "ending.html"
     folio_dir = out_dir / "folios"
     image_dir = out_dir / "assets" / "images"
     folio_dir.mkdir(parents=True, exist_ok=True)
@@ -1276,9 +1987,9 @@ def build_packet_book_site(
     for index, (packet_path, packet) in enumerate(zip(resolved_packets, packets)):
         page_out_dir = folio_dir / packet.page_id
         page_out_dir.mkdir(parents=True, exist_ok=True)
-        prev_href = f"../{packets[index - 1].page_id}/edition_elegant.html" if index > 0 else None
-        next_href = f"../{packets[index + 1].page_id}/edition_elegant.html" if index < len(packets) - 1 else None
-        home_href = "../index.html"
+        prev_href = f"../{packets[index - 1].page_id}/edition_elegant.html" if index > 0 else "../../contents.html"
+        next_href = f"../{packets[index + 1].page_id}/edition_elegant.html" if index < len(packets) - 1 else "../../ending.html"
+        home_href = "../../contents.html"
         artifact = render_packet_folio_html(
             packet_path,
             out_dir=page_out_dir,
@@ -1287,6 +1998,7 @@ def build_packet_book_site(
             prev_href=prev_href,
             next_href=next_href,
             home_href=home_href,
+            include_cover=False,
         )
         folio_paths.append(artifact.html_path)
         page_entries.append(
@@ -1296,48 +2008,97 @@ def build_packet_book_site(
             }
         )
 
-    index_html = "\n".join(
+    shell_css = "\n".join(
         [
-            "<!DOCTYPE html>",
-            "<html lang=\"en\">",
-            "<head>",
-            "  <meta charset=\"UTF-8\">",
-            "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
-            f"  <title>{escape(book_title)}</title>",
-            "  <style>",
-            _site_css(),
-            "  body { overflow: auto; }",
-            "  .index-shell { min-height: 100vh; padding: 4rem 2rem; display: flex; align-items: center; justify-content: center; }",
-            "  .index-card { width: min(920px, 100%); background: rgba(240,235,224,0.96); color: #1a1714; padding: 2.4rem 2.6rem; box-shadow: 0 18px 70px rgba(0,0,0,0.18); }",
-            "  .index-label { font-size: 0.7rem; letter-spacing: 0.28em; text-transform: uppercase; color: #8a4b2a; margin-bottom: 0.8rem; }",
-            "  .index-title { font-size: clamp(2rem, 4vw, 3.8rem); margin-bottom: 0.8rem; }",
-            "  .index-subtitle { color: #5c5044; line-height: 1.75; max-width: 52rem; }",
-            "  .folio-list { margin-top: 2rem; display: grid; gap: 0.7rem; }",
-            "  .folio-item { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #d9ccb5; padding-top: 0.8rem; }",
-            "  .folio-item a { text-decoration: none; color: #1a1714; font-size: 1.1rem; }",
-            "  .folio-item span { color: #8a4b2a; font-size: 0.74rem; letter-spacing: 0.18em; text-transform: uppercase; }",
-            "  </style>",
-            "</head>",
-            "<body>",
-            "  <div class=\"index-shell\">",
-            "    <div class=\"index-card\">",
-            "      <div class=\"index-label\">Palimpsest Book</div>",
-            f"      <div class=\"index-title\">{escape(book_title)}</div>",
-            f"      <div class=\"index-subtitle\">Generated folio site for {escape(doc_id)}. Each folio keeps the raw source image fixed on the left, makes witness plus direct translation the default scrollable reading view, and moves interpretation into a right-side toggle.</div>",
-            "      <div class=\"folio-list\">",
-            *[
-                f'        <div class="folio-item"><a href="{escape(entry["href"])}">{escape(entry["page_id"])}</a><span>Open Folio</span></div>'
-                for entry in page_entries
-            ],
-            "      </div>",
-            "    </div>",
-            "  </div>",
-            "</body>",
-            "</html>",
+            "body { overflow: auto; }",
+            ".contents-page { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 2rem; position: relative; }",
+            ".contents-page::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 30%, rgba(138,75,42,0.05) 0%, transparent 70%); pointer-events: none; }",
+            ".contents-inner { width: min(480px, 100%); position: relative; }",
+            ".contents-label { font-size: 0.65rem; letter-spacing: 0.35em; text-transform: uppercase; color: var(--faded); margin-bottom: 1.2rem; }",
+            ".contents-title { font-size: 1.8rem; font-weight: 300; color: var(--parchment); letter-spacing: 0.04em; margin-bottom: 0.4rem; }",
+            ".contents-subtitle { font-size: 0.75rem; color: var(--faded); letter-spacing: 0.12em; margin-bottom: 2.5rem; }",
+            ".contents-rule { width: 36px; height: 1px; background: var(--accent); margin-bottom: 2rem; }",
+            ".folio-list { display: grid; gap: 0; }",
+            ".folio-item { border-top: 1px solid rgba(200,191,168,0.12); }",
+            ".folio-item a { display: flex; justify-content: space-between; align-items: center; text-decoration: none; padding: 0.9rem 0; color: var(--panel-fg); transition: color 0.2s ease; }",
+            ".folio-item a:hover { color: var(--parchment); }",
+            ".folio-item .folio-name { font-size: 0.95rem; letter-spacing: 0.02em; }",
+            ".folio-item .folio-arrow { font-size: 0.7rem; color: var(--faded); letter-spacing: 0.18em; text-transform: uppercase; transition: color 0.2s ease; }",
+            ".folio-item a:hover .folio-arrow { color: var(--accent); }",
+            ".folio-item:last-child { border-bottom: 1px solid rgba(200,191,168,0.12); }",
         ]
     )
-    index_path = out_dir / "index.html"
-    index_path.write_text(index_html, encoding="utf-8")
+
+    title_body = "\n".join(
+        [
+            '<div class="book">',
+            '  <div class="page cover active" data-page="0">',
+            '    <div class="cover-label">Palimpsest Codex</div>',
+            f'    <h1 class="cover-title">{escape(book_title)}</h1>',
+            f'    <div class="cover-subtitle">Assembled set of {len(page_entries)} folios</div>',
+            '    <div class="cover-rule"></div>',
+            '    <div class="cover-nav-hint"><span class="arrow">&rarr;</span> Press to open</div>',
+            '  </div>',
+            '</div>',
+            '<script>',
+            '  (function() {',
+            '    const cover = document.querySelector(".cover");',
+            '    function openContents() { window.location.href = "contents.html"; }',
+            '    if (cover) { cover.addEventListener("click", openContents); }',
+            '    window.addEventListener("keydown", (event) => {',
+            '      if (event.key === "ArrowRight" || event.key === " ") {',
+            '        event.preventDefault();',
+            '        openContents();',
+            '      }',
+            '    });',
+            '  })();',
+            '</script>',
+        ]
+    )
+    title_path.write_text(_html_shell(title=book_title, body=title_body), encoding="utf-8")
+
+    contents_body = "\n".join(
+        [
+            '<div class="contents-page">',
+            '  <div class="contents-inner">',
+            '    <div class="contents-label">Contents</div>',
+            f'    <div class="contents-title">{escape(book_title)}</div>',
+            f'    <div class="contents-subtitle">{len(page_entries)} folios</div>',
+            '    <div class="contents-rule"></div>',
+            '    <div class="folio-list">',
+            *[
+                f'      <div class="folio-item"><a href="{escape(entry["href"])}"><span class="folio-name">{escape(_display_page_id(entry["page_id"]))}</span><span class="folio-arrow">&rarr;</span></a></div>'
+                for entry in page_entries
+            ],
+            "    </div>",
+            "  </div>",
+            "</div>",
+        ]
+    )
+    contents_path.write_text(
+        _html_shell(title=f"{book_title} - Contents", body=contents_body, extra_css=shell_css),
+        encoding="utf-8",
+    )
+
+    ending_body = "\n".join(
+        [
+            '<div class="contents-page">',
+            '  <div class="contents-inner" style="text-align: center;">',
+            '    <div class="contents-label">End of Codex</div>',
+            f'    <div class="contents-title">{escape(book_title)}</div>',
+            f'    <div class="contents-subtitle">{len(page_entries)} folios assembled</div>',
+            '    <div class="contents-rule" style="margin-left: auto; margin-right: auto;"></div>',
+            f'    <a href="contents.html" style="font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--faded); text-decoration: none; transition: color 0.2s ease;"',
+            '       onmouseover="this.style.color=\'var(--parchment)\'" onmouseout="this.style.color=\'var(--faded)\'">',
+            '      &larr; Return to contents</a>',
+            "  </div>",
+            "</div>",
+        ]
+    )
+    ending_path.write_text(
+        _html_shell(title=f"{book_title} - End", body=ending_body, extra_css=shell_css),
+        encoding="utf-8",
+    )
 
     meta_path = out_dir / "site_meta.json"
     meta = {
@@ -1346,13 +2107,17 @@ def build_packet_book_site(
         "title": book_title,
         "packet_paths": [str(path) for path in resolved_packets],
         "folio_paths": [str(path) for path in folio_paths],
-        "index_path": str(index_path),
+        "index_path": str(title_path),
+        "contents_path": str(contents_path),
+        "ending_path": str(ending_path),
     }
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
     return RenderedPacketSiteArtifact(
         doc_id=doc_id,
-        index_path=index_path,
+        index_path=title_path,
+        contents_path=contents_path,
+        ending_path=ending_path,
         folio_paths=folio_paths,
         meta_path=meta_path,
     )

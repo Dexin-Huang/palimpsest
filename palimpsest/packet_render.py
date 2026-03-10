@@ -12,6 +12,7 @@ from palimpsest.config import DEFAULT_TECTONIC_BIN
 from palimpsest.edition_fonts import resolve_edition_font_policy
 from palimpsest.models import PagePacket
 from palimpsest.packet_scholar import repair_packet_json
+from palimpsest.page_packet import sync_packet_edition_template
 
 
 def _utc_now() -> str:
@@ -89,6 +90,7 @@ def render_packet_edition(
     engine_path = _find_tectonic(engine)
     font_policy = resolve_edition_font_policy().as_dict()
 
+    sync_packet_edition_template(packet)
     _normalize_edition_tex(edition_tex)
 
     cmd = [str(engine_path)]

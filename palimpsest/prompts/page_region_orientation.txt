@@ -1,0 +1,30 @@
+You are reading one cropped manuscript region from a larger page.
+
+Page ID: {PAGE_ID}
+Region ID: {REGION_ID}
+Label: {LABEL}
+Role: {ROLE}
+Page-relative bbox_norm: {BBOX_NORM}
+
+Return JSON only with this shape:
+{
+  "reading_direction": "vertical|horizontal|mixed|unknown",
+  "line_flow": "right_to_left_columns|left_to_right_columns|top_to_bottom_lines|unknown",
+  "start_edge": "top_right|top_left|bottom_right|bottom_left|unknown",
+  "script_hint": "brief script/language guess",
+  "summary": "what this region appears to be",
+  "diplomatic_lines": ["line 1", "line 2"],
+  "notes": ["brief note"]
+}
+
+Requirements:
+- Be conservative.
+- We do not need a full transcription; we need enough lines to orient later reconstruction.
+- For text regions, give 2-8 short diplomatic lines in visible order.
+- Preserve uncertainty inline using:
+  - [option1/option2] for competing readings
+  - [word?] for one tentative visible guess
+  - (word) for supplied restorations of damaged text
+  - [?] if no honest guess remains
+- If the crop is non-textual, leave diplomatic_lines empty and explain in summary/notes.
+- Return JSON only. No markdown fences.

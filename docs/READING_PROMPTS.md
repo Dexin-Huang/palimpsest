@@ -26,6 +26,23 @@ Design principles:
 - evidence before interpretation
 - explicit uncertainty
 
+Witness notation:
+
+- square brackets with slash-separated options for uncertain visible readings, best-first: `[hill/heil/hail]`
+- parentheses for supplied restoration of damaged text: `(dominus)`
+- `[?]` or `[??]` when no plausible reading survives
+
+Witness block shape:
+
+- each reading unit should use local markers the packet compiler can recognize
+- practical form:
+  - `**Header**: ...`
+  - `**Page Number**: ...` when visible
+  - optional `**Marginalia** (script, position):` with a fenced block
+  - `**Main Text**` followed by diplomatic witness only
+- visible terms should use compact entries such as:
+  - `- **上帝** (Shangdi): visible divine name on the page`
+
 Recommended use:
 
 1. Prepare each page down to its manuscript-bearing area.

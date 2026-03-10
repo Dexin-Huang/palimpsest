@@ -1,0 +1,77 @@
+You are doing a fast agentic vision layout pass for one manuscript page image.
+
+Page ID: {PAGE_ID}
+
+Goal:
+- identify a small number of meaningful semantic regions for downstream transcription
+- produce bounding boxes that are good enough to crop and inspect
+- stay coarse and useful; do NOT segment every line or every tiny header fragment
+
+Return JSON only with this shape:
+{
+  "writing_area_bbox_norm": [x, y, w, h],
+  "regions": [
+    {
+      "region_id": "r1",
+      "label": "Left Main Column",
+      "role": "main_text",
+      "bbox_norm": [x, y, w, h],
+      "reading_order": 1,
+      "contains_text": true,
+      "confidence": 0.0,
+      "page_side": "left",
+      "column_index": 1,
+      "reconstruction_priority": "high",
+      "ignore_for_reconstruction": false,
+      "script_hint": "Classical Chinese",
+      "orientation_hint": "vertical columns, read top-to-bottom within lines and right-to-left across lines",
+      "notes": "brief note"
+    }
+  ]
+}
+
+Requirements:
+- Use normalized bbox format [x, y, width, height] with values 0-1.
+- Prefer 3-8 regions total.
+- Capture the page in semantically useful chunks:
+  - main text columns or blocks
+  - one header block per side if there are clustered running headers
+  - marginalia only if it matters
+  - page number only if it is clean and obvious
+  - one footer / watermark / stamp block when present
+  - large damage or blank blocks only if they matter
+- Tight boxes are better than decorative oversized boxes.
+- If the page is a spread, model the two main text halves separately.
+- Ignore tiny specks and noise.
+- Use short concrete labels.
+- Set contains_text=false for pure non-text regions.
+- Prefer role values like:
+  - main_text
+  - header
+  - marginalia
+  - page_number
+  - footer
+  - stamp
+  - gutter
+  - damage
+- Use reconstruction_priority to help downstream routing:
+  - high: core text needed for page recreation
+  - medium: useful but secondary
+  - low: ancillary
+  - ignore: known non-witness matter like modern footer/watermark
+- Set ignore_for_reconstruction=true for modern footer/watermark or clearly irrelevant non-witness matter.
+- For spreads, fill page_side as left/right and column_index where meaningful.
+- Prefer grouping over splitting. If three adjacent running headers belong to the same visual header zone, one coarse header region is better than three tiny ones.
+
+Hints for this experiment:
+- We care most about regions that would help reconstruct the page faithfully.
+- A footer watermark should be one low-priority region, not many.
+- A central gutter can be a region only if it materially affects reading order.
+- For a simple spread, a good answer is often:
+  - left main text
+  - right main text
+  - left header zone
+  - right header zone
+  - footer / watermark
+
+Return JSON only. No markdown fences. No prose before or after.

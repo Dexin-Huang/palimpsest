@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+from typing import Iterable
 
 from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.edition_fonts import resolve_edition_font_policy
@@ -251,7 +252,7 @@ def create_page_packet(
     previous_packet_path: Path | None = None,
     previous_handoff_path: Path | None = None,
     window_synthesis_path: Path | None = None,
-) -> tuple[PagePacket, Path]:
+    ) -> tuple[PagePacket, Path]:
     image_path = image_path.resolve()
     target_dir = (out_dir.resolve() if out_dir else _default_output_dir(image_path).resolve())
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -276,6 +277,10 @@ def create_page_packet(
     edition_pdf_path = target_dir / "edition_spread.pdf"
     edition_html_path = target_dir / "edition_elegant.html"
     folio_render_path = target_dir / "folio_render.json"
+    layout_probe_path = target_dir / "layout_probe" / "layout_probe.json"
+    layout_overlay_path = target_dir / "layout_probe" / "layout_overlay.png"
+    region_orientations_path = target_dir / "layout_probe" / "region_orientations.json"
+    page_assembly_path = target_dir / "layout_probe" / "page_assembly.json"
 
     if not witness_path.exists():
         witness_path.write_text(
@@ -331,6 +336,10 @@ def create_page_packet(
             "edition_pdf": PacketFileRef(kind="edition_pdf", path=str(edition_pdf_path), status="empty"),
             "edition_html": PacketFileRef(kind="edition_html", path=str(edition_html_path), status="empty"),
             "folio_render": PacketFileRef(kind="folio_render", path=str(folio_render_path), status="empty"),
+            "layout_probe": PacketFileRef(kind="layout_probe", path=str(layout_probe_path), status="empty"),
+            "layout_overlay": PacketFileRef(kind="layout_overlay", path=str(layout_overlay_path), status="empty"),
+            "region_orientations": PacketFileRef(kind="region_orientations", path=str(region_orientations_path), status="empty"),
+            "page_assembly": PacketFileRef(kind="page_assembly", path=str(page_assembly_path), status="empty"),
         },
         continuity=PacketContinuity(
             previous_packet_path=str(previous_packet_path.resolve()) if previous_packet_path else None,
@@ -363,3 +372,197 @@ def create_page_packet(
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     return packet, packet_path
+
+
+def attach_layout_probe(packet_path: Path, probe_dir: Path) -> PagePacket:
+    packet_path = packet_path.resolve()
+    probe_dir = probe_dir.resolve()
+    packet = PagePacket.model_validate_json(packet_path.read_text(encoding="utf-8"))
+
+    mapping = {
+        "layout_probe": probe_dir / "layout_probe.json",
+        "layout_overlay": probe_dir / "layout_overlay.png",
+        "region_orientations": probe_dir / "region_orientations.json",
+        "page_assembly": probe_dir / "page_assembly.json",
+    }
+
+    for key, resolved_path in mapping.items():
+        ref = packet.files.get(key)
+        if ref is None:
+            ref = PacketFileRef(kind=key, path=str(resolved_path), status="empty")
+            packet.files[key] = ref
+        else:
+            ref.path = str(resolved_path)
+        if resolved_path.exists():
+            ref.status = "draft"
+
+    notes = list(packet.notes or [])
+    note = "Layout probe attached."
+    if note not in notes:
+        notes.append(note)
+    packet.notes = notes
+
+    packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
+    return packet
+
+
+def _parse_markdown_sections(text: str) -> tuple[str | None, dict[str, list[str]]]:
+    title: str | None = None
+    sections: dict[str, list[str]] = {}
+    current_title: str | None = None
+    current_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_title, current_lines
+        if current_title is not None:
+            sections[current_title] = current_lines[:]
+        current_title = None
+        current_lines = []
+
+    for line in text.splitlines():
+        if line.startswith("# ") and title is None:
+            title = line[2:].strip()
+            continue
+        if line.startswith("## "):
+            flush()
+            current_title = line[3:].strip()
+            continue
+        if current_title is not None:
+            current_lines.append(line)
+    flush()
+    return title, sections
+
+
+def _extract_unit_label(section_title: str) -> str:
+    match = re.match(r"^Reading Unit \d+\s*\((.+)\)$", section_title)
+    if match:
+        return match.group(1).strip()
+    return section_title.strip()
+
+
+def _iter_bullets(lines: Iterable[str]) -> list[str]:
+    items: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("- ") or stripped.startswith("* "):
+            items.append(re.sub(r"^[-*]\s+", "", stripped))
+    return items
+
+
+def ingest_page_reading(packet_path: Path, reading_path: Path) -> PagePacket:
+    packet_path = packet_path.resolve()
+    reading_path = reading_path.resolve()
+
+    packet = PagePacket.model_validate_json(packet_path.read_text(encoding="utf-8"))
+    reading_text = reading_path.read_text(encoding="utf-8")
+    _, sections = _parse_markdown_sections(reading_text)
+
+    witness_units = [title for title in sections if title.startswith("Reading Unit")]
+    layout_lines = sections.get("Layout Notes", [])
+    terms_lines = sections.get("Visible Names And Terms", [])
+    uncertainty_lines = sections.get("Uncertainties", [])
+
+    witness_parts = [f"# Witness: {packet.page_id}", ""]
+    for title in witness_units:
+        label = _extract_unit_label(title)
+        witness_parts.append(f"## {label}")
+        for raw_line in sections[title]:
+            stripped = raw_line.strip()
+            if stripped.startswith("- **Header**:"):
+                witness_parts.append(stripped[2:])
+            elif stripped.startswith("- **Page Number**:"):
+                witness_parts.append(stripped[2:])
+            elif stripped.startswith("- **Marginalia**"):
+                witness_parts.append(stripped[2:])
+            elif stripped.startswith("- **Main Text**"):
+                witness_parts.append(stripped[2:])
+            else:
+                witness_parts.append(raw_line)
+        witness_parts.append("")
+    witness_parts.append("## Layout Notes")
+    witness_parts.extend(layout_lines)
+    witness_parts.append("")
+
+    translation_parts = ["# Working Translation", ""]
+    for title in witness_units:
+        label = _extract_unit_label(title)
+        translation_parts.extend(
+            [
+                f"## {label}: [English Header]",
+                "**Main Text**",
+                "",
+            ]
+        )
+    translation_parts.extend(
+        [
+            "## Translation Notes",
+            "",
+            "## Interpretive Restraint",
+            "",
+        ]
+    )
+
+    notes_parts = [
+        "# Notes",
+        "",
+        "## Layout",
+        *layout_lines,
+        "",
+        "## Text Structure",
+        "",
+        "## Citations And Allusions",
+        "",
+        "## Marginalia And Non-Main Text",
+        "",
+        "## Uncertainty Markers",
+        *uncertainty_lines,
+        "",
+    ]
+
+    terms_parts = [
+        "# Names And Terms",
+        "",
+        "## Technical Terms",
+        *terms_lines,
+        "",
+    ]
+
+    questions_parts = [
+        "# Open Questions",
+        "",
+        "## Witness Uncertainties",
+        *uncertainty_lines,
+        "",
+        "## Cross-Page Checks",
+        "",
+        "## Research Follow-Ups",
+        "",
+    ]
+
+    file_paths = {
+        "witness": Path(packet.files["witness"].path),
+        "translation": Path(packet.files["translation"].path),
+        "notes": Path(packet.files["notes"].path),
+        "terms": Path(packet.files["terms"].path),
+        "questions": Path(packet.files["questions"].path),
+    }
+    file_paths["witness"].write_text("\n".join(witness_parts), encoding="utf-8")
+    file_paths["translation"].write_text("\n".join(translation_parts), encoding="utf-8")
+    file_paths["notes"].write_text("\n".join(notes_parts), encoding="utf-8")
+    file_paths["terms"].write_text("\n".join(terms_parts), encoding="utf-8")
+    file_paths["questions"].write_text("\n".join(questions_parts), encoding="utf-8")
+
+    for key in ("witness", "translation", "notes", "terms", "questions"):
+        packet.files[key].status = "draft"
+    packet.workflow.next_action = "draft_interpretation"
+
+    meta_path = reading_path.parent / "reading_meta.json"
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            packet.workflow.witness_model = str(meta.get("model") or packet.workflow.witness_model or "")
+        except Exception:
+            pass
+
+    packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
+    return packet

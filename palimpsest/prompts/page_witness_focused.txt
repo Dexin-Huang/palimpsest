@@ -3,22 +3,35 @@ Please produce a witness-focused page memo for the attached manuscript page.
 The goal is to preserve what is visibly on this single page.
 Do not turn this into a broad historical essay.
 
-Return markdown with exactly these sections:
+Return markdown with exactly this heading grammar:
 
-## Witness Transcription
-- Transcribe the visible page as faithfully as possible.
-- Preserve line breaks.
-- If the page has multiple columns, keep them separate with short labels such as `Left Column` and `Right Column`.
-- Include marginalia, page numbers, and short inline notes when they are visibly part of the page.
-- When a reading is uncertain, use bracketed slash guesses such as `[////]` or `[////////]` instead of saying `illegible`.
+# Witness
 
-## Page Structure
+## Reading Unit 1
+- Rename this heading to a visible label when obvious, such as `Left Column`, `Right Column`, `Upper Register`, or `Main Panel`.
+- Inside the section, use this exact local shape:
+  - `**Header**: ...` for a visible running header or rubric if present
+  - `**Page Number**: ...` only if visible
+  - `**Marginalia** (script, position):` followed by a fenced code block only if real marginal text exists
+  - `**Main Text**` followed by diplomatic witness only
+- Preserve line breaks inside `Main Text`.
+- If a reading is uncertain but a few readings are plausible, use square brackets with the best guesses in order, such as `[hill/heil/hail]`.
+- If only one reading is plausible but still doubtful, use a bracketed guess with a question mark, such as `[dominus?]`.
+- If the text is physically damaged but a local restoration is probable, use parentheses for the supplied guess, such as `(dominus)`.
+- If nothing plausible can be read, use `[?]` or `[??]` rather than `illegible`.
+
+## Reading Unit 2
+- Only include this second unit if the page clearly has a second visible text region.
+- Use the same local block shape as above.
+
+## Layout Notes
 - Describe only the visible structure of the page.
 - Keep this short.
 - Mention columns, numbered lemmas, marginal notes, diagrams, running headers, or other obvious layout features.
 
 ## Visible Names And Terms
 - List only names, works, page references, or technical terms that are explicitly visible on the page.
+- Use compact list items such as `- **上帝** (Shangdi): visible divine name on the page`.
 - Give a very short gloss only when it helps disambiguate the visible text.
 - If an item is only probable, prefix it with `Probable:`.
 
@@ -29,6 +42,9 @@ Return markdown with exactly these sections:
 Rules:
 - Be evidence-bound. Do not invent lines or references that are not visible.
 - Keep witness text and commentary separate.
+- Keep the heading grammar stable. Do not replace it with a different outline.
+- Never use `[////]`, `[damaged]`, or `[illegible]`.
+- Use this fallback order for doubtful text: best visible guesses in `[]`, supplied restoration in `()`, then `[?]` only if no honest guess remains.
 - Do not provide a full translation or a broad thematic interpretation.
 - Do not identify the exact source work, chapter, controversy, or author unless the page itself names it or the identification is directly supported by visible evidence on the page.
 - If a reading is only probable, say so.

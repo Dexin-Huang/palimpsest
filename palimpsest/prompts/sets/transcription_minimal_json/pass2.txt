@@ -44,5 +44,9 @@ Rules:
 - Preserve existing `zone_id` values when possible, but adding or removing zones is allowed if the draft is wrong.
 - Keep `order` in real reading order.
 - Do not interleave columns.
-- Use bracketed slash guesses such as `[////]` or `[////////]` where the image does not support a confident reading, preserving approximate unreadable width when possible.
+- Use square brackets with best-guess alternatives for uncertain readings, such as `[hill/heil/hail]`.
+- Use a bracketed single guess with `?` when only one reading is plausible but still doubtful, such as `[dominus?]`.
+- Use parentheses for supplied restorations of damaged but locally reconstructable text, such as `(dominus)`.
+- If nothing plausible can be read, use `[?]` or `[??]`.
+- Replace any legacy `[////]`, `[damaged]`, or `[illegible]` placeholders from the draft with one of the notation forms above.
 - If the draft already captured a region correctly, do not rewrite it unnecessarily.

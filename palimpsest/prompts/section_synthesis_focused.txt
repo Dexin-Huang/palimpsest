@@ -9,6 +9,10 @@ Return markdown with exactly these sections:
 - Provide a concise modern English rendering of the relevant passage or section.
 - Use the surrounding pages to resolve local ambiguities where possible.
 - If a reading remains uncertain, say so.
+- Treat square-bracket alternatives such as `[hill/heil/hail]` as competing witness readings.
+- Treat bracketed single guesses such as `[dominus?]` as tentative visible readings.
+- Treat parenthetical forms such as `(dominus)` as supplied restorations of damaged text, not directly visible witness.
+- Never normalize `[////]`, `[illegible]`, or `[damaged]` into certainty. If such placeholders appear in older material, treat them as unresolved witness gaps.
 
 ## Section Reading
 - Explain what this group of pages is doing.

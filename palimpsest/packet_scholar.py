@@ -8,6 +8,7 @@ from typing import Any
 
 from palimpsest.agent_sdk import AgentRunResult, run_agent_prompt
 from palimpsest.edition_fonts import resolve_edition_font_policy
+from palimpsest.packet_templates import packet_format_contract_block, packet_heading_contract_block
 from palimpsest.models import ALLOWED_PACKET_STATUSES, PacketFileRef, PagePacket
 
 
@@ -54,6 +55,7 @@ _NEXT_ACTION_ALIASES = {
 class PacketScholarInputs:
     packet_path: Path
     workspace: Path
+    packet: PagePacket
     witness_source: Path | None
     context_sources: list[Path]
 
@@ -166,6 +168,8 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
 
     packet_dir = packet_path.parent
     edition_pdf_path = str((packet_dir / "edition_spread.pdf").resolve())
+    edition_html_path = str((packet_dir / "edition_elegant.html").resolve())
+    folio_render_path = str((packet_dir / "folio_render.json").resolve())
     if "edition_pdf" not in files:
         files["edition_pdf"] = PacketFileRef(
             kind="edition_pdf",
@@ -179,6 +183,34 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
         if Path(files["edition_pdf"]["path"]).exists() and _normalize_status(files["edition_pdf"].get("status")) == "empty":
             files["edition_pdf"]["status"] = "draft"
             files["edition_pdf"]["note"] = files["edition_pdf"].get("note") or "Compiled PDF rendering of edition_spread.tex"
+    if "edition_html" not in files:
+        files["edition_html"] = PacketFileRef(
+            kind="edition_html",
+            path=edition_html_path,
+            status="draft" if Path(edition_html_path).exists() else "empty",
+            note="Rendered HTML folio edition" if Path(edition_html_path).exists() else None,
+        ).model_dump()
+    elif isinstance(files["edition_html"], dict):
+        files["edition_html"]["kind"] = "edition_html"
+        current_html_path = str(files["edition_html"].get("path") or "").strip()
+        if not current_html_path or current_html_path.endswith("edition_spread.html"):
+            files["edition_html"]["path"] = edition_html_path
+        if Path(files["edition_html"]["path"]).exists() and _normalize_status(files["edition_html"].get("status")) == "empty":
+            files["edition_html"]["status"] = "draft"
+            files["edition_html"]["note"] = files["edition_html"].get("note") or "Rendered HTML folio edition"
+    if "folio_render" not in files:
+        files["folio_render"] = PacketFileRef(
+            kind="folio_render",
+            path=folio_render_path,
+            status="draft" if Path(folio_render_path).exists() else "empty",
+            note="Structured folio.render JSON artifact" if Path(folio_render_path).exists() else None,
+        ).model_dump()
+    elif isinstance(files["folio_render"], dict):
+        files["folio_render"].setdefault("kind", "folio_render")
+        files["folio_render"].setdefault("path", folio_render_path)
+        if Path(files["folio_render"]["path"]).exists() and _normalize_status(files["folio_render"].get("status")) == "empty":
+            files["folio_render"]["status"] = "draft"
+            files["folio_render"]["note"] = files["folio_render"].get("note") or "Structured folio.render JSON artifact"
 
     workflow = payload.get("workflow") or {}
     if not isinstance(workflow, dict):
@@ -229,6 +261,7 @@ def prepare_packet_workspace(
     return PacketScholarInputs(
         packet_path=packet_path,
         workspace=workspace,
+        packet=packet,
         witness_source=copied_witness,
         context_sources=copied_contexts,
     )
@@ -297,6 +330,20 @@ def build_packet_scholar_prompt(
             "- terms.md: visible names, works, places, and technical terms.",
             "- questions.md: unresolved items or checks for later pages.",
             "- edition_spread.tex: keep a minimal facing-page layout in sync; do not overdesign it.",
+            "",
+            "Packet file heading contract:",
+            "- Keep these heading shapes stable so folio.render.json can be assembled deterministically.",
+            "- You may improve the wording inside sections, but do not collapse files into freeform essays.",
+            "- In witness.md and translation.md, rename Reading Unit headings to visible labels when obvious.",
+            "```md",
+            packet_heading_contract_block(page_unit=packet_inputs.packet.page_unit),
+            "```",
+            "",
+            "Packet file internal syntax contract:",
+            "- The folio compiler expects these local markers and matching unit labels.",
+            "```md",
+            packet_format_contract_block(page_unit=packet_inputs.packet.page_unit),
+            "```",
         ]
     )
 
@@ -306,7 +353,9 @@ def build_packet_scholar_prompt(
                 "",
                 "Specific objective for fill_witness:",
                 "- If witness_source.md exists, use it to populate witness.md faithfully.",
-                "- Preserve uncertainty markers like [////].",
+                "- Preserve witness uncertainty markers such as [hill/heil/hail], (dominus), or [??].",
+                "- Keep witness.md structured with Header / Page Number / Marginalia / Main Text markers.",
+                "- Do not put commentary, glosses, or modern explanation inside Main Text.",
                 "- Then update packet.json so witness status becomes draft and workflow.next_action becomes fill_notes.",
             ]
         )
@@ -317,6 +366,7 @@ def build_packet_scholar_prompt(
                 "Specific objective for annotate:",
                 "- Work from witness.md and any context inputs.",
                 "- Improve notes.md, terms.md, and questions.md.",
+                "- In terms.md, use compact entries such as - **term** (romanization): gloss.",
                 "- Do not broaden into a long essay.",
             ]
         )
@@ -327,6 +377,8 @@ def build_packet_scholar_prompt(
                 "Specific objective for translate:",
                 "- Draft or improve translation.md conservatively from witness and context.",
                 "- Mark uncertainty explicitly.",
+                "- Match witness unit labels exactly before the colon, e.g. Left Column: Heaven Endows Constant Nature.",
+                "- Keep translation inside **Main Text** blocks only.",
             ]
         )
     elif task == "interpret":
@@ -336,6 +388,7 @@ def build_packet_scholar_prompt(
                 "Specific objective for interpret:",
                 "- Draft or improve interpretation.md.",
                 "- Use the phrase 'Probable inference' for non-explicit claims.",
+                "- Keep Direct Evidence and Probable Inference as separate top-level sections, not nested essay prose.",
             ]
         )
     elif task == "render_edition":
@@ -343,14 +396,17 @@ def build_packet_scholar_prompt(
             [
                 "",
                 "Specific objective for render_edition:",
-                "- Populate edition_spread.tex as a minimal compilable facing-page edition.",
-                "- Put diplomatic witness on the left and translation plus interpretation on the right.",
-                "- Keep the layout restrained and readable.",
+                "- Populate edition_spread.tex as a restrained, image-forward two-page packet.",
+                "- Page 1: source image on the left; witness and direct translation on the right.",
+                "- Page 2: interpretation, notes, terms, and open questions.",
+                "- Keep page 1 close to the witness. Do not let commentary crowd it.",
+                "- Keep the layout cinematic but disciplined, closer to an exhibition spread than a plain article.",
                 "- Escape LaTeX-special characters when needed.",
-            "- Preserve uncertainty markers like [////] in the witness layer.",
-            "- Keep the existing LaTeX preamble portable. Do not hard-code fonts if fallback logic already exists.",
-            "- Preserve or use the BEGIN/END content markers if they exist in edition_spread.tex.",
-            "- Update packet.json so edition_tex.status becomes draft and workflow.next_action becomes prepare_section_synthesis unless every major layer is already reviewed or complete.",
+                "- Preserve witness uncertainty markers such as [hill/heil/hail], (dominus), or [??] in the witness layer.",
+                "- Keep the existing LaTeX preamble portable. Do not hard-code fonts if fallback logic already exists.",
+                "- Preserve or use the BEGIN/END content markers if they exist in edition_spread.tex.",
+                "- Do not remove the source-image include unless the file is actually missing.",
+                "- Update packet.json so edition_tex.status becomes draft and workflow.next_action becomes prepare_section_synthesis unless every major layer is already reviewed or complete.",
             ]
         )
     else:

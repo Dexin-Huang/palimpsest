@@ -4,11 +4,14 @@ import argparse
 from pathlib import Path
 
 from palimpsest.config import DEFAULT_MODEL_READING
+from palimpsest.config import DEFAULT_MODEL_VISION
 from palimpsest.page_continuity import run_page_handoff, run_window_synthesis
-from palimpsest.page_packet import create_page_packet
+from palimpsest.page_layout import run_page_assembly, run_page_layout_probe, run_region_reads
+from palimpsest.page_packet import attach_layout_probe, create_page_packet, ingest_page_reading
 from palimpsest.page_prepare import prepare_image
 from palimpsest.page_reading import run_page_reading, run_section_synthesis
 from palimpsest.packet_render import render_packet_edition
+from palimpsest.packet_web import render_packet_folio_html
 
 
 def cmd_prepare(args: argparse.Namespace) -> None:
@@ -57,6 +60,32 @@ def cmd_packet(args: argparse.Namespace) -> None:
         print(f"previous_handoff: {packet.continuity.previous_handoff_path}")
     if packet.continuity.window_synthesis_path:
         print(f"window_synthesis: {packet.continuity.window_synthesis_path}")
+    if not args.no_layout_probe:
+        probe_artifact = run_page_layout_probe(
+            Path(args.image),
+            out_dir=packet_path.parent / "layout_probe",
+            model=args.layout_model,
+            orient_model=args.orient_model,
+            orient_regions=not args.no_orient,
+        )
+        packet = attach_layout_probe(packet_path, probe_artifact.output_dir)
+        print(f"layout_probe: {probe_artifact.layout_json_path}")
+        print(f"layout_overlay: {probe_artifact.overlay_path}")
+        print(f"region_orientations: {probe_artifact.orientations_path}")
+    print(f"next_action: {packet.workflow.next_action}")
+
+
+def cmd_ingest_reading(args: argparse.Namespace) -> None:
+    packet = ingest_page_reading(
+        Path(args.packet),
+        Path(args.reading),
+    )
+    print(f"packet: {args.packet}")
+    print(f"witness: {packet.files['witness'].path}")
+    print(f"translation: {packet.files['translation'].path}")
+    print(f"notes: {packet.files['notes'].path}")
+    print(f"terms: {packet.files['terms'].path}")
+    print(f"questions: {packet.files['questions'].path}")
     print(f"next_action: {packet.workflow.next_action}")
 
 
@@ -88,6 +117,17 @@ def cmd_render(args: argparse.Namespace) -> None:
     print(f"engine: {artifact.engine_path}")
 
 
+def cmd_render_html(args: argparse.Namespace) -> None:
+    artifact = render_packet_folio_html(
+        Path(args.packet),
+        out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
+        book_title=args.title,
+    )
+    print(f"html: {artifact.html_path}")
+    print(f"folio_render: {artifact.folio_render_path}")
+    print(f"meta: {artifact.meta_path}")
+
+
 def cmd_handoff(args: argparse.Namespace) -> None:
     artifact = run_page_handoff(
         Path(args.packet),
@@ -117,6 +157,44 @@ def cmd_window(args: argparse.Namespace) -> None:
     print(f"model: {artifact.model}")
 
 
+def cmd_layout_probe(args: argparse.Namespace) -> None:
+    artifact = run_page_layout_probe(
+        Path(args.image),
+        out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
+        prompt_file=Path(args.prompt_file).resolve() if args.prompt_file else None,
+        model=args.model,
+        orient_model=args.orient_model,
+        orient_regions=not args.no_orient,
+    )
+    print(f"layout_json: {artifact.layout_json_path}")
+    print(f"overlay: {artifact.overlay_path}")
+    print(f"crops_dir: {artifact.crops_dir}")
+    print(f"orientations: {artifact.orientations_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"model: {artifact.model}")
+    print(f"orientation_model: {artifact.orientation_model}")
+    if artifact.finish_reason:
+        print(f"finish_reason: {artifact.finish_reason}")
+
+
+def cmd_region_read(args: argparse.Namespace) -> None:
+    artifact = run_region_reads(
+        Path(args.probe_dir),
+        model=args.model,
+        region_ids=args.region_id or None,
+    )
+    print(f"reads: {artifact.reads_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"model: {artifact.model}")
+
+
+def cmd_assemble(args: argparse.Namespace) -> None:
+    artifact = run_page_assembly(Path(args.probe_dir))
+    print(f"assembly_json: {artifact.assembly_json_path}")
+    print(f"assembly_md: {artifact.assembly_md_path}")
+    print(f"meta: {artifact.meta_path}")
+
+
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("page", help="Prepare, packetize, read, and synthesize page-level witness artifacts")
     sub = parser.add_subparsers(dest="page_cmd", required=True)
@@ -133,7 +211,24 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     packet.add_argument("--previous-packet", help="Optional previous packet.json for continuity")
     packet.add_argument("--previous-handoff", help="Optional previous page_handoff.json or .md for continuity")
     packet.add_argument("--window", help="Optional local window_synthesis.json or .md for continuity")
+    packet.add_argument("--no-layout-probe", action="store_true", help="Skip the default coarse layout probe")
+    packet.add_argument(
+        "--layout-model",
+        default=DEFAULT_MODEL_VISION,
+        help=f"Vision model for the layout probe (default: {DEFAULT_MODEL_VISION})",
+    )
+    packet.add_argument(
+        "--orient-model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
+    )
+    packet.add_argument("--no-orient", action="store_true", help="Skip region orientation reads during the layout probe")
     packet.set_defaults(func=cmd_packet)
+
+    ingest = sub.add_parser("ingest-reading", help="Deterministically ingest a page read markdown into a page packet")
+    ingest.add_argument("--packet", required=True, help="Path to packet.json")
+    ingest.add_argument("--reading", required=True, help="Path to page reading markdown")
+    ingest.set_defaults(func=cmd_ingest_reading)
 
     read = sub.add_parser("read", help="Run the focused witness prompt on one page image")
     read.add_argument("--image", required=True, help="Source image to read")
@@ -169,6 +264,47 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     render.add_argument("--engine", help="Explicit path to the tectonic binary")
     render.add_argument("--keep-logs", action="store_true", help="Ask tectonic to keep LaTeX log files")
     render.set_defaults(func=cmd_render)
+
+    render_html = sub.add_parser("render-html", help="Render an HTML folio edition from one packet")
+    render_html.add_argument("--packet", required=True, help="Path to packet.json")
+    render_html.add_argument("--out-dir", help="Optional output directory for HTML folio artifacts")
+    render_html.add_argument("--title", help="Optional book/manuscript title override")
+    render_html.set_defaults(func=cmd_render_html)
+
+    layout_probe = sub.add_parser("layout-probe", help="Run a fast layout+bbox probe and generate overlay/crops")
+    layout_probe.add_argument("--image", required=True, help="Source image to probe")
+    layout_probe.add_argument("--out-dir", help="Output directory for layout probe artifacts")
+    layout_probe.add_argument("--prompt-file", help="Optional prompt file override")
+    layout_probe.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_VISION,
+        help=f"Vision model for the layout pass (default: {DEFAULT_MODEL_VISION})",
+    )
+    layout_probe.add_argument(
+        "--orient-model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
+    )
+    layout_probe.add_argument("--no-orient", action="store_true", help="Skip the second-pass region orientation reads")
+    layout_probe.set_defaults(func=cmd_layout_probe)
+
+    region_read = sub.add_parser("region-read", help="Run or rerun crop-level witness reads from a layout probe")
+    region_read.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
+    region_read.add_argument(
+        "--region-id",
+        action="append",
+        help="Optional region id to rerun; repeat to target multiple regions",
+    )
+    region_read.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Model for crop-level region reads (default: {DEFAULT_MODEL_READING})",
+    )
+    region_read.set_defaults(func=cmd_region_read)
+
+    assemble = sub.add_parser("assemble", help="Assemble region reads from a layout probe into one page object")
+    assemble.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
+    assemble.set_defaults(func=cmd_assemble)
 
     handoff = sub.add_parser("handoff", help="Generate a compact forward handoff from one completed page packet")
     handoff.add_argument("--packet", required=True, help="Path to packet.json")

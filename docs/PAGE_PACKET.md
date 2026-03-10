@@ -38,7 +38,8 @@ Where:
 - `page.packet` is the scholar workspace
 - `witness fill` is the evidence-first pass
 - `section synthesis` adds broader translation and interpretation
-- `edition render` builds human-facing output such as LaTeX or HTML
+- `folio.render` becomes the structured presentation object
+- `edition render` builds human-facing output such as HTML or PDF from `folio.render`
 
 ---
 
@@ -153,6 +154,7 @@ experiments/<page>_packet/
   interpretation.md
   terms.md
   questions.md
+  folio_render.json
   edition_spread.tex
   edition_spread.pdf
 ```
@@ -161,7 +163,70 @@ This is deliberately small.
 
 ---
 
-## 6. `page.packet` JSON Shape
+## 6. Packet File Grammar
+
+The scholar lane should not write arbitrary markdown.
+
+Each packet file should keep a stable heading grammar so the render layer can
+assemble `folio.render.json` deterministically.
+
+Working rule:
+- each `##` heading becomes one render section
+- `###` headings stay nested inside the nearest parent section
+- witness and translation may rename unit headings to visible labels such as
+  `Left Column`, `Upper Register`, or `Main Panel`
+- witness and translation should also use stable internal markers so structured
+  content can be compiled into `folio.render`
+
+Required shapes:
+
+- `witness.md`
+  - one or more witness-unit `##` headings
+  - inside each witness unit:
+    - `**Header**: ...`
+    - `**Page Number**: ...` when visible
+    - optional `**Marginalia** (script, position):` plus fenced block
+    - `**Main Text**` followed by diplomatic witness only
+  - final `## Layout Notes`
+- `translation.md`
+  - one or more translation-unit `##` headings
+  - each translation unit should share the witness unit title before the colon,
+    e.g. `## Left Column: Heaven Endows Constant Nature`
+  - inside each translation unit:
+    - `**Main Text**` followed by close translation paragraphs only
+  - `## Translation Notes`
+  - `## Interpretive Restraint`
+- `interpretation.md`
+  - `## What This Page Is Doing`
+  - `## Direct Evidence`
+  - `## Probable Inference`
+  - `## Connection to Adjacent Pages`
+  - `## Interpretive Restraint`
+- `notes.md`
+  - `## Layout`
+  - `## Text Structure`
+  - `## Citations And Allusions`
+  - `## Marginalia And Non-Main Text`
+  - `## Uncertainty Markers`
+- `terms.md`
+  - `## People And Beings`
+  - `## Works And Texts`
+  - `## Places And Institutions`
+  - `## Technical Terms`
+- `questions.md`
+  - `## Witness Uncertainties`
+  - `## Cross-Page Checks`
+  - `## Research Follow-Ups`
+
+This is intentional:
+- packet markdown remains authorable
+- `folio.render.json` is the structured UI artifact
+- the compiler should not need to guess where witness, translation, terms, and
+  interpretation live
+
+---
+
+## 7. `page.packet` JSON Shape
 
 Minimum fields:
 - `artifact_type`
@@ -244,7 +309,7 @@ files on every run.
 
 ---
 
-## 7. Page Packet Vs Section Synthesis
+## 8. Page Packet Vs Section Synthesis
 
 `page.packet` is page-local.
 
@@ -264,7 +329,7 @@ That separation keeps the workflow disciplined.
 
 ---
 
-## 8. Edition Layout
+## 9. Edition Layout
 
 The first edition layout should stay simple.
 
@@ -282,7 +347,7 @@ Important:
 
 ---
 
-## 9. Practical Use
+## 10. Practical Use
 
 Example:
 

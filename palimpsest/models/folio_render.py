@@ -5,6 +5,10 @@ from typing import Literal, Optional, List
 from pydantic import BaseModel, Field
 
 
+# ═══════════════════════════════════════
+# Legacy section block (body_html blobs)
+# ═══════════════════════════════════════
+
 class FolioRenderSection(BaseModel):
     """Reusable section block for a folio panel."""
 
@@ -21,6 +25,84 @@ class FolioRenderSection(BaseModel):
     body_html: str
     wide: bool = Field(default=False)
 
+
+# ═══════════════════════════════════════
+# Structured content blocks
+# ═══════════════════════════════════════
+
+class SentencePair(BaseModel):
+    """One source/translation pair."""
+
+    source: str
+    translation: str
+
+
+class ColumnWitness(BaseModel):
+    """One manuscript column with header and sentence pairs."""
+
+    header_zh: str
+    header_en: str
+    pairs: List[SentencePair] = Field(default_factory=list)
+
+
+class MarginaliaEntry(BaseModel):
+    """One marginalia annotation."""
+
+    script: str
+    position: str
+    text: str
+    note: Optional[str] = None
+
+
+class WitnessContent(BaseModel):
+    """Structured content for the witness/translation face."""
+
+    columns: List[ColumnWitness] = Field(default_factory=list)
+    marginalia: List[MarginaliaEntry] = Field(default_factory=list)
+
+
+class InterpretationBlock(BaseModel):
+    """A titled interpretation paragraph group."""
+
+    title: str
+    paragraphs: List[str] = Field(default_factory=list)
+
+
+class TermEntry(BaseModel):
+    """One structured term/name."""
+
+    zh: str
+    romanization: Optional[str] = None
+    gloss: str
+    category: Optional[str] = None
+
+
+class QuestionEntry(BaseModel):
+    """One open question."""
+
+    text: str
+    category: Optional[str] = None
+
+
+class NoteBlock(BaseModel):
+    """A titled notes section."""
+
+    title: str
+    items: List[str] = Field(default_factory=list)
+
+
+class InterpretationContent(BaseModel):
+    """Structured content for the interpretation/apparatus face."""
+
+    interpretations: List[InterpretationBlock] = Field(default_factory=list)
+    terms: List[TermEntry] = Field(default_factory=list)
+    questions: List[QuestionEntry] = Field(default_factory=list)
+    notes: List[NoteBlock] = Field(default_factory=list)
+
+
+# ═══════════════════════════════════════
+# Panel / spread / page models
+# ═══════════════════════════════════════
 
 class FolioRenderCover(BaseModel):
     """Cover page content for one folio."""
@@ -46,6 +128,8 @@ class FolioRenderTextPanel(BaseModel):
     header_label: str
     header_title: str
     sections: List[FolioRenderSection] = Field(default_factory=list)
+    witness_content: Optional[WitnessContent] = Field(default=None)
+    interpretation_content: Optional[InterpretationContent] = Field(default=None)
 
 
 class FolioRenderSpread(BaseModel):

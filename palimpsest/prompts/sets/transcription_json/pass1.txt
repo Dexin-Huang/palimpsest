@@ -80,5 +80,9 @@ Rules:
 - Use `structure.region_role` to say where the zone lives: main_text, margin_outer, margin_inner, marginalia, header, footer, page_number, interlinear, paratext, illustration_label, table, diagram.
 - If the page is mostly non-text, set `classification.page_type` to cover, blank, ownership, binding, illustration_only, index, or other, but still include any visible labels or marks as zones.
 - If there is truly no readable text, emit a single placeholder zone with empty text and `type = "unknown"`.
-- If a line or span is unreadable, use bracketed slash guesses such as "[////]" or "[////////]" to preserve the approximate unreadable width.
+- If a line or span is uncertain but a few readings are plausible, use square brackets with best-guess alternatives such as "[hill/heil/hail]".
+- If only one reading is plausible but still doubtful, use a bracketed guess with a question mark, such as "[dominus?]".
+- If a span is damaged but a local restoration is probable, use parentheses for the supplied guess, such as "(dominus)".
+- If no plausible guess survives, use "[?]" or "[??]" rather than "illegible".
+- Never use "[////]", "[damaged]", or "[illegible]".
 - System-managed provenance fields may be overwritten later, but they must still be present in the JSON.
