@@ -427,13 +427,12 @@ def _run_region_orientation(
             ),
         ],
         config=types.GenerateContentConfig(
-            response_mime_type="application/json",
             temperature=0.1,
             max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
         ),
     )
     text, _ = _response_text(response)
-    payload = _normalize_region_payload(json.loads(_coerce_json_text(text)))
+    payload = _normalize_region_payload(text)
     payload.update({
         "page_id": page_id,
         "region_id": region_id,
