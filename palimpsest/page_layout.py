@@ -543,8 +543,6 @@ def _write_region_orientations(probe_dir: Path, orientations: list[RegionOrienta
         json.dumps([item.model_dump() for item in orientations], indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    legacy_path = probe_dir / "region_orientations.json"
-    legacy_path.write_text(reads_path.read_text(encoding="utf-8"), encoding="utf-8")
     return reads_path
 
 
@@ -1239,7 +1237,7 @@ def run_region_reads(
 
     selected = {item for item in (region_ids or [])}
     existing = {item.region_id: item for item in _load_region_orientations(probe_dir)}
-    reads_path = probe_dir / "region_orientations.json"
+    reads_path = probe_dir / "region_reads.json"
     for region in layout.regions:
         if region.ignore_for_reconstruction or region.reconstruction_priority == "ignore":
             continue
@@ -1834,7 +1832,7 @@ def run_page_layout_probe(
             except Exception:
                 continue
 
-    orientations_path = target_dir / "region_orientations.json"
+    orientations_path = target_dir / "region_reads.json"
     orientations_path.write_text(
         json.dumps([item.model_dump() for item in orientations], indent=2, ensure_ascii=False),
         encoding="utf-8",
