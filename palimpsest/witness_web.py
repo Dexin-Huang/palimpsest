@@ -8,8 +8,9 @@ import os
 from pathlib import Path
 import shutil
 
-from palimpsest.packet_web import _display_page_id, _page_sort_key
 from palimpsest.web import (
+    display_page_id as web_display_page_id,
+    page_sort_key as web_page_sort_key,
     parse_markdown_document as web_parse_markdown_document,
     render_markdown_body as web_render_markdown_body,
     site_css as web_site_css,
@@ -195,7 +196,7 @@ def build_witness_reader_site(
     folio_dir.mkdir(parents=True, exist_ok=True)
     image_dir.mkdir(parents=True, exist_ok=True)
 
-    pages = sorted(page_list.get("pages", []), key=lambda page: _page_sort_key(page.get("page_id", "")))
+    pages = sorted(page_list.get("pages", []), key=lambda page: web_page_sort_key(page.get("page_id", "")))
     folio_paths: list[Path] = []
     page_entries: list[dict[str, str]] = []
     ready_count = 0
@@ -228,7 +229,7 @@ def build_witness_reader_site(
                 '    <div class="reader-topbar">',
                 "      <div>",
                 '        <div class="reader-book-label">Palimpsest Reader</div>',
-                f'        <h1 class="reader-page-title">{escape(_display_page_id(page_id))}</h1>',
+                f'        <h1 class="reader-page-title">{escape(web_display_page_id(page_id))}</h1>',
                 "      </div>",
                 '      <div class="reader-nav">',
                 f'        <a href="{escape(contents_href)}">Contents</a>',
@@ -246,7 +247,7 @@ def build_witness_reader_site(
         page_path = page_dir / "index.html"
         page_path.write_text(
             _html_page(
-                title=f"{book_title} - {_display_page_id(page_id)}",
+                title=f"{book_title} - {web_display_page_id(page_id)}",
                 body=page_body,
             ),
             encoding="utf-8",
@@ -291,7 +292,7 @@ def build_witness_reader_site(
             "    </div>",
             '    <div class="reader-index-list">',
             *[
-                f'      <div class="reader-index-item"><a href="{escape(entry["href"])}">{escape(_display_page_id(entry["page_id"]))}</a><span>{"Ready" if entry["status"] == "ready" else "Pending"}</span></div>'
+                f'      <div class="reader-index-item"><a href="{escape(entry["href"])}">{escape(web_display_page_id(entry["page_id"]))}</a><span>{"Ready" if entry["status"] == "ready" else "Pending"}</span></div>'
                 for entry in page_entries
             ],
             "    </div>",

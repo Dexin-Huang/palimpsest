@@ -36,10 +36,12 @@ from palimpsest.web import (
     MarkdownDocument,
     MarkdownSection,
     MarkdownSectionGroup,
+    display_page_id as web_display_page_id,
     group_document_sections as web_group_document_sections,
     groups_to_template_sections as web_groups_to_template_sections,
     html_shell as web_html_shell,
     parse_markdown_document as web_parse_markdown_document,
+    page_sort_key as web_page_sort_key,
     render_markdown_body as web_render_markdown_body,
     render_template_sections as web_render_template_sections,
     site_css as web_site_css,
@@ -80,21 +82,11 @@ def _slugify(value: str) -> str:
 
 
 def _page_sort_key(page_id: str) -> tuple[int, int, int, str]:
-    match = re.match(r"^f(\d+)([rv])$", page_id, re.IGNORECASE)
-    if match:
-        side = 0 if match.group(2).lower() == "r" else 1
-        return (0, int(match.group(1)), side, page_id)
-    match = re.match(r"^page_(\d+)$", page_id, re.IGNORECASE)
-    if match:
-        return (1, int(match.group(1)), 0, page_id)
-    return (2, 0, 0, page_id)
+    return web_page_sort_key(page_id)
 
 
 def _display_page_id(page_id: str) -> str:
-    match = re.match(r"^f(\d+)([rv])$", page_id, re.IGNORECASE)
-    if match:
-        return f"Folio {int(match.group(1))}{match.group(2).lower()}"
-    return page_id.replace("_", " ")
+    return web_display_page_id(page_id)
 
 
 def _read_text(path: str | Path | None) -> str:
