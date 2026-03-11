@@ -80,7 +80,7 @@ python -m palimpsest page handoff --packet library/<doc_id>/experiments/<page>_p
 python -m palimpsest page window \
   --packet library/<doc_id>/experiments/<page1>_packet/packet.json \
   --packet library/<doc_id>/experiments/<page2>_packet/packet.json
-python -m palimpsest page render --packet library/<doc_id>/experiments/<page>_packet/packet.json
+python -m palimpsest page render-html --packet library/<doc_id>/experiments/<page>_packet/packet.json
 python -m palimpsest page synthesize \
   --input library/<doc_id>/experiments/<page1>_reading/<page1>_reading.md \
   --input library/<doc_id>/experiments/<page2>_reading/<page2>_reading.md \

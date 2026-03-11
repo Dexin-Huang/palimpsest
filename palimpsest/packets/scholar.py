@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 from palimpsest.agent_sdk import AgentRunResult, run_agent_prompt
-from palimpsest.edition_fonts import resolve_edition_font_policy
 from palimpsest.packets.templates import packet_format_contract_block, packet_heading_contract_block
 from palimpsest.models import ALLOWED_PACKET_STATUSES, PacketFileRef, PagePacket
 
@@ -18,7 +17,6 @@ TASK_CHOICES = [
     "annotate",
     "translate",
     "interpret",
-    "render_edition",
 ]
 PACKET_NEXT_ACTIONS = (
     "fill_witness",
@@ -27,7 +25,6 @@ PACKET_NEXT_ACTIONS = (
     "draft_interpretation",
     "review_terms",
     "review_questions",
-    "render_edition",
     "prepare_section_synthesis",
     "complete",
 )
@@ -47,7 +44,7 @@ _NEXT_ACTION_ALIASES = {
     "notes": "fill_notes",
     "translation": "draft_translation",
     "interpretation": "draft_interpretation",
-    "edition": "render_edition",
+    "edition": "prepare_section_synthesis",
     "synthesize": "prepare_section_synthesis",
     "done": "complete",
 }
@@ -83,44 +80,6 @@ def _continuity_source_paths(packet: PagePacket) -> list[Path]:
     return result
 
 
-def _ensure_portable_edition_tex(packet: PagePacket) -> None:
-    ref = packet.files.get("edition_tex")
-    if ref is None:
-        return
-    path = Path(ref.path)
-    if not path.exists():
-        return
-    text = path.read_text(encoding="utf-8")
-    font_lines = resolve_edition_font_policy().latex_lines()
-    if all(line in text for line in font_lines):
-        return
-
-    lines = text.splitlines()
-    output: list[str] = []
-    inserted = False
-    skip_font_lines = {
-        r"\setmainfont{Junicode}",
-        r"\setCJKmainfont{SimSun}",
-        r"\IfFontExistsTF{Junicode}{\setmainfont{Junicode}}{\setmainfont{Times New Roman}}",
-        r"\IfFontExistsTF{Noto Serif CJK SC}{\setCJKmainfont{Noto Serif CJK SC}}{%",
-        r"  \IfFontExistsTF{Source Han Serif SC}{\setCJKmainfont{Source Han Serif SC}}{\setCJKmainfont{SimSun}}%",
-        r"}",
-    }
-
-    for line in lines:
-        stripped = line.strip()
-        if stripped in skip_font_lines:
-            continue
-        output.append(line)
-        if stripped == r"\usepackage{xeCJK}" and not inserted:
-            output.extend(font_lines)
-            inserted = True
-
-    if not inserted:
-        return
-    path.write_text("\n".join(output) + "\n", encoding="utf-8")
-
-
 def _normalize_status(value: object) -> str:
     raw = str(value or "").strip().lower()
     if raw in ALLOWED_PACKET_STATUSES:
@@ -142,7 +101,6 @@ def _infer_next_action(payload: dict) -> str:
         ("interpretation", "draft_interpretation"),
         ("terms", "review_terms"),
         ("questions", "review_questions"),
-        ("edition_tex", "render_edition"),
     ]
     for key, action in order:
         ref = files.get(key) or {}
@@ -167,7 +125,6 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
         payload["files"] = files
 
     packet_dir = packet_path.parent
-    edition_pdf_path = str((packet_dir / "edition_spread.pdf").resolve())
     edition_html_path = str((packet_dir / "index.html").resolve())
     folio_render_path = str((packet_dir / "render.json").resolve())
     layout_probe_path = str((packet_dir / "layout_probe" / "layout_probe.json").resolve())
@@ -176,19 +133,6 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
     section_resolution_path = str((packet_dir / "layout_probe" / "section_resolution.json").resolve())
     box_cleanup_path = str((packet_dir / "layout_probe" / "box_cleanup.json").resolve())
     page_assembly_path = str((packet_dir / "layout_probe" / "page_assembly.json").resolve())
-    if "edition_pdf" not in files:
-        files["edition_pdf"] = PacketFileRef(
-            kind="edition_pdf",
-            path=edition_pdf_path,
-            status="draft" if Path(edition_pdf_path).exists() else "empty",
-            note="Compiled PDF rendering of edition_spread.tex" if Path(edition_pdf_path).exists() else None,
-        ).model_dump()
-    elif isinstance(files["edition_pdf"], dict):
-        files["edition_pdf"].setdefault("kind", "edition_pdf")
-        files["edition_pdf"].setdefault("path", edition_pdf_path)
-        if Path(files["edition_pdf"]["path"]).exists() and _normalize_status(files["edition_pdf"].get("status")) == "empty":
-            files["edition_pdf"]["status"] = "draft"
-            files["edition_pdf"]["note"] = files["edition_pdf"].get("note") or "Compiled PDF rendering of edition_spread.tex"
     if "edition_html" not in files:
         files["edition_html"] = PacketFileRef(
             kind="edition_html",
@@ -265,7 +209,6 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
 
     packet = PagePacket.model_validate(payload)
     packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
-    _ensure_portable_edition_tex(packet)
     return packet
 
 
@@ -331,7 +274,6 @@ def build_packet_scholar_prompt(
         "5. interpretation.md",
         "6. terms.md",
         "7. questions.md",
-        "8. edition_spread.tex",
     ]
 
     if packet_inputs.witness_source is not None:
@@ -370,7 +312,6 @@ def build_packet_scholar_prompt(
             "- interpretation.md: short evidence-bound interpretation.",
             "- terms.md: visible names, works, places, and technical terms.",
             "- questions.md: unresolved items or checks for later pages.",
-            "- edition_spread.tex: keep a minimal facing-page layout in sync; do not overdesign it.",
             "",
             "Packet file heading contract:",
             "- Keep these heading shapes stable so folio.render.json can be assembled deterministically.",
@@ -432,31 +373,13 @@ def build_packet_scholar_prompt(
                 "- Keep Direct Evidence and Probable Inference as separate top-level sections, not nested essay prose.",
             ]
         )
-    elif task == "render_edition":
-        lines.extend(
-            [
-                "",
-                "Specific objective for render_edition:",
-                "- Populate edition_spread.tex as a restrained, image-forward two-page packet.",
-                "- Page 1: source image on the left; witness and direct translation on the right.",
-                "- Page 2: interpretation, notes, terms, and open questions.",
-                "- Keep page 1 close to the witness. Do not let commentary crowd it.",
-                "- Keep the layout cinematic but disciplined, closer to an exhibition spread than a plain article.",
-                "- Escape LaTeX-special characters when needed.",
-                "- Preserve witness uncertainty markers such as [hill/heil/hail], [dominus?], or (dominus) in the witness layer. Never reduce uncertainty to a bare [??].",
-                "- Keep the existing LaTeX preamble portable. Do not hard-code fonts if fallback logic already exists.",
-                "- Preserve or use the BEGIN/END content markers if they exist in edition_spread.tex.",
-                "- Do not remove the source-image include unless the file is actually missing.",
-                "- Update packet.json so edition_tex.status becomes draft and workflow.next_action becomes prepare_section_synthesis unless every major layer is already reviewed or complete.",
-            ]
-        )
     else:
         lines.extend(
             [
                 "",
                 "Specific objective for advance:",
                 "- Choose the next sensible scholarly step based on packet.json and file contents.",
-                "- Prefer fill_witness first, then annotate, then translate, then interpret, then render_edition.",
+                "- Prefer fill_witness first, then annotate, then translate, then interpret, then prepare_section_synthesis.",
             ]
         )
 

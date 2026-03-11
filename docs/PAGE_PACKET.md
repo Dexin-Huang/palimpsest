@@ -30,7 +30,7 @@ back while building:
 
 Recommended sequence:
 
-`image -> page prepare -> page.packet -> layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble -> witness fill -> section synthesis -> edition render`
+`image -> page prepare -> page.packet -> layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble -> witness fill -> section synthesis -> render`
 
 Where:
 
@@ -39,7 +39,7 @@ Where:
 - `witness fill` is the evidence-first pass
 - `section synthesis` adds broader translation and interpretation
 - `folio.render` becomes the structured presentation object
-- `edition render` builds human-facing output such as HTML or PDF from `folio.render`
+- `render` builds the canonical HTML folio from `folio.render`
 
 ---
 
@@ -150,7 +150,6 @@ Common dedicated tasks:
 - `annotate`
 - `translate`
 - `interpret`
-- `render_edition`
 
 This is intentionally separate from the general `agent`, `agent-edit`, and
 other grunt-worker commands.
@@ -177,8 +176,6 @@ experiments/<page>_packet/
   questions.md
   render.json
   index.html
-  edition_spread.tex
-  edition_spread.pdf
 ```
 
 This is deliberately small.
@@ -294,8 +291,8 @@ Typical file kinds:
 - `interpretation`
 - `terms`
 - `questions`
-- `edition_tex`
-- `edition_pdf`
+- `edition_html`
+- `folio_render`
 
 ### `workflow`
 
@@ -313,7 +310,6 @@ Typical next actions:
 - `review_terms`
 - `review_questions`
 - `prepare_section_synthesis`
-- `render_edition`
 - `complete`
 
 ### `continuity`
@@ -365,7 +361,6 @@ The packet should generate structured `folio.render` data for this first.
 
 Important:
 - HTML is the primary edition surface
-- PDF is a downstream export
 - the packet is the working source bundle
 - the renderer should assemble from structured packet data, not scrape ad hoc markdown forever
 
@@ -378,9 +373,8 @@ Example:
 ```bash
 python -m palimpsest page packet --image library/<doc_id>/images/f004r.jpg
 python -m palimpsest page read --image library/<doc_id>/images/f004r.jpg
+python -m palimpsest scholar packet --packet library/<doc_id>/experiments/f004r_packet/packet.json --task interpret
 python -m palimpsest page render-html --packet library/<doc_id>/experiments/f004r_packet/packet.json
-python -m palimpsest scholar packet --packet library/<doc_id>/experiments/f004r_packet/packet.json --task render_edition
-python -m palimpsest page render --packet library/<doc_id>/experiments/f004r_packet/packet.json
 python -m palimpsest page synthesize --input ...
 ```
 

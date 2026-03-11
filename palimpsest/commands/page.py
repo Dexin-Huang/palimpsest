@@ -26,7 +26,6 @@ from palimpsest.reconstruct import (
     run_section_resolution,
     run_section_synthesis,
 )
-from palimpsest.packet_render import render_packet_edition
 from palimpsest.reader import render_packet_folio_html
 
 
@@ -216,18 +215,6 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
         print(f"finish_reason: {artifact.finish_reason}")
     print(f"inputs: {len(artifact.input_paths)}")
     print(f"chars: {artifact.char_count}")
-
-
-def cmd_render(args: argparse.Namespace) -> None:
-    artifact = render_packet_edition(
-        Path(args.packet),
-        engine=args.engine,
-        keep_logs=args.keep_logs,
-    )
-    print(f"pdf: {artifact.pdf_path}")
-    print(f"tex: {artifact.tex_path}")
-    print(f"meta: {artifact.meta_path}")
-    print(f"engine: {artifact.engine_path}")
 
 
 def cmd_render_html(args: argparse.Namespace) -> None:
@@ -474,12 +461,6 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
         help=f"Multimodal synthesis model (default: {DEFAULT_MODEL_READING})",
     )
     synthesize.set_defaults(func=cmd_synthesize)
-
-    render = sub.add_parser("render", help="Deterministically compile a packet edition PDF with tectonic")
-    render.add_argument("--packet", required=True, help="Path to packet.json")
-    render.add_argument("--engine", help="Explicit path to the tectonic binary")
-    render.add_argument("--keep-logs", action="store_true", help="Ask tectonic to keep LaTeX log files")
-    render.set_defaults(func=cmd_render)
 
     render_html = sub.add_parser("render-html", help="Render an HTML folio edition from one packet")
     render_html.add_argument("--packet", required=True, help="Path to packet.json")

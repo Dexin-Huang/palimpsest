@@ -31,7 +31,6 @@ repeatable way to turn a page image into:
 - Builds `page.packet` workspaces for front-to-back scholarly work.
 - Synthesizes several page witnesses into section-level interpretation.
 - Renders linked HTML folios and book readers from structured page data.
-- Keeps PDF rendering as a deterministic downstream export, not the primary edition surface.
 
 ## Operating Model
 
@@ -57,7 +56,7 @@ repeatable way to turn a page image into:
    of forcing one page to explain the whole manuscript.
 
 7. `Render`
-   Build a linked folio or book from structured page output, with PDF as a downstream export when needed.
+   Build a linked folio or book from structured page output.
 
 ## Design Principles
 
@@ -220,17 +219,31 @@ python -m palimpsest scholar packet \
 python -m palimpsest scholar packet \
   --packet library/<doc_id>/experiments/<page>_packet/packet.json \
   --task interpret
-
-python -m palimpsest scholar packet \
-  --packet library/<doc_id>/experiments/<page>_packet/packet.json \
-  --task render_edition
 ```
 
-Compile the PDF deterministically when you actually need a print artifact:
+Render the folio HTML when the packet is ready:
 
 ```bash
-python -m palimpsest page render --packet library/<doc_id>/experiments/<page>_packet/packet.json
+python -m palimpsest page render-html --packet library/<doc_id>/experiments/<page>_packet/packet.json
 ```
+
+## Package Layout
+
+The repo is now split by product lane instead of by old implementation era:
+
+- `palimpsest/discovery`
+  Source adapters, ingest, triage, and discovery DB work.
+- `palimpsest/reconstruct`
+  Canonical page reconstruction:
+  `layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble`
+- `palimpsest/packets`
+  Scholar-facing `page.packet` creation, continuity, and packet advancement.
+- `palimpsest/reader`
+  Canonical HTML folio and book rendering.
+- `palimpsest/commands`
+  Thin CLI entrypoints only.
+
+See [docs/REPO_LAYOUT.md](docs/REPO_LAYOUT.md) for the explicit repo shape.
 
 ### 6. Preserve continuity
 

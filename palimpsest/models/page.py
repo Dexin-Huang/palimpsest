@@ -234,7 +234,6 @@ class PageRestorationHints(BaseModel):
         "normalized_edition",
         "pseudo_facsimile",
         "overlay",
-        "latex",
         "tei",
     ]]] = Field(
         default=None,

@@ -454,7 +454,7 @@ def _build_pipeline_info(legacy_path: Path, run_meta: dict[str, Any]) -> Pipelin
 def _build_restoration_hints(preferred_layer: str) -> PageRestorationHints:
     return PageRestorationHints(
         preferred_text_layer=preferred_layer,
-        output_modes=["diplomatic_edition", "normalized_edition", "latex", "tei"],
+        output_modes=["diplomatic_edition", "normalized_edition", "tei"],
         notes="Derived automatically from legacy transcription JSON.",
     )
 

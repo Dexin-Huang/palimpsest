@@ -303,7 +303,7 @@ Possible formats:
 - `reader.zip`
 
 Optional later:
-- PDF export
+- downloadable static site bundle
 - packet bundle
 - TEI export
 

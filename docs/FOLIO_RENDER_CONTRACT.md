@@ -49,7 +49,7 @@ That makes the system:
 
 Recommended sequence:
 
-`image -> canonical.page -> page.packet -> scholar pass -> folio.render -> html/pdf/site`
+`image -> canonical.page -> page.packet -> scholar pass -> folio.render -> html/site`
 
 Where:
 

@@ -7,9 +7,7 @@ import re
 from typing import Iterable
 
 from palimpsest.config import DEFAULT_MODEL_READING
-from palimpsest.edition_fonts import resolve_edition_font_policy
 from palimpsest.models.packet import PacketContinuity, PacketFileRef, PagePacket, PacketWorkflow
-from palimpsest.packet_latex import make_packet_latex_template, sync_packet_edition_template
 from palimpsest.reconstruct.prepare import PreparedPageArtifact, prepare_image
 from palimpsest.packets.templates import packet_markdown_template
 
@@ -60,8 +58,6 @@ def create_page_packet(
     interpretation_path = target_dir / "interpretation.md"
     terms_path = target_dir / "terms.md"
     questions_path = target_dir / "questions.md"
-    edition_tex_path = target_dir / "edition_spread.tex"
-    edition_pdf_path = target_dir / "edition_spread.pdf"
     edition_html_path = target_dir / "index.html"
     folio_render_path = target_dir / "render.json"
     layout_probe_path = target_dir / "layout_probe" / "layout_probe.json"
@@ -101,12 +97,6 @@ def create_page_packet(
             packet_markdown_template("questions", page_id=image_path.stem, page_unit=page_unit),
             encoding="utf-8",
         )
-    if not edition_tex_path.exists():
-        edition_tex_path.write_text(
-            make_packet_latex_template(image_path.stem, source_image_path=image_path, packet_dir=target_dir),
-            encoding="utf-8",
-        )
-
     packet = PagePacket(
         created_at=_utc_now(),
         doc_id=_resolve_doc_id(image_path),
@@ -121,8 +111,6 @@ def create_page_packet(
             "interpretation": PacketFileRef(kind="interpretation", path=str(interpretation_path), status="empty"),
             "terms": PacketFileRef(kind="terms", path=str(terms_path), status="empty"),
             "questions": PacketFileRef(kind="questions", path=str(questions_path), status="empty"),
-            "edition_tex": PacketFileRef(kind="edition_tex", path=str(edition_tex_path), status="empty"),
-            "edition_pdf": PacketFileRef(kind="edition_pdf", path=str(edition_pdf_path), status="empty"),
             "edition_html": PacketFileRef(kind="edition_html", path=str(edition_html_path), status="empty"),
             "folio_render": PacketFileRef(kind="folio_render", path=str(folio_render_path), status="empty"),
             "layout_probe": PacketFileRef(kind="layout_probe", path=str(layout_probe_path), status="empty"),
@@ -158,7 +146,6 @@ def create_page_packet(
         "source_image_path": str(image_path),
         "packet_path": str(packet_path),
         "prepared_image_path": str(prepared.prepared_image_path) if prepared is not None else None,
-        "edition_font_policy": resolve_edition_font_policy().as_dict(),
     }
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 

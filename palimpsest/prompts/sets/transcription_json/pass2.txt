@@ -62,7 +62,7 @@ Output JSON schema (must match exactly in key structure, but with corrected cont
   },
   "restoration": {
     "preferred_text_layer": "source_diplomatic",
-    "output_modes": ["diplomatic_edition", "normalized_edition", "latex", "tei"]
+    "output_modes": ["diplomatic_edition", "normalized_edition", "tei"]
   },
   "pipeline": {
     "notes": "raw model output; system will normalize provenance fields"
