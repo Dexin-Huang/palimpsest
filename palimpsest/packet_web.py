@@ -1194,20 +1194,9 @@ def _render_spread_piece(folio: FolioRender, *, content_piece: str, interpretati
             f'      <span class="image-header-source">{escape(folio.spread.image.source_label)}</span>',
             '    </div>',
             '    <div class="image-frame">',
-            '      <div class="image-controls">',
-            '        <button class="image-control" type="button" data-image-action="zoom-in" title="Zoom in">+</button>',
-            '        <button class="image-control" type="button" data-image-action="zoom-out" title="Zoom out">-</button>',
-            '        <button class="image-control" type="button" data-image-action="reset" title="Reset view">Reset</button>',
-            '        <button class="image-control" type="button" data-image-action="toggle-overlays" title="Toggle all region overlays">Boxes</button>',
-            '      </div>',
-            '      <div class="image-viewport" id="image-viewport">',
-            '        <div class="image-stage" id="image-stage">',
-            f'          <img src="{escape(folio.spread.image.image_path)}" alt="{escape(folio.spread.image.folio_label)} source image">',
-            '          <div class="image-overlay">',
+            f'      <img src="{escape(folio.spread.image.image_path)}" alt="{escape(folio.spread.image.folio_label)} source image">',
+            '      <div class="image-overlay">',
             region_overlays,
-            '          </div>',
-            '        </div>',
-            '      </div>',
             '      </div>',
             '    </div>',
             f'    <span class="image-caption">{escape(folio.spread.image.caption)}</span>',
@@ -1439,51 +1428,8 @@ def _site_css() -> str:
     box-shadow: 0 2px 6px rgba(0,0,0,0.06), 0 12px 32px rgba(0,0,0,0.08), 0 32px 72px rgba(0,0,0,0.05);
     line-height: 0;
     border-radius: 1px;
-    overflow: hidden;
-    background: rgba(255,255,255,0.35);
   }
-  .image-controls {
-    position: absolute;
-    top: 0.7rem;
-    right: 0.7rem;
-    display: flex;
-    gap: 0.45rem;
-    z-index: 8;
-  }
-  .image-control {
-    border: 1px solid rgba(20,18,16,0.14);
-    background: rgba(247,241,230,0.9);
-    color: var(--ink);
-    font-size: 0.56rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 0.45rem 0.55rem;
-    cursor: pointer;
-    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-  }
-  .image-control:hover,
-  .image-control.is-active {
-    background: rgba(20,18,16,0.92);
-    color: var(--parchment);
-    border-color: rgba(20,18,16,0.92);
-  }
-  .image-viewport {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    cursor: grab;
-  }
-  .image-viewport.is-dragging {
-    cursor: grabbing;
-  }
-  .image-stage {
-    position: relative;
-    transform-origin: 0 0;
-    transition: transform 0.14s ease;
-    will-change: transform;
-  }
-  .image-stage img {
+  .image-frame img {
     display: block;
     width: 100%;
     height: auto;
@@ -1508,27 +1454,14 @@ def _site_css() -> str:
     background: rgba(138,75,42,0.08);
     box-shadow: inset 0 0 0 1px rgba(247,241,230,0.22);
     transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
-    pointer-events: none;
+    pointer-events: auto;
     cursor: pointer;
-    opacity: 0;
-    visibility: hidden;
   }
-  .image-frame.is-overlay-debug .image-region,
-  .image-region.is-linked-active,
-  .image-region.is-pinned,
   .image-region:hover,
-  .pair.is-linked-active,
-  .pair.is-pinned {
-    opacity: 1;
-    visibility: visible;
-  }
-  .image-frame.is-overlay-debug .image-region,
-  .image-region.is-linked-active,
-  .image-region.is-pinned {
+  .image-region.is-linked-active {
     border-color: rgba(138,75,42,0.95);
     background: rgba(138,75,42,0.18);
     box-shadow: inset 0 0 0 1px rgba(247,241,230,0.5), 0 0 0 2px rgba(138,75,42,0.18);
-    pointer-events: auto;
   }
   .image-region-label {
     position: absolute;
@@ -1546,10 +1479,8 @@ def _site_css() -> str:
     transform: translateY(2px);
     transition: opacity 0.18s ease, transform 0.18s ease;
   }
-  .image-frame.is-overlay-debug .image-region-label,
-  .image-region.is-linked-active .image-region-label,
-  .image-region.is-pinned .image-region-label,
-  .image-region:hover .image-region-label {
+  .image-region:hover .image-region-label,
+  .image-region.is-linked-active .image-region-label {
     opacity: 1;
     transform: translateY(0);
   }
@@ -2124,50 +2055,7 @@ def _render_folio_html(
     const panel = document.getElementById('right-panel');
     const symbol = document.getElementById('flip-symbol');
     const symbolSvg = symbol ? symbol.querySelector('svg') : null;
-    const imageFrame = document.querySelector('.image-frame');
-    const imageViewport = document.getElementById('image-viewport');
-    const imageStage = document.getElementById('image-stage');
-    const imageControls = Array.from(document.querySelectorAll('[data-image-action]'));
     let rotation = 0;
-    let overlayDebug = false;
-    let scale = 1;
-    let translateX = 0;
-    let translateY = 0;
-    let isDragging = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
-    let dragOriginX = 0;
-    let dragOriginY = 0;
-
-    function applyImageTransform() {{
-      if (!imageStage) {{
-        return;
-      }}
-      imageStage.style.transform = `translate(${{translateX}}px, ${{translateY}}px) scale(${{scale}})`;
-    }}
-
-    function clampScale(nextScale) {{
-      return Math.min(4, Math.max(1, nextScale));
-    }}
-
-    function setOverlayDebug(nextValue) {{
-      overlayDebug = nextValue;
-      if (imageFrame) {{
-        imageFrame.classList.toggle('is-overlay-debug', overlayDebug);
-      }}
-      imageControls.forEach((button) => {{
-        if (button.dataset.imageAction === 'toggle-overlays') {{
-          button.classList.toggle('is-active', overlayDebug);
-        }}
-      }});
-    }}
-
-    function resetImageView() {{
-      scale = 1;
-      translateX = 0;
-      translateY = 0;
-      applyImageTransform();
-    }}
 
     function openSpread() {{
       if (!cover || !spread) {{
@@ -2194,79 +2082,6 @@ def _render_folio_html(
           face.scrollTop = 0;
         }}
       }});
-    }}
-
-    applyImageTransform();
-
-    imageControls.forEach((button) => {{
-      button.addEventListener('click', (event) => {{
-        event.stopPropagation();
-        const action = button.dataset.imageAction;
-        if (action === 'zoom-in') {{
-          scale = clampScale(scale * 1.18);
-          applyImageTransform();
-        }} else if (action === 'zoom-out') {{
-          scale = clampScale(scale / 1.18);
-          if (scale === 1) {{
-            translateX = 0;
-            translateY = 0;
-          }}
-          applyImageTransform();
-        }} else if (action === 'reset') {{
-          resetImageView();
-        }} else if (action === 'toggle-overlays') {{
-          setOverlayDebug(!overlayDebug);
-        }}
-      }});
-    }});
-
-    if (imageViewport) {{
-      imageViewport.addEventListener('wheel', (event) => {{
-        if (!imageStage) {{
-          return;
-        }}
-        event.preventDefault();
-        const delta = event.deltaY < 0 ? 1.12 : 1 / 1.12;
-        const nextScale = clampScale(scale * delta);
-        if (nextScale === scale) {{
-          return;
-        }}
-        scale = nextScale;
-        if (scale === 1) {{
-          translateX = 0;
-          translateY = 0;
-        }}
-        applyImageTransform();
-      }}, {{ passive: false }});
-
-      imageViewport.addEventListener('pointerdown', (event) => {{
-        if (scale <= 1) {{
-          return;
-        }}
-        isDragging = true;
-        dragStartX = event.clientX;
-        dragStartY = event.clientY;
-        dragOriginX = translateX;
-        dragOriginY = translateY;
-        imageViewport.classList.add('is-dragging');
-      }});
-
-      imageViewport.addEventListener('pointermove', (event) => {{
-        if (!isDragging) {{
-          return;
-        }}
-        translateX = dragOriginX + (event.clientX - dragStartX);
-        translateY = dragOriginY + (event.clientY - dragStartY);
-        applyImageTransform();
-      }});
-
-      const endDrag = () => {{
-        isDragging = false;
-        imageViewport.classList.remove('is-dragging');
-      }};
-      imageViewport.addEventListener('pointerup', endDrag);
-      imageViewport.addEventListener('pointercancel', endDrag);
-      imageViewport.addEventListener('pointerleave', endDrag);
     }}
 
     const linkedNodes = Array.from(document.querySelectorAll('[data-region-id]'));
