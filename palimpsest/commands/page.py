@@ -132,6 +132,9 @@ def _run_layout_pipeline(
                 model=cleanup_model,
             ),
         )
+        # Validation operates on page assembly units, so build a provisional
+        # assembly from the section-resolved boxes before targeted cleanup.
+        assembly_artifact = run_page_assembly(probe_artifact.output_dir)
         validation_artifact = run_page_validate(probe_artifact.output_dir)
 
     if run_box_cleanup_stage:
