@@ -8,7 +8,8 @@ from .artifacts import (
     SectionResolutionArtifact,
     VisualPairRepairArtifact,
 )
-from .pipeline import run_blob_refinement, run_page_assembly, run_page_layout_probe, run_region_reads
+from .blob import run_blob_refinement
+from .pipeline import run_page_assembly, run_page_layout_probe, run_region_reads
 from .prepare import PreparedPageArtifact, prepare_image
 from .reading import run_page_reading, run_section_synthesis
 from .resolve import run_box_cleanup, run_section_resolution, run_visual_pair_repair

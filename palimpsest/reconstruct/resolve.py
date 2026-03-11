@@ -22,6 +22,7 @@ from palimpsest.reconstruct.artifacts import (
     SectionResolutionArtifact,
     VisualPairRepairArtifact,
 )
+from palimpsest.reconstruct.blob import run_blob_refinement
 from palimpsest.reconstruct.pipeline import (
     DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
     _bbox_overlap_ratio,
@@ -37,7 +38,6 @@ from palimpsest.reconstruct.pipeline import (
     _resolve_prompt_text,
     _response_text,
     _utc_now,
-    run_blob_refinement,
 )
 
 
