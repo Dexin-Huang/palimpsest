@@ -279,7 +279,7 @@ def create_page_packet(
     folio_render_path = target_dir / "folio_render.json"
     layout_probe_path = target_dir / "layout_probe" / "layout_probe.json"
     layout_overlay_path = target_dir / "layout_probe" / "layout_overlay.png"
-    region_orientations_path = target_dir / "layout_probe" / "region_orientations.json"
+    region_orientations_path = target_dir / "layout_probe" / "region_reads.json"
     section_resolution_path = target_dir / "layout_probe" / "section_resolution.json"
     box_cleanup_path = target_dir / "layout_probe" / "box_cleanup.json"
     page_assembly_path = target_dir / "layout_probe" / "page_assembly.json"
@@ -386,7 +386,7 @@ def attach_layout_probe(packet_path: Path, probe_dir: Path) -> PagePacket:
     mapping = {
         "layout_probe": probe_dir / "layout_probe.json",
         "layout_overlay": probe_dir / "layout_overlay.png",
-        "region_orientations": probe_dir / "region_orientations.json",
+        "region_orientations": probe_dir / "region_reads.json",
         "section_resolution": probe_dir / "section_resolution.json",
         "box_cleanup": probe_dir / "box_cleanup.json",
         "page_assembly": probe_dir / "page_assembly.json",

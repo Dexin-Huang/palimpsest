@@ -155,6 +155,11 @@ Create the page packet:
 python -m palimpsest page packet --image library/<doc_id>/images/<page>.jpg
 ```
 
+`page packet` creates the packet workspace and, by default, runs the canonical
+reconstruction ladder immediately.
+
+`page refresh-packet` reruns that same ladder for an existing packet.
+
 Canonical page pipeline inside `page packet` / `page refresh-packet`:
 
 ```text
@@ -169,6 +174,16 @@ This is intentionally region-first:
 - `box-cleanup` only touches genuinely implicated neighboring box pairs
 - `assemble` builds the page witness object
 - `render-html` turns that into the linked folio view
+
+Advanced stage commands are also available when you need to inspect or rerun a
+single rung of the ladder:
+
+- `page layout-probe`
+- `page region-read`
+- `page section-resolution`
+- `page validate`
+- `page box-cleanup`
+- `page assemble`
 
 Read the page witness:
 
@@ -186,6 +201,9 @@ python -m palimpsest scholar packet \
   --task fill_witness \
   --witness library/<doc_id>/experiments/<page>_reading/<page>_reading.md
 ```
+
+`fill_witness` is the scholar-lane way to populate packet files. The lower-level
+`page ingest-reading` command exists for deterministic packet backfill and repair.
 
 Then let the dedicated scholar lane advance notes, translation,
 interpretation, and edition work:

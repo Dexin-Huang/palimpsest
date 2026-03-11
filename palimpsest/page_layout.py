@@ -22,13 +22,12 @@ from palimpsest.models import (
     PageValidationIssue,
     PageSectionResolution,
     RegionOrientation,
-    RegionReadPair,
     SectionResolutionAssignment,
 )
 
 
 DEFAULT_LAYOUT_PROMPT_NAME = "page_layout_probe"
-DEFAULT_REGION_PROMPT_NAME = "page_region_orientation"
+DEFAULT_REGION_PROMPT_NAME = "page_region_read"
 DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS = 32768
 
 
@@ -529,7 +528,9 @@ def _load_layout_probe(probe_dir: Path) -> LayoutProbe:
 
 
 def _load_region_orientations(probe_dir: Path) -> list[RegionOrientation]:
-    path = probe_dir / "region_orientations.json"
+    path = probe_dir / "region_reads.json"
+    if not path.exists():
+        path = probe_dir / "region_orientations.json"
     if not path.exists():
         return []
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -537,11 +538,13 @@ def _load_region_orientations(probe_dir: Path) -> list[RegionOrientation]:
 
 
 def _write_region_orientations(probe_dir: Path, orientations: list[RegionOrientation]) -> Path:
-    reads_path = probe_dir / "region_orientations.json"
+    reads_path = probe_dir / "region_reads.json"
     reads_path.write_text(
         json.dumps([item.model_dump() for item in orientations], indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    legacy_path = probe_dir / "region_orientations.json"
+    legacy_path.write_text(reads_path.read_text(encoding="utf-8"), encoding="utf-8")
     return reads_path
 
 
@@ -1286,8 +1289,6 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
     reads = {item.region_id: item for item in _load_region_orientations(probe_dir)}
     section_resolution = _load_section_resolution(probe_dir)
     box_cleanup = _load_box_cleanup(probe_dir)
-    suppressed_pairs: set[tuple[str, int]] = set()
-
     units: list[PageAssemblyUnit] = []
     counter = 1
     section_assignments = {
@@ -1307,15 +1308,7 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
             continue
         read = reads.get(region.region_id)
         assignment = section_assignments.get(region.region_id)
-        kept_pairs = []
-        if assignment is not None:
-            lines = [line for line in assignment.source_block.splitlines() if line.strip()]
-            kept_pairs = [RegionReadPair(source=line, translation="") for line in lines]
-        elif read:
-            for idx, pair in enumerate(read.pairs):
-                if (region.region_id, idx) in suppressed_pairs:
-                    continue
-                kept_pairs.append(pair)
+        source_block = assignment.source_block if assignment is not None else (read.source_block if read else None)
         units.append(
             PageAssemblyUnit(
                 unit_id=f"u{counter:03d}",
@@ -1326,14 +1319,7 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
                 page_side=region.page_side,
                 column_index=region.column_index,
                 reading_order=region.reading_order,
-                reading_direction=read.reading_direction if read else region.orientation_hint,
-                line_flow=read.line_flow if read else None,
-                start_edge=read.start_edge if read else None,
-                summary=read.summary if read else region.notes,
-                source_block=assignment.source_block if assignment is not None else (read.source_block if read else None),
-                translation_block=read.translation_block if read and assignment is None else None,
-                pairs=kept_pairs if (read or assignment is not None) else [],
-                diplomatic_lines=[] if (read or assignment is not None) else [],
+                source_block=source_block,
                 notes=(
                     list(assignment.notes)
                     if assignment is not None
@@ -1366,28 +1352,11 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
                 f"- BBox: `{list(unit.bbox_norm)}`",
             ]
         )
-        if unit.reading_direction:
-            markdown_lines.append(f"- Reading direction: `{unit.reading_direction}`")
-        if unit.line_flow:
-            markdown_lines.append(f"- Line flow: `{unit.line_flow}`")
         markdown_lines.append("")
-        for pair in unit.pairs:
-            markdown_lines.append(pair.source)
-            if pair.translation:
-                markdown_lines.append(f"=> {pair.translation}")
-            if pair.note:
-                markdown_lines.append(f"   note: {pair.note}")
         if unit.source_block:
             markdown_lines.append("")
             markdown_lines.append("Source Block:")
             markdown_lines.append(unit.source_block)
-        if unit.translation_block:
-            markdown_lines.append("")
-            markdown_lines.append("Translation Block:")
-            markdown_lines.append(unit.translation_block)
-        if not unit.pairs:
-            for line in unit.diplomatic_lines:
-                markdown_lines.append(line)
         if unit.notes:
             markdown_lines.append("")
             markdown_lines.append("Notes:")
@@ -1404,7 +1373,6 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
         "assembly_md_path": str(assembly_md_path),
         "section_resolution_path": str((probe_dir / "section_resolution.json").resolve()) if section_resolution is not None else None,
         "box_cleanup_path": str((probe_dir / "box_cleanup.json").resolve()) if box_cleanup is not None else None,
-        "suppressed_pair_count": len(suppressed_pairs),
     }
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return PageAssemblyArtifact(

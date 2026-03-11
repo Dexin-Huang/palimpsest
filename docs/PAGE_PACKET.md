@@ -59,6 +59,11 @@ Meaning:
 - targeted cleanup only for genuinely implicated neighboring box pairs
 - deterministic page assembly after that
 
+In practice:
+- `page packet` creates the packet and runs that ladder by default
+- `page refresh-packet` reruns the same ladder for an existing packet
+- the individual stage commands remain available as advanced/debug tools
+
 It should contain:
 - the prepared image
 - the current witness
@@ -135,6 +140,10 @@ python -m palimpsest scholar packet \
   --task advance \
   --witness library/<doc_id>/experiments/<page>_reading/<page>_reading.md
 ```
+
+Note:
+- `fill_witness` is the scholar-facing packet step
+- `page ingest-reading` is the deterministic maintenance/import path
 
 Common dedicated tasks:
 - `fill_witness`
@@ -368,6 +377,7 @@ Example:
 ```bash
 python -m palimpsest page packet --image library/<doc_id>/images/f004r.jpg
 python -m palimpsest page read --image library/<doc_id>/images/f004r.jpg
+python -m palimpsest page render-html --packet library/<doc_id>/experiments/f004r_packet/packet.json
 python -m palimpsest scholar packet --packet library/<doc_id>/experiments/f004r_packet/packet.json --task render_edition
 python -m palimpsest page render --packet library/<doc_id>/experiments/f004r_packet/packet.json
 python -m palimpsest page synthesize --input ...

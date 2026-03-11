@@ -12,6 +12,18 @@ We should improve the pipeline in this order and only fan changes out once `f004
 
 `layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble -> render-html`
 
+The public commands map directly to that ladder:
+
+- `page packet` / `page refresh-packet` run it end to end
+- `page layout-probe`
+- `page region-read`
+- `page section-resolution`
+- `page validate`
+- `page box-cleanup`
+- `page assemble`
+
+The stage commands are advanced/debug tools. The packet commands are the normal path.
+
 ## Technique ladder
 
 ### 1. Coarse semantic boxes

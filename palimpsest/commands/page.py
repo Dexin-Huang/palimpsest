@@ -168,9 +168,9 @@ def cmd_packet(args: argparse.Namespace) -> None:
         print(f"layout_probe: {probe_artifact.layout_json_path}")
         print(f"layout_overlay: {probe_artifact.overlay_path}")
         if region_artifact is not None:
-            print(f"region_orientations: {region_artifact.reads_path}")
+            print(f"region_reads: {region_artifact.reads_path}")
         else:
-            print(f"region_orientations: {probe_artifact.orientations_path}")
+            print(f"region_reads: {probe_artifact.orientations_path}")
         if section_artifact is not None:
             print(f"section_resolution: {section_artifact.resolution_json_path}")
         if validation_artifact is not None:
@@ -257,7 +257,7 @@ def cmd_refresh_packet(args: argparse.Namespace) -> None:
         print(f"layout_probe: {probe_artifact.layout_json_path}")
         print(f"layout_overlay: {probe_artifact.overlay_path}")
         if region_artifact is not None:
-            print(f"region_orientations: {region_artifact.reads_path}")
+            print(f"region_reads: {region_artifact.reads_path}")
         if section_artifact is not None:
             print(f"section_resolution: {section_artifact.resolution_json_path}")
         if validation_artifact is not None:
@@ -342,10 +342,10 @@ def cmd_layout_probe(args: argparse.Namespace) -> None:
     print(f"layout_json: {artifact.layout_json_path}")
     print(f"overlay: {artifact.overlay_path}")
     print(f"crops_dir: {artifact.crops_dir}")
-    print(f"orientations: {artifact.orientations_path}")
+    print(f"region_reads: {artifact.orientations_path}")
     print(f"meta: {artifact.meta_path}")
     print(f"model: {artifact.model}")
-    print(f"orientation_model: {artifact.orientation_model}")
+    print(f"region_read_model: {artifact.orientation_model}")
     if artifact.finish_reason:
         print(f"finish_reason: {artifact.finish_reason}")
 
@@ -357,6 +357,17 @@ def cmd_region_read(args: argparse.Namespace) -> None:
         region_ids=args.region_id or None,
     )
     print(f"reads: {artifact.reads_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"model: {artifact.model}")
+
+
+def cmd_section_resolution(args: argparse.Namespace) -> None:
+    artifact = run_section_resolution(
+        Path(args.probe_dir),
+        model=args.model,
+        prompt_file=Path(args.prompt_file).resolve() if args.prompt_file else None,
+    )
+    print(f"section_resolution: {artifact.resolution_json_path}")
     print(f"meta: {artifact.meta_path}")
     print(f"model: {artifact.model}")
 
@@ -395,7 +406,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     prepare.add_argument("--out-dir", help="Output directory for prepared image artifact")
     prepare.set_defaults(func=cmd_prepare)
 
-    packet = sub.add_parser("packet", help="Create a scholar-facing page packet with stubs and edition template")
+    packet = sub.add_parser("packet", help="Create a page packet and run the canonical reconstruction ladder")
     packet.add_argument("--image", required=True, help="Source image to packetize")
     packet.add_argument("--out-dir", help="Output directory for page packet")
     packet.add_argument("--raw", action="store_true", help="Skip automatic preparation and packetize the raw image")
@@ -411,9 +422,9 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     packet.add_argument(
         "--orient-model",
         default=DEFAULT_MODEL_READING,
-        help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
+        help=f"Model for full transcription reads per region (default: {DEFAULT_MODEL_READING})",
     )
-    packet.add_argument("--no-orient", action="store_true", help="Skip region transcription reads during the layout probe")
+    packet.add_argument("--no-orient", "--no-region-read", dest="no_orient", action="store_true", help="Skip the region-read stage during packet creation")
     packet.add_argument("--skip-box-cleanup", action="store_true", help="Skip canonical cleanup stages (section-resolution, validate, and box-cleanup)")
     packet.add_argument("--skip-cleanup", action="store_true", help="Alias for --skip-box-cleanup")
     packet.add_argument(
@@ -470,7 +481,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     render_html.add_argument("--title", help="Optional book/manuscript title override")
     render_html.set_defaults(func=cmd_render_html)
 
-    refresh_packet = sub.add_parser("refresh-packet", help="Backfill layout/assembly for an existing packet and optionally rerender HTML")
+    refresh_packet = sub.add_parser("refresh-packet", help="Rerun the canonical reconstruction ladder for an existing packet and optionally rerender HTML")
     refresh_packet.add_argument("--packet", required=True, help="Path to packet.json")
     refresh_packet.add_argument("--out-dir", help="Optional output directory for HTML folio artifacts")
     refresh_packet.add_argument("--title", help="Optional book/manuscript title override")
@@ -487,9 +498,9 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     refresh_packet.add_argument(
         "--orient-model",
         default=DEFAULT_MODEL_READING,
-        help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
+        help=f"Model for full transcription reads per region (default: {DEFAULT_MODEL_READING})",
     )
-    refresh_packet.add_argument("--no-orient", action="store_true", help="Skip region orientation reads during the layout probe")
+    refresh_packet.add_argument("--no-orient", "--no-region-read", dest="no_orient", action="store_true", help="Skip the region-read stage while refreshing the packet")
     refresh_packet.add_argument(
         "--cleanup-model",
         default=DEFAULT_MODEL_TRIAGE,
@@ -498,7 +509,7 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     refresh_packet.add_argument("--retries", type=int, default=2, help="Retry count for model-backed refresh stages")
     refresh_packet.set_defaults(func=cmd_refresh_packet)
 
-    layout_probe = sub.add_parser("layout-probe", help="Run the coarse semantic box pass and generate overlay/crops")
+    layout_probe = sub.add_parser("layout-probe", help="Advanced: run only the coarse semantic box pass and generate overlay/crops")
     layout_probe.add_argument("--image", required=True, help="Source image to probe")
     layout_probe.add_argument("--out-dir", help="Output directory for layout probe artifacts")
     layout_probe.add_argument("--prompt-file", help="Optional prompt file override")
@@ -510,12 +521,12 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     layout_probe.add_argument(
         "--orient-model",
         default=DEFAULT_MODEL_READING,
-        help=f"Model for region orientation reads (default: {DEFAULT_MODEL_READING})",
+        help=f"Model for full transcription reads per region (default: {DEFAULT_MODEL_READING})",
     )
-    layout_probe.add_argument("--no-orient", action="store_true", help="Skip the second-pass region orientation reads")
+    layout_probe.add_argument("--no-orient", "--no-region-read", dest="no_orient", action="store_true", help="Skip the follow-on region-read stage")
     layout_probe.set_defaults(func=cmd_layout_probe)
 
-    region_read = sub.add_parser("region-read", help="Run or rerun full transcription reads for the current coarse regions")
+    region_read = sub.add_parser("region-read", help="Advanced: run or rerun full transcription reads for the current coarse regions")
     region_read.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
     region_read.add_argument(
         "--region-id",
@@ -529,7 +540,17 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     region_read.set_defaults(func=cmd_region_read)
 
-    box_cleanup = sub.add_parser("box-cleanup", help="Repair only the flagged neighboring box pairs for a page")
+    section_resolution = sub.add_parser("section-resolution", help="Advanced: assign one canonical text block to each region before validation")
+    section_resolution.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
+    section_resolution.add_argument("--prompt-file", help="Optional prompt file override")
+    section_resolution.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_TRIAGE,
+        help=f"Model for canonical box-to-text assignment (default: {DEFAULT_MODEL_TRIAGE})",
+    )
+    section_resolution.set_defaults(func=cmd_section_resolution)
+
+    box_cleanup = sub.add_parser("box-cleanup", help="Advanced: repair only the flagged neighboring box pairs for a page")
     box_cleanup.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
     box_cleanup.add_argument("--prompt-file", help="Optional prompt file override")
     box_cleanup.add_argument(
@@ -539,11 +560,11 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     )
     box_cleanup.set_defaults(func=cmd_box_cleanup)
 
-    validate = sub.add_parser("validate", help="Run structural QA and flag pages that need targeted repair")
+    validate = sub.add_parser("validate", help="Advanced: run structural QA and flag pages that need targeted repair")
     validate.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
     validate.set_defaults(func=cmd_validate)
 
-    assemble = sub.add_parser("assemble", help="Assemble the cleaned region texts into one canonical page object")
+    assemble = sub.add_parser("assemble", help="Advanced: assemble the cleaned region texts into one canonical page object")
     assemble.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
     assemble.set_defaults(func=cmd_assemble)
 

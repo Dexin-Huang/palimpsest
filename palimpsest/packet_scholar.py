@@ -172,7 +172,7 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
     folio_render_path = str((packet_dir / "folio_render.json").resolve())
     layout_probe_path = str((packet_dir / "layout_probe" / "layout_probe.json").resolve())
     layout_overlay_path = str((packet_dir / "layout_probe" / "layout_overlay.png").resolve())
-    region_orientations_path = str((packet_dir / "layout_probe" / "region_orientations.json").resolve())
+    region_orientations_path = str((packet_dir / "layout_probe" / "region_reads.json").resolve())
     section_resolution_path = str((packet_dir / "layout_probe" / "section_resolution.json").resolve())
     box_cleanup_path = str((packet_dir / "layout_probe" / "box_cleanup.json").resolve())
     page_assembly_path = str((packet_dir / "layout_probe" / "page_assembly.json").resolve())
@@ -220,7 +220,7 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
     layout_defaults = {
         "layout_probe": (layout_probe_path, "Coarse layout probe for region-first reconstruction"),
         "layout_overlay": (layout_overlay_path, "Overlay preview of coarse layout regions"),
-        "region_orientations": (region_orientations_path, "Region orientation and quick-read hints"),
+        "region_orientations": (region_orientations_path, "Full transcription reads for each coarse region"),
         "section_resolution": (section_resolution_path, "Canonical text ownership per coarse region"),
         "box_cleanup": (box_cleanup_path, "Targeted cleanup for overlapping region pairs"),
         "page_assembly": (page_assembly_path, "Deterministic assembly from region reads"),

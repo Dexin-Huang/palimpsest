@@ -676,20 +676,8 @@ def _load_page_assembly(packet: PagePacket) -> PageAssembly | None:
 def _build_witness_content_from_assembly(assembly: PageAssembly) -> WitnessContent:
     def _pairs_from_blocks(unit: PageAssemblyUnit) -> list[SentencePair]:
         source_lines = [line.strip() for line in (unit.source_block or "").splitlines() if line.strip()]
-        translation_lines = [line.strip() for line in (unit.translation_block or "").splitlines() if line.strip()]
         if not source_lines:
             return []
-        if translation_lines and len(source_lines) == len(translation_lines):
-            return [
-                SentencePair(
-                    source=source_line,
-                    translation=translation_line,
-                    unit_id=unit.unit_id,
-                    region_id=unit.region_id,
-                    bbox_norm=unit.bbox_norm,
-                )
-                for source_line, translation_line in zip(source_lines, translation_lines)
-            ]
         return [
             SentencePair(
                 source=source_line,

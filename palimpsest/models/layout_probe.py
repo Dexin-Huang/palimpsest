@@ -75,63 +75,24 @@ class LayoutProbe(BaseModel):
 
 
 class RegionOrientation(BaseModel):
-    """Follow-up orientation read for one crop."""
+    """Full transcription read for one coarse page region."""
 
-    artifact_type: Literal["page.region_orientation", "page.region_read"] = Field(default="page.region_read")
+    artifact_type: Literal["page.region_read"] = Field(default="page.region_read")
     page_id: str
     region_id: str
     label: str
     role: str
-    reading_direction: Optional[str] = Field(default=None)
-    line_flow: Optional[str] = Field(default=None)
-    start_edge: Optional[str] = Field(default=None)
-    script_hint: Optional[str] = Field(default=None)
-    summary: Optional[str] = Field(default=None)
     source_block: Optional[str] = Field(default=None)
-    translation_block: Optional[str] = Field(default=None)
-    pairs: List["RegionReadPair"] = Field(default_factory=list)
     diplomatic_lines: List[str] = Field(default_factory=list)
     notes: List[str] = Field(default_factory=list)
 
-    @field_validator("pairs", mode="before")
-    @classmethod
-    def _normalize_pairs(cls, value):
-        if value is None:
-            return []
-        if not isinstance(value, list):
-            return []
-        normalized: list[dict] = []
-        for item in value:
-            if isinstance(item, str):
-                normalized.append({"source": item, "translation": ""})
-            elif isinstance(item, dict):
-                normalized.append(item)
-        return normalized
-
     @model_validator(mode="after")
-    def _sync_pair_lines(self):
+    def _sync_lines(self):
         if self.source_block and not self.diplomatic_lines:
             self.diplomatic_lines = [line for line in self.source_block.splitlines() if line.strip()]
-        if self.pairs and not self.diplomatic_lines:
-            self.diplomatic_lines = [pair.source for pair in self.pairs if pair.source]
-        elif self.diplomatic_lines and not self.pairs:
-            self.pairs = [RegionReadPair(source=line, translation="") for line in self.diplomatic_lines]
         if not self.source_block and self.diplomatic_lines:
             self.source_block = "\n".join(self.diplomatic_lines)
-        if not self.translation_block and self.pairs:
-            translations = [pair.translation for pair in self.pairs if pair.translation]
-            if translations:
-                self.translation_block = "\n".join(translations)
         return self
-
-
-class RegionReadPair(BaseModel):
-    """One aligned source/direct-translation unit from a cropped region."""
-
-    source: str
-    translation: str = Field(default="")
-    kind: Literal["line", "header", "page_number", "marginalia", "other"] = Field(default="line")
-    note: Optional[str] = Field(default=None)
 
 
 class PageAssemblyUnit(BaseModel):
@@ -145,30 +106,16 @@ class PageAssemblyUnit(BaseModel):
     page_side: Optional[Literal["left", "right", "center", "full"]] = Field(default=None)
     column_index: Optional[int] = Field(default=None)
     reading_order: Optional[int] = Field(default=None)
-    reading_direction: Optional[str] = Field(default=None)
-    line_flow: Optional[str] = Field(default=None)
-    start_edge: Optional[str] = Field(default=None)
-    summary: Optional[str] = Field(default=None)
     source_block: Optional[str] = Field(default=None)
-    translation_block: Optional[str] = Field(default=None)
-    pairs: List[RegionReadPair] = Field(default_factory=list)
     diplomatic_lines: List[str] = Field(default_factory=list)
     notes: List[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _sync_pair_lines(self):
+    def _sync_lines(self):
         if self.source_block and not self.diplomatic_lines:
             self.diplomatic_lines = [line for line in self.source_block.splitlines() if line.strip()]
-        if self.pairs and not self.diplomatic_lines:
-            self.diplomatic_lines = [pair.source for pair in self.pairs if pair.source]
-        elif self.diplomatic_lines and not self.pairs:
-            self.pairs = [RegionReadPair(source=line, translation="") for line in self.diplomatic_lines]
         if not self.source_block and self.diplomatic_lines:
             self.source_block = "\n".join(self.diplomatic_lines)
-        if not self.translation_block and self.pairs:
-            translations = [pair.translation for pair in self.pairs if pair.translation]
-            if translations:
-                self.translation_block = "\n".join(translations)
         return self
 
 
