@@ -324,7 +324,7 @@ def build_witness_reader_site(
         encoding="utf-8",
     )
 
-    meta_path = out_dir / "reader_site_meta.json"
+    meta_path = out_dir / "site_meta.json"
     meta = {
         "generated_at": _utc_now(),
         "doc_id": doc_id,

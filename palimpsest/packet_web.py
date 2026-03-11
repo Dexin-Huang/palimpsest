@@ -1887,9 +1887,9 @@ def render_packet_folio_html(
     target_dir = out_dir.resolve() if out_dir else packet_dir
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    html_path = target_dir / "edition_elegant.html"
-    meta_path = target_dir / "edition_elegant_meta.json"
-    folio_render_path = target_dir / "folio_render.json"
+    html_path = target_dir / "index.html"
+    meta_path = target_dir / "render_meta.json"
+    folio_render_path = target_dir / "render.json"
     image_href_value = image_href or _relpath(target_dir, Path(packet.source_image_path))
     resolved_book_title = book_title or packet.doc_id.replace("_", " ")
 
@@ -1973,8 +1973,8 @@ def build_packet_book_site(
     for index, (packet_path, packet) in enumerate(zip(resolved_packets, packets)):
         page_out_dir = folio_dir / packet.page_id
         page_out_dir.mkdir(parents=True, exist_ok=True)
-        prev_href = f"../{packets[index - 1].page_id}/edition_elegant.html" if index > 0 else "../../contents.html"
-        next_href = f"../{packets[index + 1].page_id}/edition_elegant.html" if index < len(packets) - 1 else "../../ending.html"
+        prev_href = f"../{packets[index - 1].page_id}/index.html" if index > 0 else "../../contents.html"
+        next_href = f"../{packets[index + 1].page_id}/index.html" if index < len(packets) - 1 else "../../ending.html"
         home_href = "../../contents.html"
         artifact = render_packet_folio_html(
             packet_path,
@@ -1990,7 +1990,7 @@ def build_packet_book_site(
         page_entries.append(
             {
                 "page_id": packet.page_id,
-                "href": f"folios/{packet.page_id}/edition_elegant.html",
+                "href": f"folios/{packet.page_id}/index.html",
             }
         )
 

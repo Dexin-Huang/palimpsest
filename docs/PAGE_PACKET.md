@@ -165,7 +165,7 @@ Suggested file layout:
 experiments/<page>_packet/
   packet.json
   packet_meta.json
-  edition_render_meta.json
+  render_meta.json
   prepared/
     <page>_prepared.jpg
     prepare_meta.json
@@ -175,7 +175,8 @@ experiments/<page>_packet/
   interpretation.md
   terms.md
   questions.md
-  folio_render.json
+  render.json
+  index.html
   edition_spread.tex
   edition_spread.pdf
 ```

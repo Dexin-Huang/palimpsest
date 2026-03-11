@@ -231,7 +231,7 @@ def cmd_render_html(args: argparse.Namespace) -> None:
         book_title=args.title,
     )
     print(f"html: {artifact.html_path}")
-    print(f"folio_render: {artifact.folio_render_path}")
+    print(f"render: {artifact.folio_render_path}")
     print(f"meta: {artifact.meta_path}")
 
 
@@ -295,7 +295,7 @@ def cmd_refresh_packet(args: argparse.Namespace) -> None:
             book_title=args.title,
         )
         print(f"html: {artifact.html_path}")
-        print(f"folio_render: {artifact.folio_render_path}")
+        print(f"render: {artifact.folio_render_path}")
         print(f"meta: {artifact.meta_path}")
 
     print(f"next_action: {packet.workflow.next_action}")
