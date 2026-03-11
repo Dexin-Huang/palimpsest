@@ -8,7 +8,7 @@ from typing import Any
 
 from palimpsest.agent_sdk import AgentRunResult, run_agent_prompt
 from palimpsest.edition_fonts import resolve_edition_font_policy
-from palimpsest.packet_templates import packet_format_contract_block, packet_heading_contract_block
+from palimpsest.packets.templates import packet_format_contract_block, packet_heading_contract_block
 from palimpsest.models import ALLOWED_PACKET_STATUSES, PacketFileRef, PagePacket
 
 

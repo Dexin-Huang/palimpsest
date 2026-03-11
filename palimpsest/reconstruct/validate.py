@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 from palimpsest.models import PageAssembly, PageAssemblyUnit, PageValidation, PageValidationIssue
-from palimpsest.layout_artifacts import PageValidationArtifact
+from palimpsest.reconstruct.artifacts import PageValidationArtifact
 
 
 def _utc_now() -> str:

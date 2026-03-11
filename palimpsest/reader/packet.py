@@ -30,7 +30,7 @@ from palimpsest.models import (
     TermEntry,
     WitnessContent,
 )
-from palimpsest.packet_scholar import repair_packet_json
+from palimpsest.packets.scholar import repair_packet_json
 from palimpsest.web import (
     FolioTemplateSection,
     MarkdownDocument,

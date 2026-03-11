@@ -10,8 +10,8 @@ from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.models import PageHandoff, PagePacket, WindowSynthesis
-from palimpsest.page_reading import _resolve_prompt_text, _response_text
-from palimpsest.packet_scholar import repair_packet_json
+from palimpsest.reconstruct.reading import _resolve_prompt_text, _response_text
+from palimpsest.packets.scholar import repair_packet_json
 
 
 DEFAULT_HANDOFF_PROMPT_NAME = "page_handoff_focused"

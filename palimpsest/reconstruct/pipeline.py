@@ -11,7 +11,7 @@ from google.genai import types
 from PIL import Image, ImageDraw, ImageFont
 
 from palimpsest.config import DEFAULT_MODEL_VISION, DEFAULT_MODEL_READING, DEFAULT_MODEL_TRIAGE
-from palimpsest.layout_artifacts import (
+from palimpsest.reconstruct.artifacts import (
     BlobRefinementArtifact,
     BoxCleanupArtifact,
     PageAssemblyArtifact,
@@ -21,7 +21,7 @@ from palimpsest.layout_artifacts import (
     SectionResolutionArtifact,
     VisualPairRepairArtifact,
 )
-from palimpsest.layout_validate import run_page_validate
+from palimpsest.reconstruct.validate import run_page_validate
 from palimpsest.models import (
     BoxCleanupDecision,
     LayoutProbe,

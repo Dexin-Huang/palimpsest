@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from palimpsest.config import DEFAULT_MODEL_SCHOLAR_AGENT
-from palimpsest.packet_scholar import TASK_CHOICES, build_packet_scholar_prompt, prepare_packet_workspace, run_packet_scholar
+from palimpsest.packets import TASK_CHOICES, build_packet_scholar_prompt, prepare_packet_workspace, run_packet_scholar
 
 
 def _write_stdout(text: str) -> None:

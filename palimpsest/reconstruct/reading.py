@@ -9,7 +9,7 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_READING
-from palimpsest.page_prepare import PreparedPageArtifact, prepare_image
+from palimpsest.reconstruct.prepare import PreparedPageArtifact, prepare_image
 from palimpsest.transcription.prompts import load_prompt
 
 

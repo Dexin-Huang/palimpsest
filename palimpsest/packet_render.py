@@ -11,8 +11,8 @@ from pathlib import Path
 from palimpsest.config import DEFAULT_TECTONIC_BIN
 from palimpsest.edition_fonts import resolve_edition_font_policy
 from palimpsest.models import PagePacket
-from palimpsest.packet_scholar import repair_packet_json
-from palimpsest.page_packet import sync_packet_edition_template
+from palimpsest.packets.packet import sync_packet_edition_template
+from palimpsest.packets.scholar import repair_packet_json
 
 
 def _utc_now() -> str:

@@ -5,9 +5,9 @@ from pathlib import Path
 
 from palimpsest.book import assemble_book
 from palimpsest.canonical import export_canonical_pages
-from palimpsest.packet_web import build_packet_book_site
+from palimpsest.reader import build_packet_book_site
 from palimpsest.restoration import assemble_diplomatic_book
-from palimpsest.witness_web import build_witness_reader_site
+from palimpsest.reader import build_witness_reader_site
 
 
 def cmd_assemble(args: argparse.Namespace) -> None:

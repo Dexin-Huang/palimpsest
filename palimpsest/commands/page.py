@@ -7,21 +7,27 @@ import time
 from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
 from palimpsest.config import DEFAULT_MODEL_VISION
-from palimpsest.page_continuity import run_page_handoff, run_window_synthesis
-from palimpsest.page_layout import (
+from palimpsest.packets import (
+    attach_layout_probe,
+    create_page_packet,
+    ingest_page_reading,
+    repair_packet_json,
+    run_page_handoff,
+    run_window_synthesis,
+)
+from palimpsest.reconstruct import (
+    prepare_image,
     run_box_cleanup,
-    run_section_resolution,
     run_page_assembly,
     run_page_layout_probe,
-    run_region_reads,
+    run_page_reading,
     run_page_validate,
+    run_region_reads,
+    run_section_resolution,
+    run_section_synthesis,
 )
-from palimpsest.page_packet import attach_layout_probe, create_page_packet, ingest_page_reading
-from palimpsest.page_prepare import prepare_image
-from palimpsest.page_reading import run_page_reading, run_section_synthesis
-from palimpsest.packet_scholar import repair_packet_json
 from palimpsest.packet_render import render_packet_edition
-from palimpsest.packet_web import render_packet_folio_html
+from palimpsest.reader import render_packet_folio_html
 
 
 def _run_layout_pipeline(

@@ -10,8 +10,8 @@ from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.edition_fonts import resolve_edition_font_policy
 from palimpsest.models.packet import PacketContinuity, PacketFileRef, PagePacket, PacketWorkflow
 from palimpsest.packet_latex import make_packet_latex_template, sync_packet_edition_template
-from palimpsest.page_prepare import PreparedPageArtifact, prepare_image
-from palimpsest.packet_templates import packet_markdown_template
+from palimpsest.reconstruct.prepare import PreparedPageArtifact, prepare_image
+from palimpsest.packets.templates import packet_markdown_template
 
 
 def _utc_now() -> str:
