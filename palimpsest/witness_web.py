@@ -8,12 +8,11 @@ import os
 from pathlib import Path
 import shutil
 
-from palimpsest.packet_web import (
-    _display_page_id,
-    _page_sort_key,
-    _parse_markdown_document,
-    _render_markdown_body,
-    _site_css,
+from palimpsest.packet_web import _display_page_id, _page_sort_key
+from palimpsest.web import (
+    parse_markdown_document as web_parse_markdown_document,
+    render_markdown_body as web_render_markdown_body,
+    site_css as web_site_css,
 )
 
 
@@ -92,14 +91,14 @@ def _collect_best_readings(doc_dir: Path) -> dict[str, WitnessReadingArtifact]:
 def _render_reading_html(reading_path: Path | None) -> str:
     if reading_path is None or not reading_path.exists():
         return '<div class="reader-empty">Pending witness read.</div>'
-    doc = _parse_markdown_document(_read_text(reading_path))
+    doc = web_parse_markdown_document(_read_text(reading_path))
     body_parts: list[str] = []
     if doc.title:
         body_parts.append(f'<div class="reader-doc-title">{escape(doc.title)}</div>')
     if doc.preamble.strip():
-        body_parts.append(_render_markdown_body(doc.preamble, preserve_linebreaks=True))
+        body_parts.append(web_render_markdown_body(doc.preamble, preserve_linebreaks=True))
     for section in doc.sections:
-        rendered_body = _render_markdown_body(section.body, preserve_linebreaks=True)
+        rendered_body = web_render_markdown_body(section.body, preserve_linebreaks=True)
         body_parts.append(
             "\n".join(
                 [
@@ -116,7 +115,7 @@ def _render_reading_html(reading_path: Path | None) -> str:
 def _reader_css() -> str:
     return "\n".join(
         [
-            _site_css(),
+            web_site_css(),
             "body { overflow: auto; }",
             ".reader-shell { min-height: 100vh; display: grid; grid-template-columns: minmax(320px, 46vw) 1fr; }",
             ".reader-image-panel { position: sticky; top: 0; height: 100vh; background: linear-gradient(180deg, #18120e 0%, #241813 100%); display: flex; align-items: center; justify-content: center; padding: 2rem; }",

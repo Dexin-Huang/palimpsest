@@ -31,20 +31,19 @@ from palimpsest.models import (
     WitnessContent,
 )
 from palimpsest.packet_scholar import repair_packet_json
-
-
-@dataclass
-class MarkdownSection:
-    level: int
-    title: str
-    body: str
-
-
-@dataclass
-class MarkdownDocument:
-    title: str | None
-    preamble: str
-    sections: list[MarkdownSection]
+from palimpsest.web import (
+    FolioTemplateSection,
+    MarkdownDocument,
+    MarkdownSection,
+    MarkdownSectionGroup,
+    group_document_sections as web_group_document_sections,
+    groups_to_template_sections as web_groups_to_template_sections,
+    html_shell as web_html_shell,
+    parse_markdown_document as web_parse_markdown_document,
+    render_markdown_body as web_render_markdown_body,
+    render_template_sections as web_render_template_sections,
+    site_css as web_site_css,
+)
 
 
 @dataclass
@@ -63,22 +62,6 @@ class RenderedPacketSiteArtifact:
     ending_path: Path
     folio_paths: list[Path]
     meta_path: Path
-
-
-@dataclass
-class FolioTemplateSection:
-    kind: str
-    title: str
-    body_html: str
-    wide: bool = False
-
-
-@dataclass
-class MarkdownSectionGroup:
-    title: str
-    level: int
-    body: str
-    children: list[MarkdownSection]
 
 
 def _utc_now() -> str:
@@ -121,242 +104,6 @@ def _read_text(path: str | Path | None) -> str:
     if not resolved.exists():
         return ""
     return resolved.read_text(encoding="utf-8")
-
-
-def _parse_markdown_document(text: str) -> MarkdownDocument:
-    lines = text.splitlines()
-    title: str | None = None
-    preamble_lines: list[str] = []
-    sections: list[MarkdownSection] = []
-    current_title: str | None = None
-    current_level: int | None = None
-    current_lines: list[str] = []
-
-    def flush() -> None:
-        nonlocal current_title, current_level, current_lines
-        if current_title is not None and current_level is not None:
-            sections.append(
-                MarkdownSection(
-                    level=current_level,
-                    title=current_title.strip(),
-                    body="\n".join(current_lines).strip(),
-                )
-            )
-        current_title = None
-        current_level = None
-        current_lines = []
-
-    for line in lines:
-        match = re.match(r"^(#{1,6})\s+(.*)$", line)
-        if match:
-            level = len(match.group(1))
-            heading = match.group(2).strip()
-            if level == 1 and title is None and current_title is None and not preamble_lines and not sections:
-                title = heading
-                continue
-            flush()
-            current_title = heading
-            current_level = level
-            continue
-        if current_title is None:
-            preamble_lines.append(line)
-        else:
-            current_lines.append(line)
-    flush()
-
-    return MarkdownDocument(
-        title=title,
-        preamble="\n".join(preamble_lines).strip(),
-        sections=sections,
-    )
-
-
-def _render_inline_markdown(text: str) -> str:
-    escaped = escape(text)
-    escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
-    escaped = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", escaped)
-    escaped = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", escaped)
-    return escaped
-
-
-def _render_markdown_body(text: str, *, preserve_linebreaks: bool = False) -> str:
-    lines = text.strip().splitlines()
-    html_parts: list[str] = []
-    i = 0
-
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-        if not stripped:
-            i += 1
-            continue
-        if stripped == "---":
-            html_parts.append("<hr>")
-            i += 1
-            continue
-        if stripped.startswith("```"):
-            code_lines: list[str] = []
-            i += 1
-            while i < len(lines) and not lines[i].strip().startswith("```"):
-                code_lines.append(lines[i])
-                i += 1
-            html_parts.append(f"<pre>{escape(chr(10).join(code_lines))}</pre>")
-            i += 1
-            continue
-        heading = re.match(r"^(#{1,6})\s+(.*)$", stripped)
-        if heading:
-            level = min(len(heading.group(1)) + 1, 6)
-            html_parts.append(f"<h{level}>{_render_inline_markdown(heading.group(2).strip())}</h{level}>")
-            i += 1
-            continue
-        if re.match(r"^[-*]\s+", stripped):
-            items: list[str] = []
-            while i < len(lines):
-                item_line = lines[i].strip()
-                if not re.match(r"^[-*]\s+", item_line):
-                    break
-                items.append(f"<li>{_render_inline_markdown(re.sub(r'^[-*]\s+', '', item_line))}</li>")
-                i += 1
-            html_parts.append("<ul>" + "".join(items) + "</ul>")
-            continue
-        if re.match(r"^\d+\.\s+", stripped):
-            items = []
-            while i < len(lines):
-                item_line = lines[i].strip()
-                if not re.match(r"^\d+\.\s+", item_line):
-                    break
-                items.append(f"<li>{_render_inline_markdown(re.sub(r'^\d+\.\s+', '', item_line))}</li>")
-                i += 1
-            html_parts.append("<ol>" + "".join(items) + "</ol>")
-            continue
-
-        paragraph_lines = [line]
-        i += 1
-        while i < len(lines):
-            nxt = lines[i]
-            nxt_stripped = nxt.strip()
-            if not nxt_stripped or nxt_stripped == "---" or nxt_stripped.startswith("```"):
-                break
-            if re.match(r"^(#{1,6})\s+", nxt_stripped) or re.match(r"^[-*]\s+", nxt_stripped) or re.match(r"^\d+\.\s+", nxt_stripped):
-                break
-            paragraph_lines.append(nxt)
-            i += 1
-
-        rendered = "<br>".join(_render_inline_markdown(item) for item in paragraph_lines) if preserve_linebreaks else _render_inline_markdown(" ".join(item.strip() for item in paragraph_lines))
-        html_parts.append(f"<p>{rendered}</p>")
-
-    return "\n".join(html_parts)
-
-
-def _group_document_sections(doc: MarkdownDocument) -> list[MarkdownSectionGroup]:
-    if not doc.sections:
-        return []
-    top_level = min(section.level for section in doc.sections)
-    groups: list[MarkdownSectionGroup] = []
-    current: MarkdownSectionGroup | None = None
-    for section in doc.sections:
-        if section.level == top_level:
-            current = MarkdownSectionGroup(
-                title=section.title,
-                level=section.level,
-                body=section.body,
-                children=[],
-            )
-            groups.append(current)
-            continue
-        if current is None:
-            current = MarkdownSectionGroup(
-                title=section.title,
-                level=section.level,
-                body="",
-                children=[],
-            )
-            groups.append(current)
-        else:
-            current.children.append(section)
-    return groups
-
-
-def _render_section_group_body(group: MarkdownSectionGroup, *, preserve_linebreaks: bool = False) -> str:
-    parts: list[str] = []
-    if group.body.strip():
-        parts.append(_render_markdown_body(group.body, preserve_linebreaks=preserve_linebreaks))
-    for child in group.children:
-        child_body = _render_markdown_body(child.body, preserve_linebreaks=preserve_linebreaks)
-        parts.append(
-            "\n".join(
-                [
-                    '<section class="subsection-card">',
-                    f'  <div class="subsection-card-title">{escape(child.title)}</div>',
-                    f'  <div class="subsection-card-body">{child_body}</div>',
-                    "</section>",
-                ]
-            )
-        )
-    return "\n".join(part for part in parts if part.strip())
-
-
-def _render_template_sections(
-    sections: list[FolioTemplateSection],
-    *,
-    article_class: str,
-    title_class: str,
-) -> str:
-    rendered: list[str] = []
-    for section in sections:
-        wide_class = f" {article_class}-wide" if section.wide else ""
-        kind_slug = _slugify(section.kind)
-        rendered.append(
-            "\n".join(
-                [
-                    f'<article class="{article_class}{wide_class} {article_class}--{kind_slug}" data-kind="{escape(section.kind)}">',
-                    f'  <div class="{title_class}">{escape(section.title)}</div>',
-                    f"  {section.body_html}",
-                    "</article>",
-                ]
-            )
-        )
-    return "\n".join(rendered)
-
-
-def _wide_section(kind: str, title: str) -> bool:
-    lowered = title.lower()
-    return kind in {"interpretation", "questions"} or lowered in {
-        "what this page is doing",
-        "open questions",
-        "interpretation",
-    }
-
-
-def _group_to_template_section(
-    group: MarkdownSectionGroup,
-    *,
-    kind: str,
-    preserve_linebreaks: bool = False,
-) -> FolioTemplateSection:
-    body_html = _render_section_group_body(group, preserve_linebreaks=preserve_linebreaks)
-    return FolioTemplateSection(
-        kind=kind,
-        title=group.title,
-        body_html=body_html or '<p class="empty-note">No content yet.</p>',
-        wide=_wide_section(kind, group.title),
-    )
-
-
-def _groups_to_template_sections(
-    groups: list[MarkdownSectionGroup],
-    *,
-    kind: str,
-    preserve_linebreaks: bool = False,
-) -> list[FolioTemplateSection]:
-    return [
-        _group_to_template_section(
-            group,
-            kind=kind,
-            preserve_linebreaks=preserve_linebreaks,
-        )
-        for group in groups
-    ]
 
 
 # ═══════════════════════════════════════
@@ -1118,7 +865,7 @@ def _render_content_piece(folio: FolioRender) -> str:
     if folio.spread.content.witness_content:
         return _render_structured_witness_face(folio)
 
-    sections_html = _render_template_sections(
+    sections_html = web_render_template_sections(
         [
             FolioTemplateSection(kind=section.kind, title=section.title, body_html=section.body_html, wide=section.wide)
             for section in folio.spread.content.sections
@@ -1147,7 +894,7 @@ def _render_interpretation_piece(
     if folio.spread.interpretation.interpretation_content:
         return _render_structured_interpretation_face(folio)
 
-    sections_html = _render_template_sections(
+    sections_html = web_render_template_sections(
         [
             FolioTemplateSection(kind=section.kind, title=section.title, body_html=section.body_html, wide=section.wide)
             for section in folio.spread.interpretation.sections
@@ -1927,12 +1674,12 @@ def _render_folio_html(
     home_href: str | None,
     include_cover: bool = True,
 ) -> tuple[str, FolioRender]:
-    witness_doc = _parse_markdown_document(_read_text(packet.files.get("witness").path if packet.files.get("witness") else None))
-    translation_doc = _parse_markdown_document(_read_text(packet.files.get("translation").path if packet.files.get("translation") else None))
-    interpretation_doc = _parse_markdown_document(_read_text(packet.files.get("interpretation").path if packet.files.get("interpretation") else None))
-    notes_doc = _parse_markdown_document(_read_text(packet.files.get("notes").path if packet.files.get("notes") else None))
-    terms_doc = _parse_markdown_document(_read_text(packet.files.get("terms").path if packet.files.get("terms") else None))
-    questions_doc = _parse_markdown_document(_read_text(packet.files.get("questions").path if packet.files.get("questions") else None))
+    witness_doc = web_parse_markdown_document(_read_text(packet.files.get("witness").path if packet.files.get("witness") else None))
+    translation_doc = web_parse_markdown_document(_read_text(packet.files.get("translation").path if packet.files.get("translation") else None))
+    interpretation_doc = web_parse_markdown_document(_read_text(packet.files.get("interpretation").path if packet.files.get("interpretation") else None))
+    notes_doc = web_parse_markdown_document(_read_text(packet.files.get("notes").path if packet.files.get("notes") else None))
+    terms_doc = web_parse_markdown_document(_read_text(packet.files.get("terms").path if packet.files.get("terms") else None))
+    questions_doc = web_parse_markdown_document(_read_text(packet.files.get("questions").path if packet.files.get("questions") else None))
 
     witness_main, witness_extra = _pick_witness_sections(witness_doc)
     translation_main, translation_extra = _pick_translation_sections(translation_doc)
@@ -1945,45 +1692,45 @@ def _render_folio_html(
     title = f"{display_page} - {book_title}"
 
     content_sections = [
-        *_groups_to_template_sections(
-            _group_document_sections(witness_main_doc),
+        *web_groups_to_template_sections(
+            web_group_document_sections(witness_main_doc),
             kind="witness",
             preserve_linebreaks=True,
         ),
-        *_groups_to_template_sections(
-            _group_document_sections(translation_main_doc),
+        *web_groups_to_template_sections(
+            web_group_document_sections(translation_main_doc),
             kind="translation",
             preserve_linebreaks=False,
         ),
     ]
     interpretation_sections = [
-        *_groups_to_template_sections(
-            _group_document_sections(interpretation_doc),
+        *web_groups_to_template_sections(
+            web_group_document_sections(interpretation_doc),
             kind="interpretation",
             preserve_linebreaks=False,
         ),
-        *_groups_to_template_sections(
-            _group_document_sections(notes_doc),
+        *web_groups_to_template_sections(
+            web_group_document_sections(notes_doc),
             kind="notes",
             preserve_linebreaks=False,
         ),
-        *_groups_to_template_sections(
-            _group_document_sections(witness_extra_doc),
+        *web_groups_to_template_sections(
+            web_group_document_sections(witness_extra_doc),
             kind="notes",
             preserve_linebreaks=False,
         ),
-        *_groups_to_template_sections(
-            _group_document_sections(translation_extra_doc),
+        *web_groups_to_template_sections(
+            web_group_document_sections(translation_extra_doc),
             kind="notes",
             preserve_linebreaks=False,
         ),
-        *_groups_to_template_sections(
-            _group_document_sections(terms_doc),
+        *web_groups_to_template_sections(
+            web_group_document_sections(terms_doc),
             kind="terms",
             preserve_linebreaks=False,
         ),
-        *_groups_to_template_sections(
-            _group_document_sections(questions_doc),
+        *web_groups_to_template_sections(
+            web_group_document_sections(questions_doc),
             kind="questions",
             preserve_linebreaks=False,
         ),
@@ -2034,7 +1781,7 @@ def _render_folio_html(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{escape(title)}</title>
 <style>
-{_site_css()}
+{web_site_css()}
 </style>
 </head>
 <body>
@@ -2294,7 +2041,7 @@ def build_packet_book_site(
             '</script>',
         ]
     )
-    title_path.write_text(_html_shell(title=book_title, body=title_body), encoding="utf-8")
+    title_path.write_text(web_html_shell(title=book_title, body=title_body), encoding="utf-8")
 
     contents_body = "\n".join(
         [
@@ -2315,7 +2062,7 @@ def build_packet_book_site(
         ]
     )
     contents_path.write_text(
-        _html_shell(title=f"{book_title} - Contents", body=contents_body, extra_css=shell_css),
+        web_html_shell(title=f"{book_title} - Contents", body=contents_body, extra_css=shell_css),
         encoding="utf-8",
     )
 
@@ -2335,7 +2082,7 @@ def build_packet_book_site(
         ]
     )
     ending_path.write_text(
-        _html_shell(title=f"{book_title} - End", body=ending_body, extra_css=shell_css),
+        web_html_shell(title=f"{book_title} - End", body=ending_body, extra_css=shell_css),
         encoding="utf-8",
     )
 
