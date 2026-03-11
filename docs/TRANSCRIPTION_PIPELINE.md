@@ -24,7 +24,7 @@ Outputs:
 The model is centralized in `.env`:
 
 ```
-PALIMPSEST_MODEL_VISION=gemini-3-flash-preview
+PALIMPSEST_MODEL_VISION=gemini-3.1-flash-lite-preview
 PALIMPSEST_THINKING_LEVEL=high
 PALIMPSEST_MEDIA_RESOLUTION=high
 ```

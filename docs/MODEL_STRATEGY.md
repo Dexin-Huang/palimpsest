@@ -7,24 +7,20 @@ The main mistake to avoid is using one model for everything.
 ## Current Recommendation
 
 - `triage / scouting`: `gemini-3.1-flash-lite-preview`
-- `page reading`: `gemini-3-flash-preview`
-- `witness extraction`: `gemini-3-flash-preview`
+- `page reading`: `gemini-3.1-flash-lite-preview`
+- `witness extraction`: `gemini-3.1-flash-lite-preview`
 - `reconstruction / image editing`: `gemini-3.1-flash-image-preview`
 
 Reason:
 
-- `flash-lite` is good enough for cheap breadth tasks
-- `flash-preview` is noticeably better for dense page reading and witness fidelity
-- hard pages such as `f200r` show that page-level reading quality drops when the
-  model is made too cheap
+- `flash-lite` is the default operating point because the quality/cost curve is
+  the most attractive for the active pipeline
+- reconstruction image work still belongs on the image-preview lane
 
-## F200r Finding
+## Current Operating Rule
 
-The `f200r` comparison established a simple rule:
-
-- `gemini-3-flash-preview` is the right default for serious page reading
-- `gemini-3.1-flash-lite-preview` is acceptable for scouting, routing, and cheap
-  support passes
+The pipeline now defaults to `gemini-3.1-flash-lite-preview` for the active
+reading lanes.
 
 Use Lite when the task is:
 
@@ -32,13 +28,12 @@ Use Lite when the task is:
 - proposing coarse regions
 - labeling crops
 - smoothing or reconciling small local boundaries
+- reading witness text in the canonical region-first pipeline
 
-Use Flash when the task is:
+Use the image model when the task is:
 
-- reading a dense full page
-- producing a page memo
-- recovering bilingual argument structure
-- extracting a witness you may actually rely on
+- reconstruction / image generation
+- visual editing or synthetic restoration
 
 ## Fine-Tuning Threshold
 

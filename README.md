@@ -85,8 +85,8 @@ Create a local `.env` from [`.env.example`](.env.example):
 ```env
 GEMINI_API_KEY=your-api-key-here
 PALIMPSEST_MODEL_TRIAGE=gemini-3.1-flash-lite-preview
-PALIMPSEST_MODEL_VISION=gemini-3-flash-preview
-PALIMPSEST_MODEL_READING=gemini-3-flash-preview
+PALIMPSEST_MODEL_VISION=gemini-3.1-flash-lite-preview
+PALIMPSEST_MODEL_READING=gemini-3.1-flash-lite-preview
 PALIMPSEST_MODEL_RECON=gemini-3.1-flash-image-preview
 ```
 
@@ -308,8 +308,7 @@ palimpsest/
 
 ## Model Policy
 
-- `gemini-3.1-flash-lite-preview` for triage and cheap scouting
-- `gemini-3-flash-preview` for witness reading and serious page work
+- `gemini-3.1-flash-lite-preview` for triage, witness reading, and page reconstruction work
 - `gemini-3.1-flash-image-preview` for reconstruction / image-generation lanes
 - `claude-sonnet-4-5` for the dedicated scholar packet workflow
 

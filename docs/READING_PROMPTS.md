@@ -15,8 +15,8 @@ Current cross-page synthesis prompt:
 
 Current model recommendation:
 
-- `gemini-3-flash-preview` for serious page reading
-- `gemini-3.1-flash-lite-preview` only for cheap scouting or support passes
+- `gemini-3.1-flash-lite-preview` for the active witness and reading lane
+- `gemini-3.1-flash-image-preview` only for reconstruction / image-generation work
 
 Design principles:
 

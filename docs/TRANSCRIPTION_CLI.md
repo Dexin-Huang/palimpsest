@@ -47,7 +47,7 @@ If `--auto-skip-non-text` is set, pass2 will be skipped for non-text page types.
 
 The default model is read from `.env`:
 ```
-PALIMPSEST_MODEL_VISION=gemini-3-flash-preview
+PALIMPSEST_MODEL_VISION=gemini-3.1-flash-lite-preview
 ```
 Override with `--model` if needed.
 

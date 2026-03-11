@@ -17,7 +17,7 @@ def _env(key: str, default: str = "") -> str:
 
 
 DEFAULT_MODEL_TRIAGE = _env("PALIMPSEST_MODEL_TRIAGE", _env("PALIMPSEST_MODEL", "gemini-3.1-flash-lite-preview"))
-DEFAULT_MODEL_VISION = _env("PALIMPSEST_MODEL_VISION", "gemini-3-flash-preview")
+DEFAULT_MODEL_VISION = _env("PALIMPSEST_MODEL_VISION", "gemini-3.1-flash-lite-preview")
 DEFAULT_MODEL_READING = _env("PALIMPSEST_MODEL_READING", DEFAULT_MODEL_VISION)
 DEFAULT_MODEL_RECON = _env("PALIMPSEST_MODEL_RECON", "gemini-3.1-flash-image-preview")
 DEFAULT_MODEL_AGENT = _env("PALIMPSEST_MODEL_AGENT", "claude-sonnet-4-5")

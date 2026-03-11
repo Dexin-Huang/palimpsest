@@ -6,12 +6,12 @@
 
 | Task | Model | Model ID |
 |------|-------|----------|
-| **Image Analysis** (OCR, transcription, annotation) | Gemini 3 Flash + Agentic Vision | `gemini-3-flash-preview` |
+| **Image Analysis** (OCR, transcription, annotation) | Gemini 3.1 Flash Lite + Agentic Vision | `gemini-3.1-flash-lite-preview` |
 | **Image Generation** (reconstructions, visualizations) | Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` |
 
 ---
 
-## Agentic Vision (Gemini 3 Flash)
+## Agentic Vision (Gemini 3.1 Flash Lite)
 
 For manuscript analysis with code execution capabilities.
 
@@ -32,7 +32,7 @@ def analyze_manuscript_page(image_path: Path, prompt: str) -> dict:
     )
 
     response = client.models.generate_content(
-        model="gemini-3-flash-preview",
+        model="gemini-3.1-flash-lite-preview",
         contents=[image_part, prompt],
         config=types.GenerateContentConfig(
             tools=[types.Tool(code_execution=types.ToolCodeExecution)],
@@ -168,7 +168,7 @@ response2 = client.models.generate_content(
 
 | Model | Input | Output |
 |-------|-------|--------|
-| Gemini 3 Flash | $0.50/M tokens | $3/M tokens |
+| Gemini 3.1 Flash Lite | $0.25/M tokens | $1.50/M tokens |
 | Gemini 3 Pro Image | $2/M tokens | $0.134/image |
 
 ---
@@ -177,7 +177,7 @@ response2 = client.models.generate_content(
 
 ```bash
 export GEMINI_API_KEY="your-api-key-here"
-export PALIMPSEST_MODEL_VISION="gemini-3-flash-preview"
+export PALIMPSEST_MODEL_VISION="gemini-3.1-flash-lite-preview"
 export PALIMPSEST_MODEL_RECON="gemini-3.1-flash-image-preview"
 pip install google-genai
 ```

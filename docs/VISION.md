@@ -264,7 +264,7 @@ Logging + audit:
 
 Config + prompts:
 - `.env` controls model and API key
-- `PALIMPSEST_MODEL_VISION=gemini-3-flash-preview`
+- `PALIMPSEST_MODEL_VISION=gemini-3.1-flash-lite-preview`
 - Prompts in `palimpsest/prompts/sets/transcription_json/`
 
 ---
