@@ -63,7 +63,7 @@ def _default_synthesis_output_dir(input_paths: list[Path]) -> Path:
 
 def _resolve_prompt_text(prompt_file: Path | None, prompt_name: str) -> tuple[str, Path]:
     if prompt_file is None:
-        prompt_path = (Path(__file__).resolve().parents[1] / "palimpsest" / "prompts" / f"{prompt_name}.txt").resolve()
+        prompt_path = (Path(__file__).resolve().parents[1] / "prompts" / f"{prompt_name}.txt").resolve()
         return load_prompt(prompt_name), prompt_path
     prompt_path = prompt_file.resolve()
     return prompt_path.read_text(encoding="utf-8"), prompt_path
