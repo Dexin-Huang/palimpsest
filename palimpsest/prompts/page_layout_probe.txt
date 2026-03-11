@@ -6,10 +6,13 @@ Goal:
 - identify a small number of meaningful semantic regions for downstream transcription
 - produce bounding boxes that are good enough to crop and inspect
 - stay coarse and useful; do NOT segment every line or every tiny header fragment
+- if the image is a cover, blank page, front matter, or otherwise non-content, say so explicitly instead of inventing text boxes
 
 Return JSON only with this shape:
 {
+  "page_kind": "content",
   "writing_area_bbox_norm": [x, y, w, h],
+  "notes": "brief note",
   "regions": [
     {
       "region_id": "r1",
@@ -32,7 +35,7 @@ Return JSON only with this shape:
 
 Requirements:
 - Use normalized bbox format [x, y, width, height] with values 0-1.
-- Prefer 3-8 regions total.
+- Prefer 0-8 regions total.
 - Capture the page in semantically useful chunks:
   - main text columns or blocks
   - one header block per side if there are clustered running headers
@@ -65,6 +68,16 @@ Requirements:
 - For spreads, fill page_side as left/right and column_index where meaningful.
 - Prefer grouping over splitting. If three adjacent running headers belong to the same visual header zone, one coarse header region is better than three tiny ones.
 - For main text and header zones, err on the side of boxes that are a little too big.
+- Set page_kind to one of:
+  - content
+  - cover
+  - blank
+  - front_matter
+  - non_content
+- If page_kind is not content, it is acceptable for regions to be an empty list.
+- Do not force 3-8 regions when the page has little or no witness content.
+- A Vatican cover, flyleaf, modern catalog cover, or mostly blank opener should usually be cover, blank, or front_matter rather than content.
+- An asymmetric opener with only one active side can still be content or front_matter; only mark meaningful text-bearing regions.
 
 Hints for this experiment:
 - We care most about regions that would help reconstruct the page faithfully.

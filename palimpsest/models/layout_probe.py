@@ -70,7 +70,9 @@ class LayoutProbe(BaseModel):
     page_id: str
     image_path: str
     page_unit: Literal["page", "spread"] = Field(default="page")
+    page_kind: Literal["content", "cover", "blank", "front_matter", "non_content"] = Field(default="content")
     writing_area_bbox_norm: Optional[Tuple[float, float, float, float]] = Field(default=None)
+    notes: Optional[str] = Field(default=None)
     regions: List[LayoutProbeRegion] = Field(default_factory=list)
 
 

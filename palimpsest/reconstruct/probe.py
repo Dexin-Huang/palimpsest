@@ -56,7 +56,6 @@ def run_page_layout_probe(
             response_mime_type="application/json",
             temperature=0.1,
             max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
-            tools=[types.Tool(code_execution=types.ToolCodeExecution())],
         ),
     )
     text, finish_reason = _response_text(response)
