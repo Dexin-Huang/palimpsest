@@ -62,7 +62,7 @@ def create_page_packet(
     folio_render_path = target_dir / "render.json"
     layout_probe_path = target_dir / "layout_probe" / "layout_probe.json"
     layout_overlay_path = target_dir / "layout_probe" / "layout_overlay.png"
-    region_orientations_path = target_dir / "layout_probe" / "region_reads.json"
+    region_reads_path = target_dir / "layout_probe" / "region_reads.json"
     section_resolution_path = target_dir / "layout_probe" / "section_resolution.json"
     box_cleanup_path = target_dir / "layout_probe" / "box_cleanup.json"
     page_assembly_path = target_dir / "layout_probe" / "page_assembly.json"
@@ -115,7 +115,7 @@ def create_page_packet(
             "folio_render": PacketFileRef(kind="folio_render", path=str(folio_render_path), status="empty"),
             "layout_probe": PacketFileRef(kind="layout_probe", path=str(layout_probe_path), status="empty"),
             "layout_overlay": PacketFileRef(kind="layout_overlay", path=str(layout_overlay_path), status="empty"),
-            "region_orientations": PacketFileRef(kind="region_orientations", path=str(region_orientations_path), status="empty"),
+            "region_reads": PacketFileRef(kind="region_reads", path=str(region_reads_path), status="empty"),
             "section_resolution": PacketFileRef(kind="section_resolution", path=str(section_resolution_path), status="empty"),
             "box_cleanup": PacketFileRef(kind="box_cleanup", path=str(box_cleanup_path), status="empty"),
             "page_assembly": PacketFileRef(kind="page_assembly", path=str(page_assembly_path), status="empty"),
@@ -160,7 +160,7 @@ def attach_layout_probe(packet_path: Path, probe_dir: Path) -> PagePacket:
     mapping = {
         "layout_probe": probe_dir / "layout_probe.json",
         "layout_overlay": probe_dir / "layout_overlay.png",
-        "region_orientations": probe_dir / "region_reads.json",
+        "region_reads": probe_dir / "region_reads.json",
         "section_resolution": probe_dir / "section_resolution.json",
         "box_cleanup": probe_dir / "box_cleanup.json",
         "page_assembly": probe_dir / "page_assembly.json",

@@ -129,7 +129,7 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
     folio_render_path = str((packet_dir / "render.json").resolve())
     layout_probe_path = str((packet_dir / "layout_probe" / "layout_probe.json").resolve())
     layout_overlay_path = str((packet_dir / "layout_probe" / "layout_overlay.png").resolve())
-    region_orientations_path = str((packet_dir / "layout_probe" / "region_reads.json").resolve())
+    region_reads_path = str((packet_dir / "layout_probe" / "region_reads.json").resolve())
     section_resolution_path = str((packet_dir / "layout_probe" / "section_resolution.json").resolve())
     box_cleanup_path = str((packet_dir / "layout_probe" / "box_cleanup.json").resolve())
     page_assembly_path = str((packet_dir / "layout_probe" / "page_assembly.json").resolve())
@@ -142,13 +142,7 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
         ).model_dump()
     elif isinstance(files["edition_html"], dict):
         files["edition_html"]["kind"] = "edition_html"
-        current_html_path = str(files["edition_html"].get("path") or "").strip()
-        if (
-            not current_html_path
-            or current_html_path.endswith("edition_spread.html")
-            or current_html_path.endswith("edition_elegant.html")
-        ):
-            files["edition_html"]["path"] = edition_html_path
+        files["edition_html"]["path"] = edition_html_path
         if Path(files["edition_html"]["path"]).exists() and _normalize_status(files["edition_html"].get("status")) == "empty":
             files["edition_html"]["status"] = "draft"
             files["edition_html"]["note"] = files["edition_html"].get("note") or "Rendered HTML folio edition"
@@ -161,19 +155,14 @@ def repair_packet_json(packet_path: Path) -> PagePacket:
         ).model_dump()
     elif isinstance(files["folio_render"], dict):
         files["folio_render"].setdefault("kind", "folio_render")
-        current_render_path = str(files["folio_render"].get("path") or "").strip()
-        if (
-            not current_render_path
-            or current_render_path.endswith("folio_render.json")
-        ):
-            files["folio_render"]["path"] = folio_render_path
+        files["folio_render"]["path"] = folio_render_path
         if Path(files["folio_render"]["path"]).exists() and _normalize_status(files["folio_render"].get("status")) == "empty":
             files["folio_render"]["status"] = "draft"
             files["folio_render"]["note"] = files["folio_render"].get("note") or "Structured folio.render JSON artifact"
     layout_defaults = {
         "layout_probe": (layout_probe_path, "Coarse layout probe for region-first reconstruction"),
         "layout_overlay": (layout_overlay_path, "Overlay preview of coarse layout regions"),
-        "region_orientations": (region_orientations_path, "Full transcription reads for each coarse region"),
+        "region_reads": (region_reads_path, "Full transcription reads for each coarse region"),
         "section_resolution": (section_resolution_path, "Canonical text ownership per coarse region"),
         "box_cleanup": (box_cleanup_path, "Targeted cleanup for overlapping region pairs"),
         "page_assembly": (page_assembly_path, "Deterministic assembly from region reads"),

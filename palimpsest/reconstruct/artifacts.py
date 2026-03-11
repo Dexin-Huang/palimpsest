@@ -60,15 +60,6 @@ class PageValidationArtifact:
 
 
 @dataclass
-class BlobRefinementArtifact:
-    probe_dir: Path
-    blob_json_path: Path
-    blob_overlay_path: Path
-    refined_crops_dir: Path
-    meta_path: Path
-
-
-@dataclass
 class VisualPairRepairArtifact:
     probe_dir: Path
     decision_json_path: Path

@@ -385,11 +385,7 @@ def _save_crops(image_path: Path, layout: LayoutProbe, crops_dir: Path) -> list[
     return saved
 
 
-def _region_crop_path(probe_dir: Path, region_id: str, *, use_blob_refined_crops: bool = False) -> Path | None:
-    if use_blob_refined_crops:
-        png_path = probe_dir / "blob_refined_crops" / f"{region_id}.png"
-        if png_path.exists():
-            return png_path
+def _region_crop_path(probe_dir: Path, region_id: str) -> Path | None:
     jpg_path = probe_dir / "crops" / f"{region_id}.jpg"
     if jpg_path.exists():
         return jpg_path
@@ -450,17 +446,15 @@ def _load_layout_probe(probe_dir: Path) -> LayoutProbe:
     return LayoutProbe.model_validate_json((probe_dir / "layout_probe.json").read_text(encoding="utf-8"))
 
 
-def _load_region_orientations(probe_dir: Path) -> list[RegionOrientation]:
+def _load_region_reads(probe_dir: Path) -> list[RegionOrientation]:
     path = probe_dir / "region_reads.json"
-    if not path.exists():
-        path = probe_dir / "region_orientations.json"
     if not path.exists():
         return []
     payload = json.loads(path.read_text(encoding="utf-8"))
     return [RegionOrientation.model_validate(item) for item in payload]
 
 
-def _write_region_orientations(probe_dir: Path, orientations: list[RegionOrientation]) -> Path:
+def _write_region_reads(probe_dir: Path, orientations: list[RegionOrientation]) -> Path:
     reads_path = probe_dir / "region_reads.json"
     reads_path.write_text(
         json.dumps([item.model_dump() for item in orientations], indent=2, ensure_ascii=False),
@@ -512,7 +506,7 @@ def run_region_reads(
     client = genai.Client()
 
     selected = {item for item in (region_ids or [])}
-    existing = {item.region_id: item for item in _load_region_orientations(probe_dir)}
+    existing = {item.region_id: item for item in _load_region_reads(probe_dir)}
     reads_path = probe_dir / "region_reads.json"
     for region in layout.regions:
         if region.ignore_for_reconstruction or region.reconstruction_priority == "ignore":
@@ -538,12 +532,12 @@ def run_region_reads(
         existing[region.region_id] = read
         partial_order = [item.region_id for item in layout.regions if item.region_id in existing]
         partial_reads = [existing[item_id] for item_id in partial_order]
-        _write_region_orientations(probe_dir, partial_reads)
+        _write_region_reads(probe_dir, partial_reads)
 
     ordered_region_ids = [region.region_id for region in layout.regions if region.region_id in existing]
     reads = [existing[region_id] for region_id in ordered_region_ids]
 
-    reads_path = _write_region_orientations(probe_dir, reads)
+    reads_path = _write_region_reads(probe_dir, reads)
     meta_path = probe_dir / "region_reads_meta.json"
     meta = {
         "generated_at": _utc_now(),
@@ -560,7 +554,7 @@ def run_region_reads(
 def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
     probe_dir = probe_dir.resolve()
     layout = _load_layout_probe(probe_dir)
-    reads = {item.region_id: item for item in _load_region_orientations(probe_dir)}
+    reads = {item.region_id: item for item in _load_region_reads(probe_dir)}
     section_resolution = _load_section_resolution(probe_dir)
     box_cleanup = _load_box_cleanup(probe_dir)
     units: list[PageAssemblyUnit] = []

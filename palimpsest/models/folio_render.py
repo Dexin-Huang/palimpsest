@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 # ═══════════════════════════════════════
-# Legacy section block (body_html blobs)
+# Template section block for panel rendering
 # ═══════════════════════════════════════
 
 class FolioRenderSection(BaseModel):

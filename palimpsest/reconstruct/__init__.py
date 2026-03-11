@@ -1,5 +1,4 @@
 from .artifacts import (
-    BlobRefinementArtifact,
     BoxCleanupArtifact,
     PageAssemblyArtifact,
     PageLayoutProbeArtifact,
@@ -8,7 +7,6 @@ from .artifacts import (
     SectionResolutionArtifact,
     VisualPairRepairArtifact,
 )
-from .blob import run_blob_refinement
 from .pipeline import run_page_assembly, run_region_reads
 from .prepare import PreparedPageArtifact, prepare_image
 from .probe import run_page_layout_probe
@@ -17,7 +15,6 @@ from .resolve import run_box_cleanup, run_section_resolution, run_visual_pair_re
 from .validate import run_page_validate
 
 __all__ = [
-    "BlobRefinementArtifact",
     "BoxCleanupArtifact",
     "PageAssemblyArtifact",
     "PageLayoutProbeArtifact",
@@ -27,7 +24,6 @@ __all__ = [
     "SectionResolutionArtifact",
     "VisualPairRepairArtifact",
     "prepare_image",
-    "run_blob_refinement",
     "run_box_cleanup",
     "run_page_assembly",
     "run_page_layout_probe",

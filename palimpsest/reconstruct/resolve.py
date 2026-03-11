@@ -22,7 +22,6 @@ from palimpsest.reconstruct.artifacts import (
     SectionResolutionArtifact,
     VisualPairRepairArtifact,
 )
-from palimpsest.reconstruct.blob import run_blob_refinement
 from palimpsest.reconstruct.pipeline import (
     DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
     _bbox_overlap_ratio,
@@ -32,7 +31,7 @@ from palimpsest.reconstruct.pipeline import (
     _load_box_cleanup,
     _load_layout_probe,
     _load_page_validation,
-    _load_region_orientations,
+    _load_region_reads,
     _load_section_resolution,
     _region_crop_path,
     _resolve_prompt_text,
@@ -64,59 +63,6 @@ def _section_resolution_payload(layout: LayoutProbe, reads: dict[str, object]) -
     return payload
 
 
-def _fallback_section_resolution(layout: LayoutProbe, reads: dict[str, object]) -> PageSectionResolution:
-    assignments: list[SectionResolutionAssignment] = []
-    for region in sorted(layout.regions, key=lambda item: ((item.reading_order or 9999), item.region_id)):
-        if region.ignore_for_reconstruction or region.reconstruction_priority == "ignore":
-            continue
-        read = reads.get(region.region_id)
-        if not read or not (read.source_block or read.diplomatic_lines):
-            continue
-        lines = [line for line in (read.diplomatic_lines or []) if str(line).strip()]
-        if not lines and read.source_block:
-            lines = [line for line in read.source_block.splitlines() if line.strip()]
-
-        if region.role == "header":
-            kept: list[str] = []
-            for line in lines:
-                compact = re.sub(r"\s+", "", line)
-                if not compact:
-                    continue
-                if len(compact) <= 2:
-                    kept.append(compact)
-                else:
-                    break
-            source_block = "\n".join(kept)
-            render_in_witness = bool(source_block)
-        elif region.role == "page_number":
-            digits = [re.sub(r"\s+", "", line) for line in lines if re.sub(r"\s+", "", line)]
-            source_block = "\n".join(digits[:1])
-            render_in_witness = False
-        else:
-            source_block = read.source_block or "\n".join(lines)
-            render_in_witness = True
-
-        assignments.append(
-            SectionResolutionAssignment(
-                region_id=region.region_id,
-                label=region.label,
-                role=region.role,
-                page_side=region.page_side,
-                column_index=region.column_index,
-                render_in_witness=render_in_witness,
-                source_block=source_block,
-                notes=["Deterministic fallback section assignment."],
-            )
-        )
-
-    return PageSectionResolution(
-        created_at=_utc_now(),
-        doc_id=layout.doc_id,
-        page_id=layout.page_id,
-        assignments=assignments,
-    )
-
-
 def run_section_resolution(
     probe_dir: Path,
     *,
@@ -125,7 +71,7 @@ def run_section_resolution(
 ) -> SectionResolutionArtifact:
     probe_dir = probe_dir.resolve()
     layout = _load_layout_probe(probe_dir)
-    reads = {item.region_id: item for item in _load_region_orientations(probe_dir)}
+    reads = {item.region_id: item for item in _load_region_reads(probe_dir)}
     sections = _section_resolution_payload(layout, reads)
 
     resolution_json_path = probe_dir / "section_resolution.json"
@@ -168,26 +114,23 @@ def run_section_resolution(
     )
 
     client = genai.Client()
-    try:
-        response = client.models.generate_content(
-            model=model,
-            contents=[prompt_text],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.1,
-                max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
-            ),
-        )
-        text, _ = _response_text(response)
-        payload = json.loads(_coerce_json_text(text))
-        payload.update({
-            "created_at": _utc_now(),
-            "doc_id": layout.doc_id,
-            "page_id": layout.page_id,
-        })
-        resolution = PageSectionResolution.model_validate(payload)
-    except Exception:
-        resolution = _fallback_section_resolution(layout, reads)
+    response = client.models.generate_content(
+        model=model,
+        contents=[prompt_text],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.1,
+            max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
+        ),
+    )
+    text, _ = _response_text(response)
+    payload = json.loads(_coerce_json_text(text))
+    payload.update({
+        "created_at": _utc_now(),
+        "doc_id": layout.doc_id,
+        "page_id": layout.page_id,
+    })
+    resolution = PageSectionResolution.model_validate(payload)
 
     resolved_by_region = {item.region_id: item for item in resolution.assignments}
     normalized_assignments: list[SectionResolutionAssignment] = []
@@ -332,15 +275,6 @@ def _box_cleanup_candidates(layout: LayoutProbe, section_resolution: PageSection
     return candidates
 
 
-def _fallback_box_cleanup(section_resolution: PageSectionResolution) -> PageBoxCleanup:
-    return PageBoxCleanup(
-        created_at=_utc_now(),
-        doc_id=section_resolution.doc_id,
-        page_id=section_resolution.page_id,
-        decisions=[],
-    )
-
-
 def _issue_context_for_pair(validation: PageValidation | None, pair_key: set[str]) -> list[dict]:
     if validation is None:
         return []
@@ -407,7 +341,12 @@ def run_box_cleanup(
     meta_path = probe_dir / "box_cleanup_meta.json"
 
     if not candidates:
-        cleanup = _fallback_box_cleanup(section_resolution)
+        cleanup = PageBoxCleanup(
+            created_at=_utc_now(),
+            doc_id=section_resolution.doc_id,
+            page_id=section_resolution.page_id,
+            decisions=[],
+        )
         cleanup_json_path.write_text(cleanup.model_dump_json(indent=2), encoding="utf-8")
         meta_path.write_text(
             json.dumps(
@@ -437,23 +376,17 @@ def run_box_cleanup(
         assignment.region_id: str(assignment.source_block or "")
         for assignment in section_resolution.assignments
     }
-    blob_refined_dir = probe_dir / "blob_refined_crops"
-    blob_refined_ready = blob_refined_dir.exists()
     for candidate in candidates:
         pair_key = {candidate["region_a"], candidate["region_b"]}
         issue_context = _issue_context_for_pair(validation, pair_key)
         candidate["source_block_a"] = current_blocks.get(candidate["region_a"], candidate["source_block_a"])
         candidate["source_block_b"] = current_blocks.get(candidate["region_b"], candidate["source_block_b"])
         if issue_context:
-            if not blob_refined_ready:
-                run_blob_refinement(probe_dir)
-                blob_refined_ready = True
             visual_artifact = run_visual_pair_repair(
                 probe_dir,
                 region_a=candidate["region_a"],
                 region_b=candidate["region_b"],
                 model=model,
-                use_blob_refined_crops=blob_refined_ready,
                 source_block_a=candidate["source_block_a"],
                 source_block_b=candidate["source_block_b"],
             )
@@ -467,38 +400,24 @@ def run_box_cleanup(
             .replace("{PAGE_ID}", layout.page_id)
             .replace("{PAIR_JSON}", json.dumps(candidate, indent=2, ensure_ascii=False))
         )
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=[final_prompt],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.1,
-                    max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
-                ),
-            )
-            text, _ = _response_text(response)
-            payload = json.loads(_coerce_json_text(text))
-            payload.setdefault("pair_id", candidate["pair_id"])
-            payload.setdefault("region_a", candidate["region_a"])
-            payload.setdefault("region_b", candidate["region_b"])
-            decision = BoxCleanupDecision.model_validate(payload)
-            decisions.append(decision)
-            current_blocks[decision.region_a] = decision.cleaned_source_block_a
-            current_blocks[decision.region_b] = decision.cleaned_source_block_b
-        except Exception:
-            decision = BoxCleanupDecision(
-                pair_id=candidate["pair_id"],
-                region_a=candidate["region_a"],
-                region_b=candidate["region_b"],
-                relation="uncertain",
-                cleaned_source_block_a=candidate["source_block_a"],
-                cleaned_source_block_b=candidate["source_block_b"],
-                reason="Fallback preserved original blocks.",
-            )
-            decisions.append(decision)
-            current_blocks[decision.region_a] = decision.cleaned_source_block_a
-            current_blocks[decision.region_b] = decision.cleaned_source_block_b
+        response = client.models.generate_content(
+            model=model,
+            contents=[final_prompt],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.1,
+                max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
+            ),
+        )
+        text, _ = _response_text(response)
+        payload = json.loads(_coerce_json_text(text))
+        payload.setdefault("pair_id", candidate["pair_id"])
+        payload.setdefault("region_a", candidate["region_a"])
+        payload.setdefault("region_b", candidate["region_b"])
+        decision = BoxCleanupDecision.model_validate(payload)
+        decisions.append(decision)
+        current_blocks[decision.region_a] = decision.cleaned_source_block_a
+        current_blocks[decision.region_b] = decision.cleaned_source_block_b
 
     cleanup = PageBoxCleanup(
         created_at=_utc_now(),
@@ -537,17 +456,15 @@ def run_visual_pair_repair(
     region_b: str,
     model: str = DEFAULT_MODEL_TRIAGE,
     prompt_file: Path | None = None,
-    use_blob_refined_crops: bool = False,
     source_block_a: str | None = None,
     source_block_b: str | None = None,
 ) -> VisualPairRepairArtifact:
     probe_dir = probe_dir.resolve()
     layout = _load_layout_probe(probe_dir)
-    reads = {item.region_id: item for item in _load_region_orientations(probe_dir)}
     section_resolution = _load_section_resolution(probe_dir)
     validation = _load_page_validation(probe_dir)
     if section_resolution is None:
-        section_resolution = _fallback_section_resolution(layout, reads)
+        raise FileNotFoundError(f"No section_resolution.json found in {probe_dir}")
 
     pair_key = {region_a, region_b}
     candidate = None
@@ -587,8 +504,8 @@ def run_visual_pair_repair(
         out_path=overlay_path,
     )
 
-    crop_a = _region_crop_path(probe_dir, candidate["region_a"], use_blob_refined_crops=use_blob_refined_crops)
-    crop_b = _region_crop_path(probe_dir, candidate["region_b"], use_blob_refined_crops=use_blob_refined_crops)
+    crop_a = _region_crop_path(probe_dir, candidate["region_a"])
+    crop_b = _region_crop_path(probe_dir, candidate["region_b"])
     if crop_a is None or crop_b is None:
         raise FileNotFoundError(f"Missing crop(s) for pair {candidate['region_a']}, {candidate['region_b']}")
 
@@ -670,7 +587,6 @@ def run_visual_pair_repair(
                 "model": model,
                 "prompt_path": str(prompt_path),
                 "finish_reason": finish_reason,
-                "use_blob_refined_crops": use_blob_refined_crops,
             },
             indent=2,
             ensure_ascii=False,

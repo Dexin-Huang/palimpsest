@@ -24,7 +24,6 @@ from .common import display_page_id, read_text, relpath, utc_now
 from .content import (
     build_image_regions_from_assembly,
     build_interpretation_content,
-    build_witness_content,
     build_witness_content_from_assembly,
     load_page_assembly,
     pick_translation_sections,
@@ -113,12 +112,8 @@ def render_folio_html(
     ]
 
     page_assembly = load_page_assembly(packet)
-    if page_assembly is not None:
-        witness_content = build_witness_content_from_assembly(page_assembly)
-        image_regions = build_image_regions_from_assembly(page_assembly)
-    else:
-        witness_content = build_witness_content(witness_doc, translation_doc)
-        image_regions = []
+    witness_content = build_witness_content_from_assembly(page_assembly)
+    image_regions = build_image_regions_from_assembly(page_assembly)
     interpretation_content = build_interpretation_content(
         interpretation_doc,
         notes_doc,
