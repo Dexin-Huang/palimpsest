@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import time
 
@@ -27,6 +28,45 @@ from palimpsest.reconstruct import (
     run_section_synthesis,
 )
 from palimpsest.reader import render_packet_folio_html
+
+
+def _load_doc_pages(doc_dir: Path) -> list[dict]:
+    page_list_path = doc_dir / "page_list.json"
+    if not page_list_path.exists():
+        raise FileNotFoundError(f"missing page_list.json in {doc_dir}")
+    payload = json.loads(page_list_path.read_text(encoding="utf-8"))
+    pages = list(payload.get("pages", []))
+    pages.sort(key=lambda item: int(item.get("order", 0)))
+    return pages
+
+
+def _select_doc_pages(
+    pages: list[dict],
+    *,
+    start_page: str | None = None,
+    end_page: str | None = None,
+    limit: int | None = None,
+) -> list[dict]:
+    selected = pages
+    if start_page:
+        try:
+            start_index = next(index for index, page in enumerate(selected) if page.get("page_id") == start_page)
+        except StopIteration as exc:
+            raise ValueError(f"start page not found: {start_page}") from exc
+        selected = selected[start_index:]
+    if end_page:
+        try:
+            end_index = next(index for index, page in enumerate(selected) if page.get("page_id") == end_page)
+        except StopIteration as exc:
+            raise ValueError(f"end page not found: {end_page}") from exc
+        selected = selected[: end_index + 1]
+    if limit is not None:
+        selected = selected[:limit]
+    return selected
+
+
+def _packet_dir_for_page(doc_dir: Path, page_id: str) -> Path:
+    return doc_dir / "experiments" / f"{page_id}_packet_v1"
 
 
 def _run_layout_pipeline(
@@ -107,6 +147,64 @@ def _run_layout_pipeline(
         assembly_artifact = run_page_assembly(probe_artifact.output_dir)
 
     return probe_artifact, region_artifact, section_artifact, validation_artifact, box_cleanup_artifact, assembly_artifact
+
+
+def _run_packet_decode(
+    *,
+    image_path: Path,
+    packet_dir: Path,
+    raw: bool,
+    layout_model: str,
+    region_model: str,
+    cleanup_model: str,
+    retries: int,
+    render_html: bool,
+    title: str | None,
+):
+    packet_path = packet_dir / "packet.json"
+    created = False
+    if packet_path.exists():
+        packet = repair_packet_json(packet_path)
+    else:
+        packet, packet_path = create_page_packet(
+            image_path,
+            out_dir=packet_dir,
+            prepare=not raw,
+        )
+        created = True
+
+    probe_artifact, region_artifact, section_artifact, validation_artifact, box_cleanup_artifact, assembly_artifact = _run_layout_pipeline(
+        image_path=image_path,
+        probe_dir=packet_dir / "layout_probe",
+        layout_model=layout_model,
+        region_model=region_model,
+        cleanup_model=cleanup_model,
+        run_regions=True,
+        run_section_resolution_stage=True,
+        run_box_cleanup_stage=True,
+        run_assembly=True,
+        retries=retries,
+    )
+    packet = attach_layout_probe(packet_path, probe_artifact.output_dir)
+    render_artifact = None
+    if render_html:
+        render_artifact = render_packet_folio_html(
+            packet_path,
+            out_dir=packet_dir,
+            book_title=title,
+        )
+    return {
+        "created": created,
+        "packet_path": packet_path,
+        "packet": packet,
+        "probe_artifact": probe_artifact,
+        "region_artifact": region_artifact,
+        "section_artifact": section_artifact,
+        "validation_artifact": validation_artifact,
+        "box_cleanup_artifact": box_cleanup_artifact,
+        "assembly_artifact": assembly_artifact,
+        "render_artifact": render_artifact,
+    }
 
 
 def cmd_prepare(args: argparse.Namespace) -> None:
@@ -390,6 +488,71 @@ def cmd_validate(args: argparse.Namespace) -> None:
     print(f"meta: {artifact.meta_path}")
 
 
+def cmd_decode_doc(args: argparse.Namespace) -> None:
+    doc_dir = Path(args.doc_dir).resolve()
+    pages = _select_doc_pages(
+        _load_doc_pages(doc_dir),
+        start_page=args.start_page,
+        end_page=args.end_page,
+        limit=args.limit,
+    )
+    total = len(pages)
+    if total == 0:
+        print("decode_doc: no pages selected")
+        return
+
+    print(f"doc_dir: {doc_dir}")
+    print(f"selected_pages: {total}")
+    if args.skip_existing:
+        print("skip_existing: true")
+
+    completed = 0
+    skipped = 0
+    failed = 0
+
+    for index, page in enumerate(pages, start=1):
+        page_id = page["page_id"]
+        image_path = doc_dir / "images" / page["filename"]
+        packet_dir = _packet_dir_for_page(doc_dir, page_id)
+        packet_path = packet_dir / "packet.json"
+        assembly_path = packet_dir / "layout_probe" / "page_assembly.json"
+        render_path = packet_dir / "index.html"
+        if args.skip_existing and packet_path.exists() and assembly_path.exists() and (not args.render_html or render_path.exists()):
+            skipped += 1
+            print(f"[{index}/{total}] {page_id}: skip", flush=True)
+            continue
+        print(f"[{index}/{total}] {page_id}: decode", flush=True)
+        try:
+            result = _run_packet_decode(
+                image_path=image_path,
+                packet_dir=packet_dir,
+                raw=args.raw,
+                layout_model=args.layout_model,
+                region_model=args.orient_model,
+                cleanup_model=args.cleanup_model,
+                retries=args.retries,
+                render_html=args.render_html,
+                title=args.title,
+            )
+            completed += 1
+            status = "created" if result["created"] else "refreshed"
+            print(f"[{index}/{total}] {page_id}: {status}", flush=True)
+            print(f"  packet: {result['packet_path']}", flush=True)
+            print(f"  assembly: {result['assembly_artifact'].assembly_json_path}", flush=True)
+            if result["render_artifact"] is not None:
+                print(f"  html: {result['render_artifact'].html_path}", flush=True)
+        except Exception as exc:
+            failed += 1
+            print(f"[{index}/{total}] {page_id}: failed ({exc.__class__.__name__}: {exc})", flush=True)
+            if args.fail_fast:
+                raise
+
+    print("decode_doc: done")
+    print(f"completed: {completed}")
+    print(f"skipped: {skipped}")
+    print(f"failed: {failed}")
+
+
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("page", help="Prepare, packetize, read, and synthesize page-level witness artifacts")
     sub = parser.add_subparsers(dest="page_cmd", required=True)
@@ -554,6 +717,34 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     assemble = sub.add_parser("assemble", help="Advanced: assemble the cleaned region texts into one canonical page object")
     assemble.add_argument("--probe-dir", required=True, help="Path to the layout_probe artifact directory")
     assemble.set_defaults(func=cmd_assemble)
+
+    decode_doc = sub.add_parser("decode-doc", help="Run the canonical reconstruction ladder across a manuscript page list")
+    decode_doc.add_argument("--doc-dir", required=True, help="Path to a library/<doc_id> directory containing images/ and page_list.json")
+    decode_doc.add_argument("--start-page", help="Optional page_id to start from")
+    decode_doc.add_argument("--end-page", help="Optional page_id to stop at")
+    decode_doc.add_argument("--limit", type=int, help="Optional max page count to decode")
+    decode_doc.add_argument("--raw", action="store_true", help="Skip automatic preparation and decode the raw images")
+    decode_doc.add_argument("--render-html", action="store_true", help="Render each packet folio after decoding")
+    decode_doc.add_argument("--title", help="Optional book/manuscript title override for HTML render")
+    decode_doc.add_argument("--skip-existing", action="store_true", help="Skip pages that already have packet + assembly (+ HTML when requested)")
+    decode_doc.add_argument("--fail-fast", action="store_true", help="Stop on the first page failure")
+    decode_doc.add_argument(
+        "--layout-model",
+        default=DEFAULT_MODEL_VISION,
+        help=f"Vision model for the layout probe (default: {DEFAULT_MODEL_VISION})",
+    )
+    decode_doc.add_argument(
+        "--orient-model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Model for full transcription reads per region (default: {DEFAULT_MODEL_READING})",
+    )
+    decode_doc.add_argument(
+        "--cleanup-model",
+        default=DEFAULT_MODEL_TRIAGE,
+        help=f"Model for canonical cleanup and repair (default: {DEFAULT_MODEL_TRIAGE})",
+    )
+    decode_doc.add_argument("--retries", type=int, default=2, help="Retry count for model-backed decode stages")
+    decode_doc.set_defaults(func=cmd_decode_doc)
 
     handoff = sub.add_parser("handoff", help="Generate a compact forward handoff from one completed page packet")
     handoff.add_argument("--packet", required=True, help="Path to packet.json")
