@@ -14,6 +14,7 @@ from palimpsest.packets import (
     ingest_page_reading,
     repair_packet_json,
     run_page_handoff,
+    run_packet_translation,
     run_window_synthesis,
     sync_packet_from_assembly,
 )
@@ -371,6 +372,83 @@ def cmd_sync_doc_packets(args: argparse.Namespace) -> None:
     print(f"failed: {failed}")
 
 
+def cmd_translate_packet(args: argparse.Namespace) -> None:
+    artifact = run_packet_translation(
+        Path(args.packet),
+        prompt_file=Path(args.prompt_file).resolve() if args.prompt_file else None,
+        model=args.model,
+    )
+    print(f"packet: {artifact.packet_path}")
+    print(f"translation: {artifact.output_path}")
+    print(f"meta: {artifact.meta_path}")
+    print(f"model: {artifact.model}")
+    if artifact.finish_reason:
+        print(f"finish_reason: {artifact.finish_reason}")
+    print(f"chars: {artifact.char_count}")
+
+
+def cmd_translate_doc_packets(args: argparse.Namespace) -> None:
+    doc_dir = Path(args.doc_dir).resolve()
+    pages = _select_doc_pages(
+        _load_doc_pages(doc_dir),
+        start_page=args.start_page,
+        end_page=args.end_page,
+        limit=args.limit,
+    )
+    total = len(pages)
+    if total == 0:
+        print("translate_doc_packets: no pages selected")
+        return
+
+    print(f"doc_dir: {doc_dir}")
+    print(f"selected_pages: {total}")
+    print(f"model: {args.model}")
+
+    completed = 0
+    skipped = 0
+    failed = 0
+
+    for index, page in enumerate(pages, start=1):
+        page_id = page["page_id"]
+        packet_dir = _packet_dir_for_page(doc_dir, page_id)
+        packet_path = packet_dir / "packet.json"
+        if not packet_path.exists():
+            failed += 1
+            print(f"[{index}/{total}] {page_id}: missing packet", flush=True)
+            if args.fail_fast:
+                raise FileNotFoundError(f"missing packet: {packet_path}")
+            continue
+
+        if args.skip_existing:
+            packet = repair_packet_json(packet_path)
+            translation_status = packet.files["translation"].status
+            if translation_status in {"draft", "reviewed", "complete"}:
+                skipped += 1
+                print(f"[{index}/{total}] {page_id}: skip", flush=True)
+                continue
+
+        print(f"[{index}/{total}] {page_id}: translate", flush=True)
+        try:
+            artifact = run_packet_translation(
+                packet_path,
+                prompt_file=Path(args.prompt_file).resolve() if args.prompt_file else None,
+                model=args.model,
+            )
+            completed += 1
+            print(f"  translation: {artifact.output_path}", flush=True)
+            print(f"  chars: {artifact.char_count}", flush=True)
+        except Exception as exc:
+            failed += 1
+            print(f"[{index}/{total}] {page_id}: failed ({exc.__class__.__name__}: {exc})", flush=True)
+            if args.fail_fast:
+                raise
+
+    print("translate_doc_packets: done")
+    print(f"completed: {completed}")
+    print(f"skipped: {skipped}")
+    print(f"failed: {failed}")
+
+
 def cmd_synthesize(args: argparse.Namespace) -> None:
     artifact = run_section_synthesis(
         [Path(item) for item in args.input],
@@ -681,6 +759,31 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     sync_doc.add_argument("--skip-existing", action="store_true", help="Skip packets whose witness status is already draft/reviewed/complete")
     sync_doc.add_argument("--fail-fast", action="store_true", help="Stop on the first failed packet sync")
     sync_doc.set_defaults(func=cmd_sync_doc_packets)
+
+    translate_packet = sub.add_parser("translate-packet", help="Translate one packet witness into translation.md using the canonical reading model")
+    translate_packet.add_argument("--packet", required=True, help="Path to packet.json")
+    translate_packet.add_argument("--prompt-file", help="Optional explicit translation prompt file")
+    translate_packet.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Translation model (default: {DEFAULT_MODEL_READING})",
+    )
+    translate_packet.set_defaults(func=cmd_translate_packet)
+
+    translate_doc = sub.add_parser("translate-doc-packets", help="Translate packet witnesses across a document tranche")
+    translate_doc.add_argument("--doc-dir", required=True, help="Document directory containing page_list.json and experiments/")
+    translate_doc.add_argument("--start-page", help="Optional starting page_id")
+    translate_doc.add_argument("--end-page", help="Optional ending page_id")
+    translate_doc.add_argument("--limit", type=int, help="Optional maximum number of pages")
+    translate_doc.add_argument("--prompt-file", help="Optional explicit translation prompt file")
+    translate_doc.add_argument(
+        "--model",
+        default=DEFAULT_MODEL_READING,
+        help=f"Translation model (default: {DEFAULT_MODEL_READING})",
+    )
+    translate_doc.add_argument("--skip-existing", action="store_true", help="Skip packets whose translation status is already draft/reviewed/complete")
+    translate_doc.add_argument("--fail-fast", action="store_true", help="Stop on the first failed packet translation")
+    translate_doc.set_defaults(func=cmd_translate_doc_packets)
 
     read = sub.add_parser("read", help="Run the focused witness prompt on one page image")
     read.add_argument("--image", required=True, help="Source image to read")

@@ -8,6 +8,7 @@ from .scholar import (
     run_packet_scholar,
 )
 from .templates import packet_format_contract_block, packet_heading_contract_block, packet_markdown_template
+from .translate import run_packet_translation
 
 __all__ = [
     "TASK_CHOICES",
@@ -22,6 +23,7 @@ __all__ = [
     "repair_packet_json",
     "run_page_handoff",
     "run_packet_scholar",
+    "run_packet_translation",
     "run_window_synthesis",
     "sync_packet_from_assembly",
 ]

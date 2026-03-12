@@ -1,0 +1,26 @@
+Translate the witness markdown into close English and return only the completed `translation.md` markdown.
+
+Rules:
+- Keep the top-level file title exactly as `# Working Translation`.
+- For every witness unit in `witness.md`, emit a matching translation section with the same unit title before the colon.
+- Use this exact shape for each unit:
+  - `## <same witness unit title>: <short English header>`
+  - `**Main Text**`
+  - then the direct translation
+- Do not omit any witness unit.
+- Translate line-for-line. Under each `**Main Text**`, emit one English line for each witness line, in the same order.
+- Keep the same number of translated lines as witness lines whenever possible.
+- Do not expand one witness line into multiple English lines.
+- If a witness line is fragmentary, translate it minimally and move on.
+- Do not repeat translated lines, phrases, or patterns.
+- Keep the output roughly proportional to the witness length.
+- Do not translate `Layout Notes` into a witness unit. Put any brief observations under `## Translation Notes`.
+- Keep the translation close and evidence-bound.
+- Preserve uncertainty explicitly with forms like `[mandate?]`, `[virtue/power]`, or `(supplied text)`.
+- Never invent punctuation, names, or explanations not supported by the witness.
+- Do not turn the file into an essay.
+- End with:
+  - `## Translation Notes`
+  - `## Interpretive Restraint`
+
+Return markdown only.
