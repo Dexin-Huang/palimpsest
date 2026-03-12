@@ -37,6 +37,7 @@ library/**/runs/
 library/**/experiments/
 library/**/packet_site_proto/
 library/**/site_proto/
+library/**/site_*/
 library/**/reader_site/
 library/**/temp_docres_input/
 library/**/images_cleaned*/

@@ -3,21 +3,21 @@
 Palimpsest reads the tracks history forgot.
 
 Palimpsest is a manuscript discovery and reading system for digitized archival
-corpora. It is built for a specific goal: recover neglected human worlds from
-scans that exist online but are thinly cataloged, weakly indexed, or rarely
-read end to end.
+corpora. It is built for a narrow purpose: recover neglected human worlds from
+scans that already exist online, but remain thinly cataloged, weakly indexed,
+or rarely read end to end.
 
-The project is not centered on OCR as an end in itself. Its operating model is:
+The project is not organized around OCR as an end in itself. Its operating
+model is:
 
-`source discovery -> page witness -> scholar packet -> section synthesis -> edition`
+`discovery -> reconstruction -> packets -> reader`
 
-The first product is not a generic archive crawler. It is a reliable,
-repeatable way to turn a page image into:
+The core product is a repeatable way to turn a page image into:
 
 - a witness-first transcription
-- a compact scholarly workspace
-- a translation and interpretation layer
-- a rendered edition spread
+- a structured page packet for scholarly work
+- a section-level synthesis across neighboring pages
+- a linked HTML folio or book
 
 ## What It Does
 
@@ -25,53 +25,42 @@ repeatable way to turn a page image into:
   Gallica, and IDP.
 - Maintains a discovery database with source metadata, triage scores, and
   source-specific context.
-- Prepares page images deterministically before reading them.
-- Produces page-level witness memos instead of asking one prompt to do
-  everything at once.
-- Builds `page.packet` workspaces for front-to-back scholarly work.
-- Synthesizes several page witnesses into section-level interpretation.
-- Renders linked HTML folios and book readers from structured page data.
+- Reconstructs pages through a canonical region-first pipeline.
+- Builds `page.packet` workspaces for notes, translation, interpretation, and
+  continuity.
+- Renders static HTML folios and manuscript readers from structured page data.
 
-## Operating Model
+## Canonical Page Pipeline
 
-1. `Discovery`
-   Find high-upside material from public sources with thin metadata or
-   under-described content.
+Palimpsest now uses one reconstruction ladder:
 
-2. `Intake`
-   Create a library record from a IIIF manifest or a curated source reference.
+`layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble`
 
-3. `Prepare`
-   Crop away dead page area and focus on the manuscript-bearing region.
+This is intentionally region-first:
 
-4. `Read`
-   Produce a witness-first reading of one page.
+- `layout-probe` proposes coarse semantic boxes
+- `region-read` transcribes each box in full
+- `section-resolution` assigns one canonical text block to each box
+- `validate` flags structural boundary problems
+- `box-cleanup` repairs only implicated neighboring pairs
+- `assemble` builds the canonical page witness
 
-5. `Packetize`
-   Create a scholar-facing bundle for notes, translation, interpretation,
-   continuity, and edition work.
-
-6. `Synthesize`
-   Read several adjacent pages together so interpretation uses context instead
-   of forcing one page to explain the whole manuscript.
-
-7. `Render`
-   Build a linked folio or book from structured page output.
+The reader then renders the assembled page as a linked folio HTML view.
 
 ## Design Principles
 
 - Witness first. Translation and interpretation come after the page has been
   read.
-- Deterministic where possible. Preparation and rendering should not depend on
-  a model.
-- Small, explicit artifacts. A page packet is better than a giant implicit
+- Deterministic where possible. Preparation, assembly, and rendering should not
+  depend on a model unless necessary.
+- Small explicit artifacts. A page packet is better than a giant implicit
   session state.
-- Source adapters stay thin. Each source should emit references, not invent a
-  new subsystem.
+- Thin source adapters. Each source should emit references, not become its own
+  subsystem.
 - Public corpora first. The system is meant to run unattended over accessible
   digital collections.
 
-## Quick Start
+## Install
 
 Install in editable mode:
 
@@ -89,17 +78,17 @@ PALIMPSEST_MODEL_READING=gemini-3.1-flash-lite-preview
 PALIMPSEST_MODEL_RECON=gemini-3.1-flash-image-preview
 ```
 
-Check the CLI surface:
+Check the CLI:
 
 ```bash
 python -m palimpsest --help
 ```
 
-## Golden Path
+## Quick Start
 
 ### 1. Discover candidates
 
-List registered sources:
+List registered public sources:
 
 ```bash
 python -m palimpsest discovery sources list
@@ -112,175 +101,101 @@ python -m palimpsest discovery sources scrape --source idp --collection chinese_
 python -m palimpsest discovery sources scrape --source gallica --collection chinese_divination --limit 5
 ```
 
-Ingest directly into the discovery DB and triage:
+Ingest directly into the discovery database and triage:
 
 ```bash
 python -m palimpsest discovery sources ingest --source idp --collection chinese_daoism --limit 5 --triage
 ```
 
-### 2. Intake one document
+### 2. Intake a document
 
 From a IIIF manifest:
 
 ```bash
-python -m palimpsest library intake \
-  --doc-id vatican_pal_lat_1267 \
+python -m palimpsest library intake ^
+  --doc-id vatican_pal_lat_1267 ^
   --manifest https://digi.vatlib.it/iiif/MSS_Pal.lat.1267/manifest.json
 ```
 
-### 3. Run the library pipeline
-
-```bash
-python -m palimpsest library run --doc-id vatican_pal_lat_1267
-```
-
-This materializes the main output lanes:
-
-- `exports/transcriptions_full/`
-- `exports/canonical_pages/`
-- `exports/restoration/`
-
-### 4. Read one page properly
-
-Prepare the page:
-
-```bash
-python -m palimpsest page prepare --image library/<doc_id>/images/<page>.jpg
-```
-
-Create the page packet:
+### 3. Create a page packet
 
 ```bash
 python -m palimpsest page packet --image library/<doc_id>/images/<page>.jpg
 ```
 
-`page packet` creates the packet workspace and, by default, runs the canonical
-reconstruction ladder immediately.
+`page packet` creates the packet workspace and runs the canonical reconstruction
+pipeline immediately. To rerun that same ladder later:
 
-`page refresh-packet` reruns that same ladder for an existing packet.
-
-Canonical page pipeline inside `page packet` / `page refresh-packet`:
-
-```text
-layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble -> render-html
+```bash
+python -m palimpsest page refresh-packet --packet library/<doc_id>/experiments/<page>_packet_v1/packet.json
 ```
 
-This is intentionally region-first:
-- `layout-probe` finds coarse inclusive boxes
-- `region-read` transcribes each box in full
-- `section-resolution` assigns canonical text to each box
-- `validate` flags structural boundary problems before repair
-- `box-cleanup` only touches genuinely implicated neighboring box pairs
-- `assemble` builds the page witness object
-- `render-html` turns that into the linked folio view
+### 4. Read and advance the packet
 
-Advanced stage commands are also available when you need to inspect or rerun a
-single rung of the ladder:
-
-- `page layout-probe`
-- `page region-read`
-- `page section-resolution`
-- `page validate`
-- `page box-cleanup`
-- `page assemble`
-
-Read the page witness:
+Read a page witness directly:
 
 ```bash
 python -m palimpsest page read --image library/<doc_id>/images/<page>.jpg
 ```
 
-### 5. Advance the scholarly packet
-
-Ingest the witness into the packet:
+Fill the packet witness from that reading:
 
 ```bash
-python -m palimpsest scholar packet \
-  --packet library/<doc_id>/experiments/<page>_packet/packet.json \
-  --task fill_witness \
+python -m palimpsest scholar packet ^
+  --packet library/<doc_id>/experiments/<page>_packet_v1/packet.json ^
+  --task fill_witness ^
   --witness library/<doc_id>/experiments/<page>_reading/<page>_reading.md
 ```
 
-`fill_witness` is the scholar-lane way to populate packet files. The lower-level
-`page ingest-reading` command exists for deterministic packet backfill and repair.
-
-Then let the dedicated scholar lane advance notes, translation,
-interpretation, and edition work:
+Then advance notes, translation, and interpretation:
 
 ```bash
-python -m palimpsest scholar packet \
-  --packet library/<doc_id>/experiments/<page>_packet/packet.json \
-  --task annotate
-
-python -m palimpsest scholar packet \
-  --packet library/<doc_id>/experiments/<page>_packet/packet.json \
-  --task translate
-
-python -m palimpsest scholar packet \
-  --packet library/<doc_id>/experiments/<page>_packet/packet.json \
-  --task interpret
+python -m palimpsest scholar packet --packet library/<doc_id>/experiments/<page>_packet_v1/packet.json --task annotate
+python -m palimpsest scholar packet --packet library/<doc_id>/experiments/<page>_packet_v1/packet.json --task translate
+python -m palimpsest scholar packet --packet library/<doc_id>/experiments/<page>_packet_v1/packet.json --task interpret
 ```
 
-Render the folio HTML when the packet is ready:
+### 5. Render a folio or a book
+
+Render a single folio:
 
 ```bash
-python -m palimpsest page render-html --packet library/<doc_id>/experiments/<page>_packet/packet.json
+python -m palimpsest page render-html --packet library/<doc_id>/experiments/<page>_packet_v1/packet.json
+```
+
+Build a manuscript reader:
+
+```bash
+python -m palimpsest book site --packets-dir library/<doc_id>/experiments --output-dir library/<doc_id>/site_build
+```
+
+### 6. Synthesize a section
+
+```bash
+python -m palimpsest page synthesize ^
+  --input library/<doc_id>/experiments/<page1>_reading/<page1>_reading.md ^
+  --input library/<doc_id>/experiments/<page2>_reading/<page2>_reading.md ^
+  --input library/<doc_id>/experiments/<page3>_reading/<page3>_reading.md
 ```
 
 ## Package Layout
 
-The repo is now split by product lane instead of by old implementation era:
+The repo is split by product lane:
 
 - `palimpsest/discovery`
   Source adapters, ingest, triage, and discovery DB work.
 - `palimpsest/reconstruct`
-  Canonical page reconstruction:
-  `layout-probe -> region-read -> section-resolution -> validate -> box-cleanup -> assemble`
+  Canonical page reconstruction.
 - `palimpsest/packets`
-  Scholar-facing `page.packet` creation, continuity, and packet advancement.
+  `page.packet` creation, continuity, and scholar workflow.
 - `palimpsest/reader`
   Canonical HTML folio and book rendering.
 - `palimpsest/commands`
-  Thin CLI entrypoints only.
+  Thin CLI entrypoints.
 
 See [docs/REPO_LAYOUT.md](docs/REPO_LAYOUT.md) for the explicit repo shape.
 
-### 6. Preserve continuity
-
-Generate the forward handoff for the next page:
-
-```bash
-python -m palimpsest page handoff \
-  --packet library/<doc_id>/experiments/<page>_packet/packet.json \
-  --next-page-id <next_page_id>
-```
-
-Generate a sliding window synthesis across adjacent packets:
-
-```bash
-python -m palimpsest page window \
-  --packet library/<doc_id>/experiments/<page1>_packet/packet.json \
-  --packet library/<doc_id>/experiments/<page2>_packet/packet.json \
-  --packet library/<doc_id>/experiments/<page3>_packet/packet.json
-```
-
-### 7. Synthesize a section
-
-```bash
-python -m palimpsest page synthesize \
-  --input library/<doc_id>/experiments/<page1>_reading/<page1>_reading.md \
-  --input library/<doc_id>/experiments/<page2>_reading/<page2>_reading.md \
-  --input library/<doc_id>/experiments/<page3>_reading/<page3>_reading.md
-```
-
-## Source Radar
-
-Palimpsest distinguishes between:
-
-- `automation_fit`: how suitable a source is for unattended pipeline work
-- `north_star_fit`: how well it matches the goal of recovering vanished human
-  worlds
-- `access`: the practical delivery mode
+## Source Adapters
 
 Current public adapters:
 
@@ -288,80 +203,53 @@ Current public adapters:
 - `idp`
 - `gallica`
 
-The intended pattern is simple:
+The intended source flow is:
 
-`adapter -> refs -> discovery DB -> intake -> page packets`
+`adapter -> refs -> discovery DB -> intake -> packets -> reader`
 
-## Project Layout
+## Model Defaults
 
-```text
-library/
-  <doc_id>/
-    metadata.json
-    page_list.json
-    images/
-    exports/
-      transcriptions_full/
-      canonical_pages/
-      restoration/
+- `gemini-3.1-flash-lite-preview`
+  - triage
+  - reconstruction
+  - reading
+- `gemini-3.1-flash-image-preview`
+  - image-generation / reconstruction-image lane
+- `claude-sonnet-4-5`
+  - packet scholar workflow
 
-docs/
-  VISION.md
-  ARCHITECTURE.md
-  PAGE_PACKET.md
-  SOURCE_ADAPTERS.md
-  DISCOVERY_SYSTEM.md
-
-palimpsest/
-  commands/
-  discovery/
-  models/
-  prompts/
-```
-
-## Model Policy
-
-- `gemini-3.1-flash-lite-preview` for triage, witness reading, and page reconstruction work
-- `gemini-3.1-flash-image-preview` for reconstruction / image-generation lanes
-- `claude-sonnet-4-5` for the dedicated scholar packet workflow
-
-`*-image-preview` models should not be the default witness-reading lane.
+`*-image-preview` models are not the default witness-reading lane.
 
 ## Current Status
 
-This project is early, active, and opinionated.
+Palimpsest is early, active, and opinionated.
 
-The current stable path is:
+The stable path today is:
 
 - discover from curated public sources
-- map one page into coarse semantic boxes
-- transcribe each box in full
-- validate and repair only the implicated boundaries
-- assemble one canonical page witness
-- move page by page with packet continuity
-- synthesize every few pages
-- render linked HTML folios/books deterministically
+- reconstruct one page through the canonical region-first ladder
+- build a page packet
+- advance translation and interpretation with explicit continuity
+- render a linked folio or manuscript reader
 
-The repo already includes working manuscript dossiers and packet artifacts from
-real runs. It is intended to be used as a live research system, not just a
-framework skeleton.
+The repository includes real packet artifacts, dossiers, and manuscript reads
+from live runs. It is a working research system, not just a framework stub.
 
 ## Documentation
 
+Core docs:
+
 - [docs/VISION.md](docs/VISION.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [docs/PRODUCT_FOCUS.md](docs/PRODUCT_FOCUS.md)
-- [docs/PAGE_EVIDENCE_SCHEMA.md](docs/PAGE_EVIDENCE_SCHEMA.md)
-- [docs/DIPLOMATIC_RESTORATION_CONTRACT.md](docs/DIPLOMATIC_RESTORATION_CONTRACT.md)
-- [docs/READING_PROMPTS.md](docs/READING_PROMPTS.md)
+- [docs/REPO_LAYOUT.md](docs/REPO_LAYOUT.md)
 - [docs/PAGE_PACKET.md](docs/PAGE_PACKET.md)
 - [docs/READER_PRODUCT.md](docs/READER_PRODUCT.md)
-- [docs/CONTINUITY_STATE.md](docs/CONTINUITY_STATE.md)
 - [docs/SOURCE_ADAPTERS.md](docs/SOURCE_ADAPTERS.md)
 - [docs/DISCOVERY_SYSTEM.md](docs/DISCOVERY_SYSTEM.md)
+- [docs/READING_PROMPTS.md](docs/READING_PROMPTS.md)
 - [docs/MODEL_STRATEGY.md](docs/MODEL_STRATEGY.md)
-- [docs/knowledge_recovery_vision.md](docs/knowledge_recovery_vision.md)
-- [docs/AGENT_WORKERS.md](docs/AGENT_WORKERS.md)
+
+Further project docs remain under [docs/](docs/).
 
 ## References
 
