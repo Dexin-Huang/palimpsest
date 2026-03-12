@@ -28,7 +28,14 @@ class LayoutProbeRegion(BaseModel):
     def _validate_bbox(cls, value):
         if not isinstance(value, (list, tuple)) or len(value) != 4:
             raise ValueError("bbox_norm must be [x, y, w, h]")
-        coords = tuple(float(item) for item in value)
+        x, y, w, h = (float(item) for item in value)
+        if w < 0.0:
+            x = x + w
+            w = abs(w)
+        if h < 0.0:
+            y = y + h
+            h = abs(h)
+        coords = (x, y, w, h)
         for index, coord in enumerate(coords):
             if coord < 0.0 or coord > 1.0:
                 raise ValueError(f"bbox_norm[{index}] out of range: {coord}")

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from google import genai
 from google.genai import types
+from pydantic import BaseModel
 
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
 from palimpsest.models import (
@@ -63,6 +64,49 @@ def _section_resolution_payload(layout: LayoutProbe, reads: dict[str, object]) -
     return payload
 
 
+class _SectionResolutionResponse(BaseModel):
+    assignments: list[SectionResolutionAssignment]
+
+
+def _can_resolve_sections_deterministically(sections: list[dict]) -> bool:
+    renderable = [section for section in sections if section["role"] != "page_number" and str(section["source_block"]).strip()]
+    if not renderable:
+        return True
+    if any(section["role"] == "header" for section in renderable):
+        return False
+    counts_by_side: dict[str, int] = {}
+    for section in renderable:
+        side = section.get("page_side") or "unknown"
+        counts_by_side[side] = counts_by_side.get(side, 0) + 1
+    if any(count > 2 for count in counts_by_side.values()):
+        return False
+    allowed_roles = {"main_text", "marginalia", "page_number"}
+    return all(section["role"] in allowed_roles for section in sections)
+
+
+def _deterministic_section_resolution(layout: LayoutProbe, sections: list[dict]) -> PageSectionResolution:
+    assignments: list[SectionResolutionAssignment] = []
+    for section in sections:
+        assignments.append(
+            SectionResolutionAssignment(
+                region_id=section["region_id"],
+                label=section["label"],
+                role=section["role"],
+                page_side=section["page_side"],
+                column_index=section["column_index"],
+                render_in_witness=(section["role"] != "page_number"),
+                source_block=str(section["source_block"] or ""),
+                notes=["Deterministic passthrough for simple page structure."],
+            )
+        )
+    return PageSectionResolution(
+        created_at=_utc_now(),
+        doc_id=layout.doc_id,
+        page_id=layout.page_id,
+        assignments=assignments,
+    )
+
+
 def run_section_resolution(
     probe_dir: Path,
     *,
@@ -106,6 +150,31 @@ def run_section_resolution(
             model=model,
         )
 
+    if _can_resolve_sections_deterministically(sections):
+        resolution = _deterministic_section_resolution(layout, sections)
+        resolution_json_path.write_text(resolution.model_dump_json(indent=2), encoding="utf-8")
+        meta_path.write_text(
+            json.dumps(
+                {
+                    "generated_at": _utc_now(),
+                    "probe_dir": str(probe_dir),
+                    "resolution_json_path": str(resolution_json_path),
+                    "model": None,
+                    "section_count": len(sections),
+                    "mode": "deterministic",
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return SectionResolutionArtifact(
+            probe_dir=probe_dir,
+            resolution_json_path=resolution_json_path,
+            meta_path=meta_path,
+            model=model,
+        )
+
     prompt_text, prompt_path = _resolve_prompt_text(prompt_file, "page_section_resolution")
     prompt_text = (
         prompt_text
@@ -119,18 +188,19 @@ def run_section_resolution(
         contents=[prompt_text],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
+            response_schema=_SectionResolutionResponse,
             temperature=0.1,
             max_output_tokens=DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
         ),
     )
     text, _ = _response_text(response)
-    payload = json.loads(_coerce_json_text(text))
-    payload.update({
-        "created_at": _utc_now(),
-        "doc_id": layout.doc_id,
-        "page_id": layout.page_id,
-    })
-    resolution = PageSectionResolution.model_validate(payload)
+    parsed = _SectionResolutionResponse.model_validate_json(_coerce_json_text(text))
+    resolution = PageSectionResolution(
+        created_at=_utc_now(),
+        doc_id=layout.doc_id,
+        page_id=layout.page_id,
+        assignments=parsed.assignments,
+    )
 
     resolved_by_region = {item.region_id: item for item in resolution.assignments}
     normalized_assignments: list[SectionResolutionAssignment] = []
