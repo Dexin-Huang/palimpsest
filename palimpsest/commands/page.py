@@ -15,6 +15,7 @@ from palimpsest.packets import (
     repair_packet_json,
     run_page_handoff,
     run_window_synthesis,
+    sync_packet_from_assembly,
 )
 from palimpsest.reconstruct import (
     prepare_image,
@@ -300,6 +301,74 @@ def cmd_ingest_reading(args: argparse.Namespace) -> None:
     print(f"terms: {packet.files['terms'].path}")
     print(f"questions: {packet.files['questions'].path}")
     print(f"next_action: {packet.workflow.next_action}")
+
+
+def cmd_sync_packet(args: argparse.Namespace) -> None:
+    packet = sync_packet_from_assembly(
+        Path(args.packet),
+        Path(args.assembly).resolve() if args.assembly else None,
+    )
+    print(f"packet: {args.packet}")
+    print(f"witness: {packet.files['witness'].path}")
+    print(f"translation: {packet.files['translation'].path}")
+    print(f"notes: {packet.files['notes'].path}")
+    print(f"next_action: {packet.workflow.next_action}")
+
+
+def cmd_sync_doc_packets(args: argparse.Namespace) -> None:
+    doc_dir = Path(args.doc_dir).resolve()
+    pages = _select_doc_pages(
+        _load_doc_pages(doc_dir),
+        start_page=args.start_page,
+        end_page=args.end_page,
+        limit=args.limit,
+    )
+    total = len(pages)
+    if total == 0:
+        print("sync_doc_packets: no pages selected")
+        return
+
+    print(f"doc_dir: {doc_dir}")
+    print(f"selected_pages: {total}")
+
+    synced = 0
+    skipped = 0
+    failed = 0
+
+    for index, page in enumerate(pages, start=1):
+        page_id = page["page_id"]
+        packet_dir = _packet_dir_for_page(doc_dir, page_id)
+        packet_path = packet_dir / "packet.json"
+        if not packet_path.exists():
+            failed += 1
+            print(f"[{index}/{total}] {page_id}: missing packet", flush=True)
+            if args.fail_fast:
+                raise FileNotFoundError(f"missing packet: {packet_path}")
+            continue
+
+        if args.skip_existing:
+            packet = repair_packet_json(packet_path)
+            if packet.files["witness"].status in {"draft", "reviewed", "complete"}:
+                skipped += 1
+                print(f"[{index}/{total}] {page_id}: skip", flush=True)
+                continue
+
+        print(f"[{index}/{total}] {page_id}: sync", flush=True)
+        try:
+            packet = sync_packet_from_assembly(packet_path)
+            synced += 1
+            print(f"  witness: {packet.files['witness'].path}", flush=True)
+            print(f"  next_action: {packet.workflow.next_action}", flush=True)
+        except Exception as exc:
+            failed += 1
+            print(f"[{index}/{total}] {page_id}: failed ({exc.__class__.__name__}: {exc})", flush=True)
+            if args.fail_fast:
+                raise
+
+    print("sync_doc_packets: done")
+    print(f"synced: {synced}")
+    print(f"skipped: {skipped}")
+    print(f"failed: {failed}")
 
 
 def cmd_synthesize(args: argparse.Namespace) -> None:
@@ -598,6 +667,20 @@ def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     ingest.add_argument("--packet", required=True, help="Path to packet.json")
     ingest.add_argument("--reading", required=True, help="Path to page reading markdown")
     ingest.set_defaults(func=cmd_ingest_reading)
+
+    sync_packet = sub.add_parser("sync-packet", help="Deterministically sync page_assembly.json into witness/translation packet files")
+    sync_packet.add_argument("--packet", required=True, help="Path to packet.json")
+    sync_packet.add_argument("--assembly", help="Optional explicit page_assembly.json path")
+    sync_packet.set_defaults(func=cmd_sync_packet)
+
+    sync_doc = sub.add_parser("sync-doc-packets", help="Sync page assemblies into packet witness files across a document tranche")
+    sync_doc.add_argument("--doc-dir", required=True, help="Document directory containing page_list.json and experiments/")
+    sync_doc.add_argument("--start-page", help="Optional starting page_id")
+    sync_doc.add_argument("--end-page", help="Optional ending page_id")
+    sync_doc.add_argument("--limit", type=int, help="Optional maximum number of pages")
+    sync_doc.add_argument("--skip-existing", action="store_true", help="Skip packets whose witness status is already draft/reviewed/complete")
+    sync_doc.add_argument("--fail-fast", action="store_true", help="Stop on the first failed packet sync")
+    sync_doc.set_defaults(func=cmd_sync_doc_packets)
 
     read = sub.add_parser("read", help="Run the focused witness prompt on one page image")
     read.add_argument("--image", required=True, help="Source image to read")

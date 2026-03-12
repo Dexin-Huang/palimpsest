@@ -7,6 +7,7 @@ import re
 from typing import Iterable
 
 from palimpsest.config import DEFAULT_MODEL_READING
+from palimpsest.models import PageAssembly
 from palimpsest.models.packet import PacketContinuity, PacketFileRef, PagePacket, PacketWorkflow
 from palimpsest.reconstruct.prepare import PreparedPageArtifact, prepare_image
 from palimpsest.packets.templates import packet_markdown_template
@@ -227,6 +228,225 @@ def _iter_bullets(lines: Iterable[str]) -> list[str]:
         if stripped.startswith("- ") or stripped.startswith("* "):
             items.append(re.sub(r"^[-*]\s+", "", stripped))
     return items
+
+
+def _load_packet(packet_path: Path) -> PagePacket:
+    return PagePacket.model_validate_json(packet_path.read_text(encoding="utf-8"))
+
+
+def _load_packet_assembly(packet: PagePacket, assembly_path: Path | None = None) -> PageAssembly:
+    if assembly_path is None:
+        assembly_ref = packet.files.get("page_assembly")
+        if assembly_ref is None or not assembly_ref.path:
+            raise FileNotFoundError(f"Packet {packet.page_id} is missing page_assembly metadata")
+        assembly_path = Path(assembly_ref.path)
+    assembly_path = assembly_path.resolve()
+    if not assembly_path.exists():
+        raise FileNotFoundError(f"Missing page_assembly.json: {assembly_path}")
+    return PageAssembly.model_validate_json(assembly_path.read_text(encoding="utf-8"))
+
+
+def _sorted_assembly_units(assembly: PageAssembly):
+    return sorted(
+        assembly.units,
+        key=lambda unit: (
+            9999 if unit.reading_order is None else unit.reading_order,
+            unit.page_side or "",
+            9999 if unit.column_index is None else unit.column_index,
+            unit.unit_id,
+        ),
+    )
+
+
+def _unit_key(unit) -> tuple[str | None, int | None]:
+    return (unit.page_side, unit.column_index)
+
+
+def _normalize_block(text: str | None) -> str:
+    if not text:
+        return ""
+    return "\n".join(line.rstrip() for line in text.splitlines()).strip()
+
+
+def _pick_marginalia_for_unit(main_unit, marginalia_by_side):
+    candidates = list(marginalia_by_side.get(main_unit.page_side or "", []))
+    if not candidates:
+        return []
+    return candidates
+
+
+def sync_packet_from_assembly(packet_path: Path, assembly_path: Path | None = None) -> PagePacket:
+    packet_path = packet_path.resolve()
+    packet = _load_packet(packet_path)
+    assembly = _load_packet_assembly(packet, assembly_path=assembly_path)
+
+    ordered_units = _sorted_assembly_units(assembly)
+    headers: dict[tuple[str | None, int | None], str] = {}
+    page_numbers: dict[tuple[str | None, int | None], str] = {}
+    marginalia_by_side: dict[str, list] = {}
+    main_units: list = []
+
+    for unit in ordered_units:
+        text = _normalize_block(unit.source_block)
+        if unit.role == "header":
+            headers[_unit_key(unit)] = text
+            continue
+        if unit.role == "page_number":
+            page_numbers[_unit_key(unit)] = text
+            continue
+        if unit.role == "marginalia":
+            marginalia_by_side.setdefault(unit.page_side or "", []).append(unit)
+            continue
+        if unit.role == "main_text":
+            main_units.append(unit)
+
+    witness_parts = [f"# Witness: {packet.page_id}", ""]
+    translation_parts = ["# Working Translation", ""]
+    notes_parts = [
+        "# Notes",
+        "",
+        "## Layout",
+        f"- Page unit: {assembly.page_unit}",
+        "- Synced deterministically from page_assembly.json.",
+    ]
+
+    if not main_units:
+        witness_parts.extend(
+            [
+                "## Main Witness",
+                "**Header**:",
+                "**Page Number**:",
+                "**Main Text**",
+                "",
+                "## Layout Notes",
+                "- No witness-bearing content units in page_assembly.json.",
+                "",
+            ]
+        )
+        notes_parts.extend(
+            [
+                "- Non-content or empty page assembly.",
+                "",
+                "## Text Structure",
+                "",
+                "## Citations And Allusions",
+                "",
+                "## Marginalia And Non-Main Text",
+                "",
+                "## Uncertainty Markers",
+                "",
+            ]
+        )
+        witness_ref = packet.files["witness"]
+        Path(witness_ref.path).write_text("\n".join(witness_parts), encoding="utf-8")
+        witness_ref.status = "draft"
+        packet.workflow.next_action = "complete"
+        packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
+        return packet
+
+    for main_unit in main_units:
+        title = main_unit.label
+        key = _unit_key(main_unit)
+        header_text = headers.get(key, "")
+        page_number_text = page_numbers.get(key, "")
+        main_text = _normalize_block(main_unit.source_block)
+        marginalia_units = _pick_marginalia_for_unit(main_unit, marginalia_by_side)
+
+        witness_parts.append(f"## {title}")
+        witness_parts.append(f"**Header**: {header_text}" if header_text else "**Header**:")
+        witness_parts.append(f"**Page Number**: {page_number_text}" if page_number_text else "**Page Number**:")
+        if marginalia_units:
+            position = f"{main_unit.page_side or 'page'} margin"
+            marginalia_text = "\n\n".join(
+                block for block in (_normalize_block(unit.source_block) for unit in marginalia_units) if block
+            )
+            witness_parts.extend(
+                [
+                    f"**Marginalia** (unknown, {position}):",
+                    "```",
+                    marginalia_text,
+                    "```",
+                ]
+            )
+        else:
+            witness_parts.append("**Marginalia** (script, position):")
+            witness_parts.extend(["```", "```"])
+        witness_parts.append("**Main Text**")
+        if main_text:
+            witness_parts.extend(main_text.splitlines())
+        witness_parts.append("")
+
+        translation_parts.extend(
+            [
+                f"## {title}: [English Header]",
+                "**Main Text**",
+                "",
+            ]
+        )
+
+    witness_parts.extend(
+        [
+            "## Layout Notes",
+            f"- Page unit: {assembly.page_unit}",
+            f"- Canonical witness units: {', '.join(unit.label for unit in main_units)}",
+            "",
+        ]
+    )
+    translation_parts.extend(
+        [
+            "## Translation Notes",
+            "",
+            "## Interpretive Restraint",
+            "",
+        ]
+    )
+    notes_parts.extend(
+        [
+            "",
+            "## Text Structure",
+            *[f"- Main unit: {unit.label}" for unit in main_units],
+            "",
+            "## Citations And Allusions",
+            "",
+            "## Marginalia And Non-Main Text",
+            *[
+                f"- {unit.label} on {unit.page_side or 'page'} side"
+                for units in marginalia_by_side.values()
+                for unit in units
+            ],
+            "",
+            "## Uncertainty Markers",
+            "",
+        ]
+    )
+
+    witness_path = Path(packet.files["witness"].path)
+    witness_path.write_text("\n".join(witness_parts), encoding="utf-8")
+    packet.files["witness"].status = "draft"
+
+    translation_ref = packet.files.get("translation")
+    if translation_ref is not None and translation_ref.status in {"empty", "started"}:
+        Path(translation_ref.path).write_text("\n".join(translation_parts), encoding="utf-8")
+        translation_ref.status = "started"
+
+    notes_ref = packet.files.get("notes")
+    if notes_ref is not None and notes_ref.status in {"empty", "started"}:
+        Path(notes_ref.path).write_text("\n".join(notes_parts), encoding="utf-8")
+        notes_ref.status = "started"
+
+    terms_ref = packet.files.get("terms")
+    if terms_ref is not None and terms_ref.status in {"empty", "started"}:
+        Path(terms_ref.path).write_text(packet_markdown_template("terms", page_id=packet.page_id, page_unit=packet.page_unit), encoding="utf-8")
+        terms_ref.status = "started"
+
+    questions_ref = packet.files.get("questions")
+    if questions_ref is not None and questions_ref.status in {"empty", "started"}:
+        Path(questions_ref.path).write_text(packet_markdown_template("questions", page_id=packet.page_id, page_unit=packet.page_unit), encoding="utf-8")
+        questions_ref.status = "started"
+
+    packet.workflow.next_action = "fill_notes"
+    packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
+    return packet
 
 
 def ingest_page_reading(packet_path: Path, reading_path: Path) -> PagePacket:

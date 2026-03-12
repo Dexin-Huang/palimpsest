@@ -1,5 +1,5 @@
 from .continuity import run_page_handoff, run_window_synthesis
-from .packet import attach_layout_probe, create_page_packet, ingest_page_reading
+from .packet import attach_layout_probe, create_page_packet, ingest_page_reading, sync_packet_from_assembly
 from .scholar import (
     TASK_CHOICES,
     build_packet_scholar_prompt,
@@ -23,4 +23,5 @@ __all__ = [
     "run_page_handoff",
     "run_packet_scholar",
     "run_window_synthesis",
+    "sync_packet_from_assembly",
 ]
