@@ -31,7 +31,7 @@ except ImportError:
 
 import requests
 
-from palimpsest.commands.discovery import extract_metadata
+from palimpsest.discovery.iiif import extract_metadata
 
 
 @dataclass

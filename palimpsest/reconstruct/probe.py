@@ -7,8 +7,8 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_READING, DEFAULT_MODEL_VISION
+from palimpsest.models.layout_probe import LayoutProbe, RegionOrientation
 from palimpsest.reconstruct.artifacts import PageLayoutProbeArtifact
-from palimpsest.models import LayoutProbe, RegionOrientation
 
 from .pipeline import (
     DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,

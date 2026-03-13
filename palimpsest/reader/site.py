@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 import shutil
 
-from palimpsest.packets.scholar import repair_packet_json
+from palimpsest.contracts import EDITION_HTML_FILENAME
+from palimpsest.packets.state import repair_packet_json
 from palimpsest.web import html_shell as web_html_shell
 
 from .common import display_page_id, page_sort_key, relpath, utc_now
@@ -61,8 +62,8 @@ def build_packet_book_site(
     for index, (packet_path, packet) in enumerate(zip(resolved_packets, packets)):
         page_out_dir = folio_dir / packet.page_id
         page_out_dir.mkdir(parents=True, exist_ok=True)
-        prev_href = f"../{packets[index - 1].page_id}/index.html" if index > 0 else "../../contents.html"
-        next_href = f"../{packets[index + 1].page_id}/index.html" if index < len(packets) - 1 else "../../ending.html"
+        prev_href = f"../{packets[index - 1].page_id}/{EDITION_HTML_FILENAME}" if index > 0 else "../../contents.html"
+        next_href = f"../{packets[index + 1].page_id}/{EDITION_HTML_FILENAME}" if index < len(packets) - 1 else "../../ending.html"
         artifact = render_packet_folio_html(
             packet_path,
             out_dir=page_out_dir,
@@ -74,7 +75,7 @@ def build_packet_book_site(
             include_cover=False,
         )
         folio_paths.append(artifact.html_path)
-        page_entries.append({"page_id": packet.page_id, "href": f"folios/{packet.page_id}/index.html"})
+        page_entries.append({"page_id": packet.page_id, "href": f"folios/{packet.page_id}/{EDITION_HTML_FILENAME}"})
 
     shell_css = "\n".join(
         [

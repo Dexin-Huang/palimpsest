@@ -5,8 +5,10 @@ from html import escape
 import json
 from pathlib import Path
 
-from palimpsest.models import FolioRender, PagePacket
-from palimpsest.packets.scholar import repair_packet_json
+from palimpsest.contracts import folio_render_path, render_html_path, render_meta_path
+from palimpsest.models.folio_render import FolioRender
+from palimpsest.models.packet import PagePacket
+from palimpsest.packets.state import repair_packet_json
 from palimpsest.web import (
     MarkdownDocument,
     build_folio_render as web_build_folio_render,
@@ -267,9 +269,10 @@ def render_packet_folio_html(
     target_dir = out_dir.resolve() if out_dir else packet_dir
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    html_path = target_dir / "index.html"
-    meta_path = target_dir / "render_meta.json"
-    folio_render_path = target_dir / "render.json"
+    html_path = render_html_path(target_dir)
+    meta_path = render_meta_path(target_dir)
+    resolved_folio_render_path = folio_render_path(target_dir)
+    packet_workspace_render = target_dir == packet_dir
     image_href_value = image_href or relpath(target_dir, Path(packet.source_image_path))
     resolved_book_title = book_title or packet.doc_id.replace("_", " ")
 
@@ -283,20 +286,13 @@ def render_packet_folio_html(
         include_cover=include_cover,
     )
     html_path.write_text(html, encoding="utf-8")
-    folio_render_path.write_text(folio_render.model_dump_json(indent=2), encoding="utf-8")
-
-    packet.files["edition_html"].status = "draft"
-    packet.files["edition_html"].note = "Rendered HTML folio edition"
-    if "folio_render" in packet.files:
-        packet.files["folio_render"].status = "draft"
-        packet.files["folio_render"].note = "Structured folio.render JSON artifact"
-    packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
+    resolved_folio_render_path.write_text(folio_render.model_dump_json(indent=2), encoding="utf-8")
 
     meta = {
         "rendered_at": utc_now(),
         "packet_path": str(packet_path),
         "html_path": str(html_path),
-        "folio_render_path": str(folio_render_path),
+        "folio_render_path": str(resolved_folio_render_path),
         "source_image_path": packet.source_image_path,
         "image_href": image_href_value,
         "book_title": resolved_book_title,
@@ -304,12 +300,13 @@ def render_packet_folio_html(
         "next_href": next_href,
         "home_href": home_href,
         "include_cover": include_cover,
+        "packet_workspace_render": packet_workspace_render,
     }
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
 
     return RenderedPacketHtmlArtifact(
         packet_path=packet_path,
         html_path=html_path,
-        folio_render_path=folio_render_path,
+        folio_render_path=resolved_folio_render_path,
         meta_path=meta_path,
     )

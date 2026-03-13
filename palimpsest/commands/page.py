@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
-import time
 
 from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
@@ -18,6 +16,14 @@ from palimpsest.packets import (
     run_window_synthesis,
     sync_packet_from_assembly,
 )
+from palimpsest.packets.workflow import (
+    load_doc_pages,
+    packet_dir_for_page,
+    render_packet_workspace,
+    run_layout_pipeline,
+    run_packet_decode,
+    select_doc_pages,
+)
 from palimpsest.reconstruct import (
     prepare_image,
     run_box_cleanup,
@@ -29,187 +35,6 @@ from palimpsest.reconstruct import (
     run_section_resolution,
     run_section_synthesis,
 )
-from palimpsest.reader import render_packet_folio_html
-
-
-def _load_doc_pages(doc_dir: Path) -> list[dict]:
-    page_list_path = doc_dir / "page_list.json"
-    if not page_list_path.exists():
-        raise FileNotFoundError(f"missing page_list.json in {doc_dir}")
-    payload = json.loads(page_list_path.read_text(encoding="utf-8"))
-    pages = list(payload.get("pages", []))
-    pages.sort(key=lambda item: int(item.get("order", 0)))
-    return pages
-
-
-def _select_doc_pages(
-    pages: list[dict],
-    *,
-    start_page: str | None = None,
-    end_page: str | None = None,
-    limit: int | None = None,
-) -> list[dict]:
-    selected = pages
-    if start_page:
-        try:
-            start_index = next(index for index, page in enumerate(selected) if page.get("page_id") == start_page)
-        except StopIteration as exc:
-            raise ValueError(f"start page not found: {start_page}") from exc
-        selected = selected[start_index:]
-    if end_page:
-        try:
-            end_index = next(index for index, page in enumerate(selected) if page.get("page_id") == end_page)
-        except StopIteration as exc:
-            raise ValueError(f"end page not found: {end_page}") from exc
-        selected = selected[: end_index + 1]
-    if limit is not None:
-        selected = selected[:limit]
-    return selected
-
-
-def _packet_dir_for_page(doc_dir: Path, page_id: str) -> Path:
-    return doc_dir / "experiments" / f"{page_id}_packet_v1"
-
-
-def _run_layout_pipeline(
-    *,
-    image_path: Path,
-    probe_dir: Path,
-    layout_model: str,
-    region_model: str,
-    cleanup_model: str,
-    run_regions: bool,
-    run_section_resolution_stage: bool,
-    run_box_cleanup_stage: bool,
-    run_assembly: bool,
-    retries: int = 2,
-):
-    probe_artifact = None
-    region_artifact = None
-    section_artifact = None
-    validation_artifact = None
-    box_cleanup_artifact = None
-    assembly_artifact = None
-
-    def _retry(stage_name: str, fn):
-        last_exc = None
-        for attempt in range(retries + 1):
-            try:
-                if attempt == 0:
-                    print(f"{stage_name}: running", flush=True)
-                return fn()
-            except Exception as exc:  # pragma: no cover - defensive runtime retry path
-                last_exc = exc
-                if attempt >= retries:
-                    raise
-                print(f"{stage_name}: retry {attempt + 1}/{retries} after {exc.__class__.__name__}", flush=True)
-                time.sleep(min(2 + attempt, 5))
-        raise last_exc  # pragma: no cover
-
-    probe_artifact = _retry(
-        "layout_probe",
-        lambda: run_page_layout_probe(
-            image_path,
-            out_dir=probe_dir,
-            model=layout_model,
-            orient_model=region_model,
-            orient_regions=False,
-        ),
-    )
-
-    if run_regions:
-        region_artifact = _retry(
-            "region_read",
-            lambda: run_region_reads(
-                probe_artifact.output_dir,
-                model=region_model,
-            ),
-        )
-
-    if run_section_resolution_stage:
-        section_artifact = _retry(
-            "section_resolution",
-            lambda: run_section_resolution(
-                probe_artifact.output_dir,
-                model=cleanup_model,
-            ),
-        )
-        # Validation operates on page assembly units, so build a provisional
-        # assembly from the section-resolved boxes before targeted cleanup.
-        assembly_artifact = run_page_assembly(probe_artifact.output_dir)
-        validation_artifact = run_page_validate(probe_artifact.output_dir)
-
-    if run_box_cleanup_stage:
-        box_cleanup_artifact = _retry(
-            "box_cleanup",
-            lambda: run_box_cleanup(
-                probe_artifact.output_dir,
-                model=cleanup_model,
-            ),
-        )
-
-    if run_assembly:
-        assembly_artifact = run_page_assembly(probe_artifact.output_dir)
-
-    return probe_artifact, region_artifact, section_artifact, validation_artifact, box_cleanup_artifact, assembly_artifact
-
-
-def _run_packet_decode(
-    *,
-    image_path: Path,
-    packet_dir: Path,
-    raw: bool,
-    layout_model: str,
-    region_model: str,
-    cleanup_model: str,
-    retries: int,
-    render_html: bool,
-    title: str | None,
-):
-    packet_path = packet_dir / "packet.json"
-    created = False
-    if packet_path.exists():
-        packet = repair_packet_json(packet_path)
-    else:
-        packet, packet_path = create_page_packet(
-            image_path,
-            out_dir=packet_dir,
-            prepare=not raw,
-        )
-        created = True
-
-    probe_artifact, region_artifact, section_artifact, validation_artifact, box_cleanup_artifact, assembly_artifact = _run_layout_pipeline(
-        image_path=image_path,
-        probe_dir=packet_dir / "layout_probe",
-        layout_model=layout_model,
-        region_model=region_model,
-        cleanup_model=cleanup_model,
-        run_regions=True,
-        run_section_resolution_stage=True,
-        run_box_cleanup_stage=True,
-        run_assembly=True,
-        retries=retries,
-    )
-    packet = attach_layout_probe(packet_path, probe_artifact.output_dir)
-    render_artifact = None
-    if render_html:
-        render_artifact = render_packet_folio_html(
-            packet_path,
-            out_dir=packet_dir,
-            book_title=title,
-        )
-    return {
-        "created": created,
-        "packet_path": packet_path,
-        "packet": packet,
-        "probe_artifact": probe_artifact,
-        "region_artifact": region_artifact,
-        "section_artifact": section_artifact,
-        "validation_artifact": validation_artifact,
-        "box_cleanup_artifact": box_cleanup_artifact,
-        "assembly_artifact": assembly_artifact,
-        "render_artifact": render_artifact,
-    }
 
 
 def cmd_prepare(args: argparse.Namespace) -> None:
@@ -260,7 +85,7 @@ def cmd_packet(args: argparse.Namespace) -> None:
     if packet.continuity.window_synthesis_path:
         print(f"window_synthesis: {packet.continuity.window_synthesis_path}")
     if not args.no_layout_probe:
-        probe_artifact, region_artifact, section_artifact, validation_artifact, box_cleanup_artifact, assembly_artifact = _run_layout_pipeline(
+        layout = run_layout_pipeline(
             image_path=Path(args.image),
             probe_dir=packet_path.parent / "layout_probe",
             layout_model=args.layout_model,
@@ -272,21 +97,21 @@ def cmd_packet(args: argparse.Namespace) -> None:
             run_assembly=True,
             retries=args.retries,
         )
-        packet = attach_layout_probe(packet_path, probe_artifact.output_dir)
-        print(f"layout_probe: {probe_artifact.layout_json_path}")
-        print(f"layout_overlay: {probe_artifact.overlay_path}")
-        if region_artifact is not None:
-            print(f"region_reads: {region_artifact.reads_path}")
+        packet = attach_layout_probe(packet_path, layout.probe_artifact.output_dir)
+        print(f"layout_probe: {layout.probe_artifact.layout_json_path}")
+        print(f"layout_overlay: {layout.probe_artifact.overlay_path}")
+        if layout.region_artifact is not None:
+            print(f"region_reads: {layout.region_artifact.reads_path}")
         else:
-            print(f"region_reads: {probe_artifact.orientations_path}")
-        if section_artifact is not None:
-            print(f"section_resolution: {section_artifact.resolution_json_path}")
-        if validation_artifact is not None:
-            print(f"page_validation: {validation_artifact.validation_json_path}")
-        if box_cleanup_artifact is not None:
-            print(f"box_cleanup: {box_cleanup_artifact.cleanup_json_path}")
-        if assembly_artifact is not None:
-            print(f"page_assembly: {assembly_artifact.assembly_json_path}")
+            print(f"region_reads: {layout.probe_artifact.orientations_path}")
+        if layout.section_artifact is not None:
+            print(f"section_resolution: {layout.section_artifact.resolution_json_path}")
+        if layout.validation_artifact is not None:
+            print(f"page_validation: {layout.validation_artifact.validation_json_path}")
+        if layout.box_cleanup_artifact is not None:
+            print(f"box_cleanup: {layout.box_cleanup_artifact.cleanup_json_path}")
+        if layout.assembly_artifact is not None:
+            print(f"page_assembly: {layout.assembly_artifact.assembly_json_path}")
     print(f"next_action: {packet.workflow.next_action}")
 
 
@@ -318,8 +143,8 @@ def cmd_sync_packet(args: argparse.Namespace) -> None:
 
 def cmd_sync_doc_packets(args: argparse.Namespace) -> None:
     doc_dir = Path(args.doc_dir).resolve()
-    pages = _select_doc_pages(
-        _load_doc_pages(doc_dir),
+    pages = select_doc_pages(
+        load_doc_pages(doc_dir),
         start_page=args.start_page,
         end_page=args.end_page,
         limit=args.limit,
@@ -338,7 +163,7 @@ def cmd_sync_doc_packets(args: argparse.Namespace) -> None:
 
     for index, page in enumerate(pages, start=1):
         page_id = page["page_id"]
-        packet_dir = _packet_dir_for_page(doc_dir, page_id)
+        packet_dir = packet_dir_for_page(doc_dir, page_id)
         packet_path = packet_dir / "packet.json"
         if not packet_path.exists():
             failed += 1
@@ -389,8 +214,8 @@ def cmd_translate_packet(args: argparse.Namespace) -> None:
 
 def cmd_translate_doc_packets(args: argparse.Namespace) -> None:
     doc_dir = Path(args.doc_dir).resolve()
-    pages = _select_doc_pages(
-        _load_doc_pages(doc_dir),
+    pages = select_doc_pages(
+        load_doc_pages(doc_dir),
         start_page=args.start_page,
         end_page=args.end_page,
         limit=args.limit,
@@ -410,7 +235,7 @@ def cmd_translate_doc_packets(args: argparse.Namespace) -> None:
 
     for index, page in enumerate(pages, start=1):
         page_id = page["page_id"]
-        packet_dir = _packet_dir_for_page(doc_dir, page_id)
+        packet_dir = packet_dir_for_page(doc_dir, page_id)
         packet_path = packet_dir / "packet.json"
         if not packet_path.exists():
             failed += 1
@@ -466,7 +291,7 @@ def cmd_synthesize(args: argparse.Namespace) -> None:
 
 
 def cmd_render_html(args: argparse.Namespace) -> None:
-    artifact = render_packet_folio_html(
+    artifact = render_packet_workspace(
         Path(args.packet),
         out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
         book_title=args.title,
@@ -483,7 +308,7 @@ def cmd_refresh_packet(args: argparse.Namespace) -> None:
     probe_dir = packet_path.parent / "layout_probe"
 
     if not args.skip_layout_probe:
-        probe_artifact, region_artifact, section_artifact, validation_artifact, box_cleanup_artifact, assembly_artifact = _run_layout_pipeline(
+        layout = run_layout_pipeline(
             image_path=Path(packet.source_image_path),
             probe_dir=probe_dir,
             layout_model=args.layout_model,
@@ -495,18 +320,18 @@ def cmd_refresh_packet(args: argparse.Namespace) -> None:
             run_assembly=not args.skip_assembly,
             retries=args.retries,
         )
-        print(f"layout_probe: {probe_artifact.layout_json_path}")
-        print(f"layout_overlay: {probe_artifact.overlay_path}")
-        if region_artifact is not None:
-            print(f"region_reads: {region_artifact.reads_path}")
-        if section_artifact is not None:
-            print(f"section_resolution: {section_artifact.resolution_json_path}")
-        if validation_artifact is not None:
-            print(f"page_validation: {validation_artifact.validation_json_path}")
-        if box_cleanup_artifact is not None:
-            print(f"box_cleanup: {box_cleanup_artifact.cleanup_json_path}")
-        if assembly_artifact is not None:
-            print(f"page_assembly: {assembly_artifact.assembly_json_path}")
+        print(f"layout_probe: {layout.probe_artifact.layout_json_path}")
+        print(f"layout_overlay: {layout.probe_artifact.overlay_path}")
+        if layout.region_artifact is not None:
+            print(f"region_reads: {layout.region_artifact.reads_path}")
+        if layout.section_artifact is not None:
+            print(f"section_resolution: {layout.section_artifact.resolution_json_path}")
+        if layout.validation_artifact is not None:
+            print(f"page_validation: {layout.validation_artifact.validation_json_path}")
+        if layout.box_cleanup_artifact is not None:
+            print(f"box_cleanup: {layout.box_cleanup_artifact.cleanup_json_path}")
+        if layout.assembly_artifact is not None:
+            print(f"page_assembly: {layout.assembly_artifact.assembly_json_path}")
     else:
         if not skip_cleanup:
             section_artifact = run_section_resolution(
@@ -530,7 +355,7 @@ def cmd_refresh_packet(args: argparse.Namespace) -> None:
     print(f"packet: {packet_path}")
 
     if args.render_html:
-        artifact = render_packet_folio_html(
+        artifact = render_packet_workspace(
             packet_path,
             out_dir=Path(args.out_dir).resolve() if args.out_dir else None,
             book_title=args.title,
@@ -640,8 +465,8 @@ def cmd_validate(args: argparse.Namespace) -> None:
 
 def cmd_decode_doc(args: argparse.Namespace) -> None:
     doc_dir = Path(args.doc_dir).resolve()
-    pages = _select_doc_pages(
-        _load_doc_pages(doc_dir),
+    pages = select_doc_pages(
+        load_doc_pages(doc_dir),
         start_page=args.start_page,
         end_page=args.end_page,
         limit=args.limit,
@@ -663,7 +488,7 @@ def cmd_decode_doc(args: argparse.Namespace) -> None:
     for index, page in enumerate(pages, start=1):
         page_id = page["page_id"]
         image_path = doc_dir / "images" / page["filename"]
-        packet_dir = _packet_dir_for_page(doc_dir, page_id)
+        packet_dir = packet_dir_for_page(doc_dir, page_id)
         packet_path = packet_dir / "packet.json"
         assembly_path = packet_dir / "layout_probe" / "page_assembly.json"
         render_path = packet_dir / "index.html"
@@ -673,7 +498,7 @@ def cmd_decode_doc(args: argparse.Namespace) -> None:
             continue
         print(f"[{index}/{total}] {page_id}: decode", flush=True)
         try:
-            result = _run_packet_decode(
+            result = run_packet_decode(
                 image_path=image_path,
                 packet_dir=packet_dir,
                 raw=args.raw,
@@ -685,12 +510,12 @@ def cmd_decode_doc(args: argparse.Namespace) -> None:
                 title=args.title,
             )
             completed += 1
-            status = "created" if result["created"] else "refreshed"
+            status = "created" if result.created else "refreshed"
             print(f"[{index}/{total}] {page_id}: {status}", flush=True)
-            print(f"  packet: {result['packet_path']}", flush=True)
-            print(f"  assembly: {result['assembly_artifact'].assembly_json_path}", flush=True)
-            if result["render_artifact"] is not None:
-                print(f"  html: {result['render_artifact'].html_path}", flush=True)
+            print(f"  packet: {result.packet_path}", flush=True)
+            print(f"  assembly: {result.layout.assembly_artifact.assembly_json_path}", flush=True)
+            if result.render_artifact is not None:
+                print(f"  html: {result.render_artifact.html_path}", flush=True)
         except Exception as exc:
             failed += 1
             print(f"[{index}/{total}] {page_id}: failed ({exc.__class__.__name__}: {exc})", flush=True)

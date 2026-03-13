@@ -5,6 +5,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 
+from palimpsest.contracts import prepare_meta_path, prepare_output_dir, prepared_image_path
 from PIL import Image
 
 
@@ -29,9 +30,7 @@ def _utc_now() -> str:
 
 
 def _default_output_dir(image_path: Path) -> Path:
-    if image_path.parent.name in {"images", "images_cleaned"}:
-        return image_path.parent.parent / "experiments" / f"{image_path.stem}_prepared"
-    return image_path.parent / f"{image_path.stem}_prepared"
+    return prepare_output_dir(image_path)
 
 
 def detect_content_bbox(
@@ -94,15 +93,15 @@ def prepare_image(
         padding_px=padding_px,
     )
 
-    prepared_image_path = target_dir / f"{image_path.stem}_prepared.jpg"
+    resolved_prepared_image_path = prepared_image_path(target_dir, image_path)
     with Image.open(image_path) as image:
-        image.crop(bbox_px).save(prepared_image_path, format="JPEG", quality=95)
+        image.crop(bbox_px).save(resolved_prepared_image_path, format="JPEG", quality=95)
 
-    meta_path = target_dir / "prepare_meta.json"
+    meta_path = prepare_meta_path(target_dir)
     meta = {
         "generated_at": _utc_now(),
         "source_image_path": str(image_path),
-        "prepared_image_path": str(prepared_image_path),
+        "prepared_image_path": str(resolved_prepared_image_path),
         "bbox_px": list(bbox_px),
         "footer_trim_ratio": footer_trim_ratio,
         "ink_threshold": ink_threshold,
@@ -112,7 +111,7 @@ def prepare_image(
 
     return PreparedPageArtifact(
         source_image_path=image_path,
-        prepared_image_path=prepared_image_path,
+        prepared_image_path=resolved_prepared_image_path,
         meta_path=meta_path,
         bbox_px=bbox_px,
         footer_trim_ratio=footer_trim_ratio,

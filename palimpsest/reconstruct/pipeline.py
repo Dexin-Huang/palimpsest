@@ -11,8 +11,23 @@ from google.genai import types
 from PIL import Image, ImageDraw, ImageFont
 
 from palimpsest.config import DEFAULT_MODEL_READING
-from palimpsest.reconstruct.artifacts import PageAssemblyArtifact, RegionReadsArtifact
-from palimpsest.models import (
+from palimpsest.contracts import (
+    IMAGE_PARENT_DIRNAMES,
+    box_cleanup_path,
+    layout_probe_json_path,
+    layout_overlay_path,
+    layout_probe_output_dir,
+    page_assembly_json_path,
+    page_assembly_md_path,
+    page_assembly_meta_path,
+    page_validation_json_path,
+    region_reads_meta_path,
+    region_reads_path,
+    section_resolution_path,
+)
+from palimpsest.model_io import resolve_prompt_text as _resolve_prompt_text
+from palimpsest.model_io import response_text as _response_text
+from palimpsest.models.layout_probe import (
     LayoutProbe,
     PageAssembly,
     PageAssemblyUnit,
@@ -21,6 +36,7 @@ from palimpsest.models import (
     PageValidation,
     RegionOrientation,
 )
+from palimpsest.reconstruct.artifacts import PageAssemblyArtifact, RegionReadsArtifact
 
 
 DEFAULT_LAYOUT_PROMPT_NAME = "page_layout_probe"
@@ -33,44 +49,14 @@ def _utc_now() -> str:
 
 
 def _default_output_dir(image_path: Path) -> Path:
-    if image_path.parent.name in {"images", "images_cleaned"}:
-        return image_path.parent.parent / "experiments" / f"{image_path.stem}_layout_probe"
-    return image_path.parent / f"{image_path.stem}_layout_probe"
+    return layout_probe_output_dir(image_path)
 
 
 def _resolve_doc_id(image_path: Path) -> str:
     image_path = image_path.resolve()
-    if image_path.parent.name in {"images", "images_cleaned"}:
+    if image_path.parent.name in IMAGE_PARENT_DIRNAMES:
         return image_path.parent.parent.name
     return image_path.parent.name
-
-
-def _resolve_prompt_text(prompt_file: Path | None, prompt_name: str) -> tuple[str, Path]:
-    if prompt_file is None:
-        prompt_path = (Path(__file__).resolve().parents[1] / "prompts" / f"{prompt_name}.txt").resolve()
-        return prompt_path.read_text(encoding="utf-8"), prompt_path
-    prompt_path = prompt_file.resolve()
-    return prompt_path.read_text(encoding="utf-8"), prompt_path
-
-
-def _response_text(response) -> tuple[str, str | None]:
-    candidates = getattr(response, "candidates", None) or []
-    finish_reason = None
-    text_parts: list[str] = []
-    for index, candidate in enumerate(candidates):
-        if index == 0:
-            raw_reason = getattr(candidate, "finish_reason", None)
-            finish_reason = str(raw_reason) if raw_reason is not None else None
-        content = getattr(candidate, "content", None)
-        parts = getattr(content, "parts", None) or []
-        for part in parts:
-            value = getattr(part, "text", None)
-            if isinstance(value, str) and value:
-                text_parts.append(value)
-    text = "\n".join(text_parts).strip()
-    if not text:
-        raise ValueError("Model returned no text")
-    return text, finish_reason
 
 
 def _coerce_json_text(text: str) -> str:
@@ -443,11 +429,11 @@ def _run_region_orientation(
 
 
 def _load_layout_probe(probe_dir: Path) -> LayoutProbe:
-    return LayoutProbe.model_validate_json((probe_dir / "layout_probe.json").read_text(encoding="utf-8"))
+    return LayoutProbe.model_validate_json(layout_probe_json_path(probe_dir).read_text(encoding="utf-8"))
 
 
 def _load_region_reads(probe_dir: Path) -> list[RegionOrientation]:
-    path = probe_dir / "region_reads.json"
+    path = region_reads_path(probe_dir)
     if not path.exists():
         return []
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -455,7 +441,7 @@ def _load_region_reads(probe_dir: Path) -> list[RegionOrientation]:
 
 
 def _write_region_reads(probe_dir: Path, orientations: list[RegionOrientation]) -> Path:
-    reads_path = probe_dir / "region_reads.json"
+    reads_path = region_reads_path(probe_dir)
     reads_path.write_text(
         json.dumps([item.model_dump() for item in orientations], indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -464,7 +450,7 @@ def _write_region_reads(probe_dir: Path, orientations: list[RegionOrientation]) 
 
 
 def _load_section_resolution(probe_dir: Path) -> PageSectionResolution | None:
-    path = probe_dir / "section_resolution.json"
+    path = section_resolution_path(probe_dir)
     if not path.exists():
         return None
     try:
@@ -474,7 +460,7 @@ def _load_section_resolution(probe_dir: Path) -> PageSectionResolution | None:
 
 
 def _load_box_cleanup(probe_dir: Path) -> PageBoxCleanup | None:
-    path = probe_dir / "box_cleanup.json"
+    path = box_cleanup_path(probe_dir)
     if not path.exists():
         return None
     try:
@@ -484,7 +470,7 @@ def _load_box_cleanup(probe_dir: Path) -> PageBoxCleanup | None:
 
 
 def _load_page_validation(probe_dir: Path) -> PageValidation | None:
-    path = probe_dir / "page_validation.json"
+    path = page_validation_json_path(probe_dir)
     if not path.exists():
         return None
     try:
@@ -507,7 +493,7 @@ def run_region_reads(
 
     selected = {item for item in (region_ids or [])}
     existing = {item.region_id: item for item in _load_region_reads(probe_dir)}
-    reads_path = probe_dir / "region_reads.json"
+    reads_path = region_reads_path(probe_dir)
     for region in layout.regions:
         if region.ignore_for_reconstruction or region.reconstruction_priority == "ignore":
             continue
@@ -538,7 +524,7 @@ def run_region_reads(
     reads = [existing[region_id] for region_id in ordered_region_ids]
 
     reads_path = _write_region_reads(probe_dir, reads)
-    meta_path = probe_dir / "region_reads_meta.json"
+    meta_path = region_reads_meta_path(probe_dir)
     meta = {
         "generated_at": _utc_now(),
         "probe_dir": str(probe_dir),
@@ -606,8 +592,8 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
         units=units,
     )
 
-    assembly_json_path = probe_dir / "page_assembly.json"
-    assembly_md_path = probe_dir / "page_assembly.md"
+    assembly_json_path = page_assembly_json_path(probe_dir)
+    assembly_md_path = page_assembly_md_path(probe_dir)
     assembly_json_path.write_text(assembly.model_dump_json(indent=2), encoding="utf-8")
 
     markdown_lines = [f"# Page Assembly: {assembly.page_id}", ""]
@@ -633,14 +619,14 @@ def run_page_assembly(probe_dir: Path) -> PageAssemblyArtifact:
         markdown_lines.append("")
     assembly_md_path.write_text("\n".join(markdown_lines), encoding="utf-8")
 
-    meta_path = probe_dir / "page_assembly_meta.json"
+    meta_path = page_assembly_meta_path(probe_dir)
     meta = {
         "generated_at": _utc_now(),
         "probe_dir": str(probe_dir),
         "assembly_json_path": str(assembly_json_path),
         "assembly_md_path": str(assembly_md_path),
-        "section_resolution_path": str((probe_dir / "section_resolution.json").resolve()) if section_resolution is not None else None,
-        "box_cleanup_path": str((probe_dir / "box_cleanup.json").resolve()) if box_cleanup is not None else None,
+        "section_resolution_path": str(section_resolution_path(probe_dir).resolve()) if section_resolution is not None else None,
+        "box_cleanup_path": str(box_cleanup_path(probe_dir).resolve()) if box_cleanup is not None else None,
     }
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return PageAssemblyArtifact(

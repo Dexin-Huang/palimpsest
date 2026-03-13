@@ -31,7 +31,7 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
-from palimpsest.transcription.io import strip_json_fences
+from palimpsest.model_io import strip_json_fences
 
 from .database import DiscoveryDB, Manuscript, Enrichment
 

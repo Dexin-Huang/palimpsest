@@ -3,7 +3,7 @@ from __future__ import annotations
 from html import escape
 import re
 
-from palimpsest.models import (
+from palimpsest.models.folio_render import (
     FolioRender,
     FolioRenderCover,
     FolioRenderImagePanel,
@@ -13,9 +13,9 @@ from palimpsest.models import (
     FolioRenderSpread,
     FolioRenderTextPanel,
     InterpretationContent,
-    PagePacket,
     WitnessContent,
 )
+from palimpsest.models.packet import PagePacket
 from palimpsest.web import FolioTemplateSection, render_template_sections as web_render_template_sections
 
 

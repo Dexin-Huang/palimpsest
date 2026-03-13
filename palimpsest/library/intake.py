@@ -4,6 +4,14 @@ import json
 import re
 from pathlib import Path
 
+from palimpsest.contracts import (
+    images_dir,
+    library_registry_path,
+    metadata_path,
+    page_list_path,
+    runs_dir,
+)
+
 from .config import LIBRARY_ROOT
 from .io import atomic_write_json
 from .registry import build_registry_entry, now_iso, update_registry
@@ -17,12 +25,8 @@ def validate_doc_id(doc_id: str) -> None:
 
 
 def _ensure_layout(doc_dir: Path) -> None:
-    (doc_dir / "images").mkdir(parents=True, exist_ok=True)
-    (doc_dir / "exports" / "transcriptions_full").mkdir(parents=True, exist_ok=True)
-    (doc_dir / "exports" / "canonical_pages").mkdir(parents=True, exist_ok=True)
-    (doc_dir / "exports" / "restoration").mkdir(parents=True, exist_ok=True)
-    (doc_dir / "exports" / "book").mkdir(parents=True, exist_ok=True)
-    (doc_dir / "runs").mkdir(parents=True, exist_ok=True)
+    images_dir(doc_dir).mkdir(parents=True, exist_ok=True)
+    runs_dir(doc_dir).mkdir(parents=True, exist_ok=True)
 
 
 def ingest_document(
@@ -49,10 +53,10 @@ def ingest_document(
 
     page_list = {**page_list, "doc_id": doc_id}
 
-    atomic_write_json(doc_dir / "metadata.json", metadata)
-    atomic_write_json(doc_dir / "page_list.json", page_list)
+    atomic_write_json(metadata_path(doc_dir), metadata)
+    atomic_write_json(page_list_path(doc_dir), page_list)
 
-    registry_path = library_root / "index.jsonl"
+    registry_path = library_registry_path(library_root)
     update_registry(registry_path, build_registry_entry(metadata, page_list))
 
     return doc_dir

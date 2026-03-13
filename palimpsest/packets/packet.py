@@ -7,7 +7,23 @@ import re
 from typing import Iterable
 
 from palimpsest.config import DEFAULT_MODEL_READING
-from palimpsest.models import PageAssembly
+from palimpsest.contracts import (
+    IMAGE_PARENT_DIRNAMES,
+    box_cleanup_path,
+    folio_render_path,
+    layout_probe_dir,
+    layout_probe_json_path,
+    layout_overlay_path,
+    packet_file_path,
+    packet_meta_path,
+    packet_output_dir_for_image,
+    packet_path as packet_json_path,
+    page_assembly_json_path,
+    region_reads_path,
+    render_html_path,
+    section_resolution_path,
+)
+from palimpsest.models.layout_probe import PageAssembly
 from palimpsest.models.packet import PacketContinuity, PacketFileRef, PagePacket, PacketWorkflow
 from palimpsest.reconstruct.prepare import PreparedPageArtifact, prepare_image
 from palimpsest.packets.templates import packet_markdown_template
@@ -19,15 +35,13 @@ def _utc_now() -> str:
 
 def _resolve_doc_id(image_path: Path) -> str:
     image_path = image_path.resolve()
-    if image_path.parent.name in {"images", "images_cleaned"}:
+    if image_path.parent.name in IMAGE_PARENT_DIRNAMES:
         return image_path.parent.parent.name
     return image_path.parent.name
 
 
 def _default_output_dir(image_path: Path) -> Path:
-    if image_path.parent.name in {"images", "images_cleaned"}:
-        return image_path.parent.parent / "experiments" / f"{image_path.stem}_packet"
-    return image_path.parent / f"{image_path.stem}_packet"
+    return packet_output_dir_for_image(image_path)
 
 
 def create_page_packet(
@@ -53,20 +67,21 @@ def create_page_packet(
     if prepare:
         prepared = prepare_image(image_path, out_dir=target_dir / "prepared")
 
-    witness_path = target_dir / "witness.md"
-    notes_path = target_dir / "notes.md"
-    translation_path = target_dir / "translation.md"
-    interpretation_path = target_dir / "interpretation.md"
-    terms_path = target_dir / "terms.md"
-    questions_path = target_dir / "questions.md"
-    edition_html_path = target_dir / "index.html"
-    folio_render_path = target_dir / "render.json"
-    layout_probe_path = target_dir / "layout_probe" / "layout_probe.json"
-    layout_overlay_path = target_dir / "layout_probe" / "layout_overlay.png"
-    region_reads_path = target_dir / "layout_probe" / "region_reads.json"
-    section_resolution_path = target_dir / "layout_probe" / "section_resolution.json"
-    box_cleanup_path = target_dir / "layout_probe" / "box_cleanup.json"
-    page_assembly_path = target_dir / "layout_probe" / "page_assembly.json"
+    probe_dir = layout_probe_dir(target_dir)
+    witness_path = packet_file_path(target_dir, "witness")
+    notes_path = packet_file_path(target_dir, "notes")
+    translation_path = packet_file_path(target_dir, "translation")
+    interpretation_path = packet_file_path(target_dir, "interpretation")
+    terms_path = packet_file_path(target_dir, "terms")
+    questions_path = packet_file_path(target_dir, "questions")
+    edition_html_path = render_html_path(target_dir)
+    resolved_folio_render_path = folio_render_path(target_dir)
+    resolved_layout_probe_path = layout_probe_json_path(probe_dir)
+    resolved_layout_overlay_path = layout_overlay_path(probe_dir)
+    resolved_region_reads_path = region_reads_path(probe_dir)
+    resolved_section_resolution_path = section_resolution_path(probe_dir)
+    resolved_box_cleanup_path = box_cleanup_path(probe_dir)
+    resolved_page_assembly_path = page_assembly_json_path(probe_dir)
 
     if not witness_path.exists():
         witness_path.write_text(
@@ -113,13 +128,13 @@ def create_page_packet(
             "terms": PacketFileRef(kind="terms", path=str(terms_path), status="empty"),
             "questions": PacketFileRef(kind="questions", path=str(questions_path), status="empty"),
             "edition_html": PacketFileRef(kind="edition_html", path=str(edition_html_path), status="empty"),
-            "folio_render": PacketFileRef(kind="folio_render", path=str(folio_render_path), status="empty"),
-            "layout_probe": PacketFileRef(kind="layout_probe", path=str(layout_probe_path), status="empty"),
-            "layout_overlay": PacketFileRef(kind="layout_overlay", path=str(layout_overlay_path), status="empty"),
-            "region_reads": PacketFileRef(kind="region_reads", path=str(region_reads_path), status="empty"),
-            "section_resolution": PacketFileRef(kind="section_resolution", path=str(section_resolution_path), status="empty"),
-            "box_cleanup": PacketFileRef(kind="box_cleanup", path=str(box_cleanup_path), status="empty"),
-            "page_assembly": PacketFileRef(kind="page_assembly", path=str(page_assembly_path), status="empty"),
+            "folio_render": PacketFileRef(kind="folio_render", path=str(resolved_folio_render_path), status="empty"),
+            "layout_probe": PacketFileRef(kind="layout_probe", path=str(resolved_layout_probe_path), status="empty"),
+            "layout_overlay": PacketFileRef(kind="layout_overlay", path=str(resolved_layout_overlay_path), status="empty"),
+            "region_reads": PacketFileRef(kind="region_reads", path=str(resolved_region_reads_path), status="empty"),
+            "section_resolution": PacketFileRef(kind="section_resolution", path=str(resolved_section_resolution_path), status="empty"),
+            "box_cleanup": PacketFileRef(kind="box_cleanup", path=str(resolved_box_cleanup_path), status="empty"),
+            "page_assembly": PacketFileRef(kind="page_assembly", path=str(resolved_page_assembly_path), status="empty"),
         },
         continuity=PacketContinuity(
             previous_packet_path=str(previous_packet_path.resolve()) if previous_packet_path else None,
@@ -138,10 +153,10 @@ def create_page_packet(
         ],
     )
 
-    packet_path = target_dir / "packet.json"
+    packet_path = packet_json_path(target_dir)
     packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
 
-    meta_path = target_dir / "packet_meta.json"
+    meta_path = packet_meta_path(target_dir)
     meta = {
         "generated_at": _utc_now(),
         "source_image_path": str(image_path),
@@ -159,12 +174,12 @@ def attach_layout_probe(packet_path: Path, probe_dir: Path) -> PagePacket:
     packet = PagePacket.model_validate_json(packet_path.read_text(encoding="utf-8"))
 
     mapping = {
-        "layout_probe": probe_dir / "layout_probe.json",
-        "layout_overlay": probe_dir / "layout_overlay.png",
-        "region_reads": probe_dir / "region_reads.json",
-        "section_resolution": probe_dir / "section_resolution.json",
-        "box_cleanup": probe_dir / "box_cleanup.json",
-        "page_assembly": probe_dir / "page_assembly.json",
+        "layout_probe": layout_probe_json_path(probe_dir),
+        "layout_overlay": layout_overlay_path(probe_dir),
+        "region_reads": region_reads_path(probe_dir),
+        "section_resolution": section_resolution_path(probe_dir),
+        "box_cleanup": box_cleanup_path(probe_dir),
+        "page_assembly": page_assembly_json_path(probe_dir),
     }
 
     for key, resolved_path in mapping.items():

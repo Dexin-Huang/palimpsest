@@ -3,20 +3,20 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from palimpsest.models import (
+from palimpsest.models.folio_render import (
     ColumnWitness,
     FolioRenderImageRegion,
     InterpretationBlock,
     InterpretationContent,
     MarginaliaEntry,
     NoteBlock,
-    PageAssembly,
-    PagePacket,
     QuestionEntry,
     SentencePair,
     TermEntry,
     WitnessContent,
 )
+from palimpsest.models.layout_probe import PageAssembly
+from palimpsest.models.packet import PagePacket
 from palimpsest.web import MarkdownDocument, MarkdownSection
 
 

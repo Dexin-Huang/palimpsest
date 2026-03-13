@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from palimpsest.agent_sdk import AgentRunResult, run_agent_prompt
+from palimpsest.models.packet import ALLOWED_PACKET_STATUSES, PagePacket
+from palimpsest.packets.state import PACKET_NEXT_ACTIONS, repair_packet_json
 from palimpsest.packets.templates import packet_format_contract_block, packet_heading_contract_block
-from palimpsest.models import ALLOWED_PACKET_STATUSES, PacketFileRef, PagePacket
 
 
 TASK_CHOICES = [
@@ -18,36 +17,8 @@ TASK_CHOICES = [
     "translate",
     "interpret",
 ]
-PACKET_NEXT_ACTIONS = (
-    "fill_witness",
-    "fill_notes",
-    "draft_translation",
-    "draft_interpretation",
-    "review_terms",
-    "review_questions",
-    "prepare_section_synthesis",
-    "complete",
-)
-_STATUS_ALIASES = {
-    "filled": "draft",
-    "done": "complete",
-    "completed": "complete",
-    "in_progress": "started",
-    "in-progress": "started",
-    "review": "reviewed",
-    "final": "complete",
-}
-_NEXT_ACTION_ALIASES = {
-    "annotate": "fill_notes",
-    "translate": "draft_translation",
-    "interpret": "draft_interpretation",
-    "notes": "fill_notes",
-    "translation": "draft_translation",
-    "interpretation": "draft_interpretation",
-    "edition": "prepare_section_synthesis",
-    "synthesize": "prepare_section_synthesis",
-    "done": "complete",
-}
+
+
 @dataclass
 class PacketScholarInputs:
     packet_path: Path
@@ -78,127 +49,6 @@ def _continuity_source_paths(packet: PagePacket) -> list[Path]:
         if path.exists():
             result.append(path.resolve())
     return result
-
-
-def _normalize_status(value: object) -> str:
-    raw = str(value or "").strip().lower()
-    if raw in ALLOWED_PACKET_STATUSES:
-        return raw
-    if raw in _STATUS_ALIASES:
-        return _STATUS_ALIASES[raw]
-    return "draft" if raw else "empty"
-
-
-def _infer_next_action(payload: dict) -> str:
-    files = payload.get("files") or {}
-    if not isinstance(files, dict):
-        return "fill_witness"
-
-    order = [
-        ("witness", "fill_witness"),
-        ("notes", "fill_notes"),
-        ("translation", "draft_translation"),
-        ("interpretation", "draft_interpretation"),
-        ("terms", "review_terms"),
-        ("questions", "review_questions"),
-    ]
-    for key, action in order:
-        ref = files.get(key) or {}
-        if not isinstance(ref, dict):
-            return action
-        if _normalize_status(ref.get("status")) in {"empty", "started"}:
-            return action
-    return "prepare_section_synthesis"
-
-
-def repair_packet_json(packet_path: Path) -> PagePacket:
-    packet_path = packet_path.resolve()
-    payload: dict[str, Any] = json.loads(packet_path.read_text(encoding="utf-8"))
-
-    files = payload.get("files") or {}
-    if isinstance(files, dict):
-        for ref in files.values():
-            if isinstance(ref, dict):
-                ref["status"] = _normalize_status(ref.get("status"))
-    else:
-        files = {}
-        payload["files"] = files
-
-    packet_dir = packet_path.parent
-    edition_html_path = str((packet_dir / "index.html").resolve())
-    folio_render_path = str((packet_dir / "render.json").resolve())
-    layout_probe_path = str((packet_dir / "layout_probe" / "layout_probe.json").resolve())
-    layout_overlay_path = str((packet_dir / "layout_probe" / "layout_overlay.png").resolve())
-    region_reads_path = str((packet_dir / "layout_probe" / "region_reads.json").resolve())
-    section_resolution_path = str((packet_dir / "layout_probe" / "section_resolution.json").resolve())
-    box_cleanup_path = str((packet_dir / "layout_probe" / "box_cleanup.json").resolve())
-    page_assembly_path = str((packet_dir / "layout_probe" / "page_assembly.json").resolve())
-    if "edition_html" not in files:
-        files["edition_html"] = PacketFileRef(
-            kind="edition_html",
-            path=edition_html_path,
-            status="draft" if Path(edition_html_path).exists() else "empty",
-            note="Rendered HTML folio edition" if Path(edition_html_path).exists() else None,
-        ).model_dump()
-    elif isinstance(files["edition_html"], dict):
-        files["edition_html"]["kind"] = "edition_html"
-        files["edition_html"]["path"] = edition_html_path
-        if Path(files["edition_html"]["path"]).exists() and _normalize_status(files["edition_html"].get("status")) == "empty":
-            files["edition_html"]["status"] = "draft"
-            files["edition_html"]["note"] = files["edition_html"].get("note") or "Rendered HTML folio edition"
-    if "folio_render" not in files:
-        files["folio_render"] = PacketFileRef(
-            kind="folio_render",
-            path=folio_render_path,
-            status="draft" if Path(folio_render_path).exists() else "empty",
-            note="Structured folio.render JSON artifact" if Path(folio_render_path).exists() else None,
-        ).model_dump()
-    elif isinstance(files["folio_render"], dict):
-        files["folio_render"].setdefault("kind", "folio_render")
-        files["folio_render"]["path"] = folio_render_path
-        if Path(files["folio_render"]["path"]).exists() and _normalize_status(files["folio_render"].get("status")) == "empty":
-            files["folio_render"]["status"] = "draft"
-            files["folio_render"]["note"] = files["folio_render"].get("note") or "Structured folio.render JSON artifact"
-    layout_defaults = {
-        "layout_probe": (layout_probe_path, "Coarse layout probe for region-first reconstruction"),
-        "layout_overlay": (layout_overlay_path, "Overlay preview of coarse layout regions"),
-        "region_reads": (region_reads_path, "Full transcription reads for each coarse region"),
-        "section_resolution": (section_resolution_path, "Canonical text ownership per coarse region"),
-        "box_cleanup": (box_cleanup_path, "Targeted cleanup for overlapping region pairs"),
-        "page_assembly": (page_assembly_path, "Deterministic assembly from region reads"),
-    }
-    for key, (default_path, default_note) in layout_defaults.items():
-        if key not in files:
-            files[key] = PacketFileRef(
-                kind=key,
-                path=default_path,
-                status="draft" if Path(default_path).exists() else "empty",
-                note=default_note if Path(default_path).exists() else None,
-            ).model_dump()
-            continue
-        if not isinstance(files[key], dict):
-            continue
-        files[key].setdefault("kind", key)
-        current_path = str(files[key].get("path") or "").strip()
-        if not current_path:
-            files[key]["path"] = default_path
-        if Path(files[key]["path"]).exists() and _normalize_status(files[key].get("status")) == "empty":
-            files[key]["status"] = "draft"
-            files[key]["note"] = files[key].get("note") or default_note
-
-    workflow = payload.get("workflow") or {}
-    if not isinstance(workflow, dict):
-        workflow = {}
-        payload["workflow"] = workflow
-    next_action = str(workflow.get("next_action") or "").strip()
-    next_action = _NEXT_ACTION_ALIASES.get(next_action, next_action)
-    if next_action not in PACKET_NEXT_ACTIONS:
-        next_action = _infer_next_action(payload)
-    workflow["next_action"] = next_action
-
-    packet = PagePacket.model_validate(payload)
-    packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
-    return packet
 
 
 def prepare_packet_workspace(

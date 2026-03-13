@@ -28,16 +28,6 @@ from .page import (
     SourceInfo,
     Page,
 )
-from .restoration import (
-    LayoutProjection,
-    SegmentAnchors,
-    EditorialNote,
-    ReviewInfo,
-    DiplomaticSegment,
-    DiplomaticPage,
-    DiplomaticBookPageRef,
-    DiplomaticBook,
-)
 from .packet import (
     ALLOWED_PACKET_STATUSES,
     PacketFileRef,
@@ -109,14 +99,6 @@ __all__ = [
     "PipelineInfo",
     "SourceInfo",
     "Page",
-    "LayoutProjection",
-    "SegmentAnchors",
-    "EditorialNote",
-    "ReviewInfo",
-    "DiplomaticSegment",
-    "DiplomaticPage",
-    "DiplomaticBookPageRef",
-    "DiplomaticBook",
     "ALLOWED_PACKET_STATUSES",
     "PacketFileRef",
     "PacketWorkflow",

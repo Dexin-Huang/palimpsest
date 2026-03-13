@@ -5,7 +5,13 @@ import json
 from pathlib import Path
 import re
 
-from palimpsest.models import PageAssembly, PageAssemblyUnit, PageValidation, PageValidationIssue
+from palimpsest.contracts import (
+    page_assembly_json_path,
+    page_validation_json_path,
+    page_validation_md_path,
+    page_validation_meta_path,
+)
+from palimpsest.models.layout_probe import PageAssembly, PageAssemblyUnit, PageValidation, PageValidationIssue
 from palimpsest.reconstruct.artifacts import PageValidationArtifact
 
 
@@ -35,7 +41,7 @@ def _find_neighbor_header(units: list[PageAssemblyUnit], target: PageAssemblyUni
 
 def run_page_validate(probe_dir: Path) -> PageValidationArtifact:
     probe_dir = probe_dir.resolve()
-    assembly_path = probe_dir / "page_assembly.json"
+    assembly_path = page_assembly_json_path(probe_dir)
     assembly = PageAssembly.model_validate_json(assembly_path.read_text(encoding="utf-8"))
 
     issues: list[PageValidationIssue] = []
@@ -108,8 +114,8 @@ def run_page_validate(probe_dir: Path) -> PageValidationArtifact:
         issues=issues,
     )
 
-    validation_json_path = probe_dir / "page_validation.json"
-    validation_md_path = probe_dir / "page_validation.md"
+    validation_json_path = page_validation_json_path(probe_dir)
+    validation_md_path = page_validation_md_path(probe_dir)
     validation_json_path.write_text(validation.model_dump_json(indent=2), encoding="utf-8")
 
     markdown_lines = [
@@ -139,7 +145,7 @@ def run_page_validate(probe_dir: Path) -> PageValidationArtifact:
             markdown_lines.append("")
     validation_md_path.write_text("\n".join(markdown_lines), encoding="utf-8")
 
-    meta_path = probe_dir / "page_validation_meta.json"
+    meta_path = page_validation_meta_path(probe_dir)
     meta = {
         "generated_at": _utc_now(),
         "probe_dir": str(probe_dir),

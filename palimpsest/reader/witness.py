@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from html import escape
 import json
-import os
 from pathlib import Path
 import shutil
 
 from palimpsest.web import (
-    display_page_id as web_display_page_id,
-    page_sort_key as web_page_sort_key,
     parse_markdown_document as web_parse_markdown_document,
     render_markdown_body as web_render_markdown_body,
     site_css as web_site_css,
 )
+
+from .common import display_page_id, page_sort_key, read_json, read_text, relpath, utc_now
 
 
 @dataclass
@@ -39,22 +37,6 @@ class RenderedWitnessSiteArtifact:
     meta_path: Path
 
 
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def _relpath(from_dir: Path, target_path: Path) -> str:
-    return Path(os.path.relpath(target_path.resolve(), start=from_dir.resolve())).as_posix()
-
-
-def _read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8-sig"))
-
-
-def _read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
-
-
 def _reading_rank(artifact: WitnessReadingArtifact) -> tuple[int, int, int, str]:
     stop = 1 if artifact.finish_reason == "FinishReason.STOP" else 0
     full_model = 1 if "flash-lite" not in artifact.model else 0
@@ -65,7 +47,7 @@ def _collect_best_readings(doc_dir: Path) -> dict[str, WitnessReadingArtifact]:
     readings: dict[str, WitnessReadingArtifact] = {}
     for meta_path in doc_dir.glob("experiments/*_reading*/reading_meta.json"):
         try:
-            meta = _read_json(meta_path)
+            meta = read_json(meta_path)
         except Exception:
             continue
         image_path = Path(meta.get("image_path", ""))
@@ -92,7 +74,7 @@ def _collect_best_readings(doc_dir: Path) -> dict[str, WitnessReadingArtifact]:
 def _render_reading_html(reading_path: Path | None) -> str:
     if reading_path is None or not reading_path.exists():
         return '<div class="reader-empty">Pending witness read.</div>'
-    doc = web_parse_markdown_document(_read_text(reading_path))
+    doc = web_parse_markdown_document(read_text(reading_path))
     body_parts: list[str] = []
     if doc.title:
         body_parts.append(f'<div class="reader-doc-title">{escape(doc.title)}</div>')
@@ -181,8 +163,8 @@ def build_witness_reader_site(
 ) -> RenderedWitnessSiteArtifact:
     doc_dir = doc_dir.resolve()
     out_dir = out_dir.resolve()
-    page_list = _read_json(doc_dir / "page_list.json")
-    metadata = _read_json(doc_dir / "metadata.json")
+    page_list = read_json(doc_dir / "page_list.json")
+    metadata = read_json(doc_dir / "metadata.json")
     readings = _collect_best_readings(doc_dir)
 
     book_title = title or metadata.get("title") or metadata.get("doc_id") or doc_dir.name
@@ -196,7 +178,7 @@ def build_witness_reader_site(
     folio_dir.mkdir(parents=True, exist_ok=True)
     image_dir.mkdir(parents=True, exist_ok=True)
 
-    pages = sorted(page_list.get("pages", []), key=lambda page: web_page_sort_key(page.get("page_id", "")))
+    pages = sorted(page_list.get("pages", []), key=lambda page: page_sort_key(page.get("page_id", "")))
     folio_paths: list[Path] = []
     page_entries: list[dict[str, str]] = []
     ready_count = 0
@@ -223,13 +205,13 @@ def build_witness_reader_site(
             [
                 '<div class="reader-shell">',
                 '  <div class="reader-image-panel">',
-                f'    <img src="{escape(_relpath(page_dir, image_target))}" alt="{escape(page_id)}">',
+                f'    <img src="{escape(relpath(page_dir, image_target))}" alt="{escape(page_id)}">',
                 "  </div>",
                 '  <div class="reader-text-panel">',
                 '    <div class="reader-topbar">',
                 "      <div>",
                 '        <div class="reader-book-label">Palimpsest Reader</div>',
-                f'        <h1 class="reader-page-title">{escape(web_display_page_id(page_id))}</h1>',
+                f'        <h1 class="reader-page-title">{escape(display_page_id(page_id))}</h1>',
                 "      </div>",
                 '      <div class="reader-nav">',
                 f'        <a href="{escape(contents_href)}">Contents</a>',
@@ -247,7 +229,7 @@ def build_witness_reader_site(
         page_path = page_dir / "index.html"
         page_path.write_text(
             _html_page(
-                title=f"{book_title} - {web_display_page_id(page_id)}",
+                title=f"{book_title} - {display_page_id(page_id)}",
                 body=page_body,
             ),
             encoding="utf-8",
@@ -292,7 +274,7 @@ def build_witness_reader_site(
             "    </div>",
             '    <div class="reader-index-list">',
             *[
-                f'      <div class="reader-index-item"><a href="{escape(entry["href"])}">{escape(web_display_page_id(entry["page_id"]))}</a><span>{"Ready" if entry["status"] == "ready" else "Pending"}</span></div>'
+                f'      <div class="reader-index-item"><a href="{escape(entry["href"])}">{escape(display_page_id(entry["page_id"]))}</a><span>{"Ready" if entry["status"] == "ready" else "Pending"}</span></div>'
                 for entry in page_entries
             ],
             "    </div>",
@@ -327,7 +309,7 @@ def build_witness_reader_site(
 
     meta_path = out_dir / "site_meta.json"
     meta = {
-        "generated_at": _utc_now(),
+        "generated_at": utc_now(),
         "doc_id": doc_id,
         "title": book_title,
         "doc_dir": str(doc_dir),

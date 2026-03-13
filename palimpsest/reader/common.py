@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 import os
 from pathlib import Path
@@ -31,3 +32,7 @@ def read_text(path: str | Path | None) -> str:
     if not resolved.exists():
         return ""
     return resolved.read_text(encoding="utf-8")
+
+
+def read_json(path: str | Path) -> dict:
+    return json.loads(Path(path).read_text(encoding="utf-8-sig"))

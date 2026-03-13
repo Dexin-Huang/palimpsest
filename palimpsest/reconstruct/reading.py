@@ -9,8 +9,18 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_READING
+from palimpsest.contracts import (
+    prompt_copy_path,
+    reading_meta_path,
+    reading_output_dir,
+    reading_output_path,
+    section_synthesis_inputs_path,
+    section_synthesis_meta_path,
+    section_synthesis_output_dir,
+    section_synthesis_output_path,
+)
+from palimpsest.model_io import resolve_prompt_text, response_text
 from palimpsest.reconstruct.prepare import PreparedPageArtifact, prepare_image
-from palimpsest.transcription.prompts import load_prompt
 
 
 DEFAULT_READING_PROMPT_NAME = "page_witness_focused"
@@ -47,46 +57,11 @@ def _utc_now() -> str:
 
 
 def _default_output_dir(image_path: Path) -> Path:
-    if image_path.parent.name in {"images", "images_cleaned"}:
-        return image_path.parent.parent / "experiments" / f"{image_path.stem}_reading"
-    return image_path.parent / f"{image_path.stem}_reading"
+    return reading_output_dir(image_path)
 
 
 def _default_synthesis_output_dir(input_paths: list[Path]) -> Path:
-    if not input_paths:
-        raise ValueError("At least one input path is required")
-    first = input_paths[0]
-    if first.parent.name.endswith("_reading") or first.parent.name.endswith("_witness") or "_reading" in first.parent.name or "_witness" in first.parent.name:
-        return first.parent.parent / "section_synthesis"
-    return first.parent / "section_synthesis"
-
-
-def _resolve_prompt_text(prompt_file: Path | None, prompt_name: str) -> tuple[str, Path]:
-    if prompt_file is None:
-        prompt_path = (Path(__file__).resolve().parents[1] / "prompts" / f"{prompt_name}.txt").resolve()
-        return load_prompt(prompt_name), prompt_path
-    prompt_path = prompt_file.resolve()
-    return prompt_path.read_text(encoding="utf-8"), prompt_path
-
-
-def _response_text(response) -> tuple[str, str | None]:
-    candidates = getattr(response, "candidates", None) or []
-    finish_reason = None
-    text_parts: list[str] = []
-    for index, candidate in enumerate(candidates):
-        if index == 0:
-            raw_reason = getattr(candidate, "finish_reason", None)
-            finish_reason = str(raw_reason) if raw_reason is not None else None
-        content = getattr(candidate, "content", None)
-        parts = getattr(content, "parts", None) or []
-        for part in parts:
-            value = getattr(part, "text", None)
-            if isinstance(value, str) and value:
-                text_parts.append(value)
-    text = "\n".join(text_parts).strip()
-    if not text:
-        raise ValueError("Model returned no reading text")
-    return text, finish_reason
+    return section_synthesis_output_dir(input_paths)
 
 
 def run_page_reading(
@@ -101,9 +76,9 @@ def run_page_reading(
     target_dir = (out_dir.resolve() if out_dir else _default_output_dir(image_path).resolve())
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    prompt_text, prompt_path = _resolve_prompt_text(prompt_file, DEFAULT_READING_PROMPT_NAME)
-    prompt_copy_path = target_dir / "prompt.txt"
-    prompt_copy_path.write_text(prompt_text, encoding="utf-8")
+    prompt_text, prompt_path = resolve_prompt_text(prompt_file, DEFAULT_READING_PROMPT_NAME)
+    copied_prompt_path = prompt_copy_path(target_dir)
+    copied_prompt_path.write_text(prompt_text, encoding="utf-8")
 
     prepared: PreparedPageArtifact | None = None
     model_image_path = image_path
@@ -123,18 +98,18 @@ def run_page_reading(
             max_output_tokens=DEFAULT_READING_MAX_OUTPUT_TOKENS,
         ),
     )
-    text, finish_reason = _response_text(response)
+    text, finish_reason = response_text(response)
 
-    output_path = target_dir / f"{image_path.stem}_reading.md"
-    output_path.write_text(text, encoding="utf-8")
+    resolved_output_path = reading_output_path(target_dir, image_path)
+    resolved_output_path.write_text(text, encoding="utf-8")
 
-    meta_path = target_dir / "reading_meta.json"
+    meta_path = reading_meta_path(target_dir)
     meta = {
         "generated_at": _utc_now(),
         "image_path": str(image_path),
         "prepared_image_path": str(model_image_path),
         "prepare_meta_path": str(prepared.meta_path) if prepared is not None else None,
-        "output_path": str(output_path),
+        "output_path": str(resolved_output_path),
         "prompt_path": str(prompt_path),
         "model": model,
         "finish_reason": finish_reason,
@@ -146,7 +121,7 @@ def run_page_reading(
         image_path=image_path,
         prepared_image_path=model_image_path,
         prepare_meta_path=prepared.meta_path if prepared is not None else None,
-        output_path=output_path,
+        output_path=resolved_output_path,
         prompt_path=prompt_path,
         meta_path=meta_path,
         model=model,
@@ -177,12 +152,12 @@ def run_section_synthesis(
     target_dir = (out_dir.resolve() if out_dir else _default_synthesis_output_dir(resolved_inputs).resolve())
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    prompt_text, prompt_path = _resolve_prompt_text(prompt_file, DEFAULT_SYNTHESIS_PROMPT_NAME)
-    prompt_copy_path = target_dir / "prompt.txt"
-    prompt_copy_path.write_text(prompt_text, encoding="utf-8")
+    prompt_text, prompt_path = resolve_prompt_text(prompt_file, DEFAULT_SYNTHESIS_PROMPT_NAME)
+    copied_prompt_path = prompt_copy_path(target_dir)
+    copied_prompt_path.write_text(prompt_text, encoding="utf-8")
 
     bundled_inputs = _bundle_section_inputs(resolved_inputs)
-    bundled_inputs_path = target_dir / "inputs.md"
+    bundled_inputs_path = section_synthesis_inputs_path(target_dir)
     bundled_inputs_path.write_text(bundled_inputs, encoding="utf-8")
 
     client = genai.Client()
@@ -197,12 +172,12 @@ def run_section_synthesis(
             max_output_tokens=DEFAULT_READING_MAX_OUTPUT_TOKENS,
         ),
     )
-    text, finish_reason = _response_text(response)
+    text, finish_reason = response_text(response)
 
-    output_path = target_dir / "section_synthesis.md"
+    output_path = section_synthesis_output_path(target_dir)
     output_path.write_text(text, encoding="utf-8")
 
-    meta_path = target_dir / "section_synthesis_meta.json"
+    meta_path = section_synthesis_meta_path(target_dir)
     meta = {
         "generated_at": _utc_now(),
         "input_paths": [str(path) for path in resolved_inputs],

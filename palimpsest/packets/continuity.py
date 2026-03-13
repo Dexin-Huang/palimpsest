@@ -9,9 +9,10 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_READING
-from palimpsest.models import PageHandoff, PagePacket, WindowSynthesis
-from palimpsest.reconstruct.reading import _resolve_prompt_text, _response_text
-from palimpsest.packets.scholar import repair_packet_json
+from palimpsest.model_io import resolve_prompt_text, response_text
+from palimpsest.models.continuity import PageHandoff, WindowSynthesis
+from palimpsest.models.packet import PagePacket
+from palimpsest.packets.state import repair_packet_json
 
 
 DEFAULT_HANDOFF_PROMPT_NAME = "page_handoff_focused"
@@ -256,7 +257,7 @@ def run_page_handoff(
     target_dir = (out_dir.resolve() if out_dir else _default_handoff_dir(packet_path).resolve())
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    prompt_text, prompt_path = _resolve_prompt_text(prompt_file, DEFAULT_HANDOFF_PROMPT_NAME)
+    prompt_text, prompt_path = resolve_prompt_text(prompt_file, DEFAULT_HANDOFF_PROMPT_NAME)
     bundled_inputs = _bundle_handoff_inputs(packet, packet_path, previous_handoff_path.resolve() if previous_handoff_path else None, next_page_id)
     prompt_copy_path = target_dir / "page_handoff_prompt.txt"
     prompt_copy_path.write_text(prompt_text, encoding="utf-8")
@@ -273,7 +274,7 @@ def run_page_handoff(
             max_output_tokens=DEFAULT_CONTINUITY_MAX_OUTPUT_TOKENS,
         ),
     )
-    text, finish_reason = _response_text(response)
+    text, finish_reason = response_text(response)
     payload = json.loads(text)
     payload["artifact_type"] = "page.handoff"
     payload["created_at"] = _utc_now()
@@ -331,7 +332,7 @@ def run_window_synthesis(
     target_dir = (out_dir.resolve() if out_dir else _default_window_dir(resolved_packets).resolve())
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    prompt_text, prompt_path = _resolve_prompt_text(prompt_file, DEFAULT_WINDOW_PROMPT_NAME)
+    prompt_text, prompt_path = resolve_prompt_text(prompt_file, DEFAULT_WINDOW_PROMPT_NAME)
     bundled_inputs = _bundle_window_inputs(resolved_packets)
     prompt_copy_path = target_dir / "window_synthesis_prompt.txt"
     prompt_copy_path.write_text(prompt_text, encoding="utf-8")
@@ -348,7 +349,7 @@ def run_window_synthesis(
             max_output_tokens=DEFAULT_CONTINUITY_MAX_OUTPUT_TOKENS,
         ),
     )
-    text, finish_reason = _response_text(response)
+    text, finish_reason = response_text(response)
     payload = json.loads(text)
     payload["artifact_type"] = "window.synthesis"
     payload["created_at"] = _utc_now()

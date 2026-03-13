@@ -10,7 +10,14 @@ from google.genai import types
 from pydantic import BaseModel
 
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
-from palimpsest.models import (
+from palimpsest.contracts import (
+    box_cleanup_meta_path,
+    box_cleanup_path,
+    section_resolution_meta_path,
+    section_resolution_path,
+    visual_pair_repairs_dir,
+)
+from palimpsest.models.layout_probe import (
     BoxCleanupDecision,
     LayoutProbe,
     PageBoxCleanup,
@@ -118,8 +125,8 @@ def run_section_resolution(
     reads = {item.region_id: item for item in _load_region_reads(probe_dir)}
     sections = _section_resolution_payload(layout, reads)
 
-    resolution_json_path = probe_dir / "section_resolution.json"
-    meta_path = probe_dir / "section_resolution_meta.json"
+    resolution_json_path = section_resolution_path(probe_dir)
+    meta_path = section_resolution_meta_path(probe_dir)
 
     if not sections:
         resolution = PageSectionResolution(
@@ -407,8 +414,8 @@ def run_box_cleanup(
         raise FileNotFoundError(f"No section_resolution.json found in {probe_dir}")
 
     candidates = _box_cleanup_candidates(layout, section_resolution)
-    cleanup_json_path = probe_dir / "box_cleanup.json"
-    meta_path = probe_dir / "box_cleanup_meta.json"
+    cleanup_json_path = box_cleanup_path(probe_dir)
+    meta_path = box_cleanup_meta_path(probe_dir)
 
     if not candidates:
         cleanup = PageBoxCleanup(
@@ -561,7 +568,7 @@ def run_visual_pair_repair(
 
     region_lookup = {region.region_id: region for region in layout.regions}
     image_path = Path(layout.image_path).resolve()
-    repairs_dir = probe_dir / "visual_pair_repairs"
+    repairs_dir = visual_pair_repairs_dir(probe_dir)
     repairs_dir.mkdir(parents=True, exist_ok=True)
     pair_slug = f"{candidate['region_a']}__{candidate['region_b']}"
     overlay_path = repairs_dir / f"{pair_slug}_overlay.png"

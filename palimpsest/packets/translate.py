@@ -10,7 +10,7 @@ from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.model_io import resolve_prompt_text, response_text
-from palimpsest.models import PagePacket
+from palimpsest.models.packet import PagePacket
 
 
 DEFAULT_PACKET_TRANSLATION_PROMPT_NAME = "packet_translation"
