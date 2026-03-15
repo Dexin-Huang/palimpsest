@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 import shutil
 
-from palimpsest.web import (
+from palimpsest.web.markup import (
     parse_markdown_document as web_parse_markdown_document,
     render_markdown_body as web_render_markdown_body,
-    site_css as web_site_css,
 )
+from palimpsest.web.theme import site_css as web_site_css
 
 from .common import display_page_id, page_sort_key, read_json, read_text, relpath, utc_now
 

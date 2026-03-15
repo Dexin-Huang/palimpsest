@@ -7,7 +7,6 @@ from pathlib import Path
 
 from palimpsest.config import DEFAULT_MODEL_SCHOLAR_AGENT, DEFAULT_MODEL_TRIAGE
 from palimpsest.discovery.workflow import (
-    add_manuscripts,
     enrich_manuscripts,
     ingest_sources,
     list_sources,
@@ -16,17 +15,6 @@ from palimpsest.discovery.workflow import (
     show_stats,
     triage_manuscripts,
 )
-
-
-def cmd_add(args: argparse.Namespace) -> None:
-    add_manuscripts(
-        db_path=args.db,
-        count=args.count,
-        collection=args.collection,
-        range_value=args.range_,
-        delay=args.delay,
-    )
-
 
 def cmd_triage(args: argparse.Namespace) -> None:
     triage_manuscripts(
@@ -110,14 +98,6 @@ def cmd_scout(args: argparse.Namespace) -> None:
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("discovery", help="Discovery utilities")
     sub = parser.add_subparsers(dest="discovery_cmd", required=True)
-
-    add = sub.add_parser("add", help="Add N new manuscripts to DB and triage them")
-    add.add_argument("count", type=int, help="Number of new manuscripts to add")
-    add.add_argument("--collection", default="Reg.lat", help="Collection (default: Reg.lat)")
-    add.add_argument("--range", dest="range_", help="Shelfmark range like 1500-2100")
-    add.add_argument("--db", default="discovery/manuscripts.db", help="Database path")
-    add.add_argument("--delay", type=float, default=1.5, help="Delay between requests")
-    add.set_defaults(func=cmd_add)
 
     triage = sub.add_parser("triage", help="Run Gemini triage on manuscripts in DB")
     triage.add_argument("--db", default="discovery/manuscripts.db", help="Database path")

@@ -40,6 +40,10 @@ LAYOUT_PROBE_DIR_SUFFIX = "_layout_probe"
 LAYOUT_PROBE_DIRNAME = "layout_probe"
 LAYOUT_PROBE_FILENAME = "layout_probe.json"
 LAYOUT_OVERLAY_FILENAME = "layout_overlay.png"
+LAYOUT_PROMPT_COPY_FILENAME = "layout_prompt.txt"
+LAYOUT_PROBE_RAW_RESPONSE_FILENAME = "layout_probe_raw.json"
+LAYOUT_PROBE_META_FILENAME = "layout_probe_meta.json"
+LAYOUT_CROPS_DIRNAME = "crops"
 REGION_READS_FILENAME = "region_reads.json"
 REGION_READS_META_FILENAME = "region_reads_meta.json"
 SECTION_RESOLUTION_FILENAME = "section_resolution.json"
@@ -209,6 +213,22 @@ def layout_probe_json_path(probe_dir: Path) -> Path:
 
 def layout_overlay_path(probe_dir: Path) -> Path:
     return Path(probe_dir) / LAYOUT_OVERLAY_FILENAME
+
+
+def layout_prompt_copy_path(probe_dir: Path) -> Path:
+    return Path(probe_dir) / LAYOUT_PROMPT_COPY_FILENAME
+
+
+def layout_probe_raw_response_path(probe_dir: Path) -> Path:
+    return Path(probe_dir) / LAYOUT_PROBE_RAW_RESPONSE_FILENAME
+
+
+def layout_probe_meta_path(probe_dir: Path) -> Path:
+    return Path(probe_dir) / LAYOUT_PROBE_META_FILENAME
+
+
+def layout_crops_dir(probe_dir: Path) -> Path:
+    return Path(probe_dir) / LAYOUT_CROPS_DIRNAME
 
 
 def region_reads_path(probe_dir: Path) -> Path:

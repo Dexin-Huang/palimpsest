@@ -1,25 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from html import escape
 import json
 from pathlib import Path
 
 from palimpsest.contracts import folio_render_path, render_html_path, render_meta_path
 from palimpsest.models.folio_render import FolioRender
 from palimpsest.models.packet import PagePacket
-from palimpsest.packets.state import repair_packet_json
-from palimpsest.web import (
+from palimpsest.packets.state import load_packet_json
+from palimpsest.web.folio_fragments import build_folio_render as web_build_folio_render
+from palimpsest.web.folio_page import render_folio_document_html as web_render_folio_document_html
+from palimpsest.web.markup import (
     MarkdownDocument,
-    build_folio_render as web_build_folio_render,
     group_document_sections as web_group_document_sections,
     groups_to_template_sections as web_groups_to_template_sections,
     parse_markdown_document as web_parse_markdown_document,
-    render_content_piece as web_render_content_piece,
-    render_cover_piece as web_render_cover_piece,
-    render_interpretation_piece as web_render_interpretation_piece,
-    render_spread_piece as web_render_spread_piece,
-    site_css as web_site_css,
 )
 
 from .common import display_page_id, read_text, relpath, utc_now
@@ -138,123 +133,18 @@ def render_folio_html(
         page_label=display_page,
         created_at=utc_now(),
     )
-    cover_piece = web_render_cover_piece(folio)
-    content_piece = web_render_content_piece(folio)
-    interpretation_piece = web_render_interpretation_piece(folio)
-    spread_piece = web_render_spread_piece(
-        folio,
-        content_piece=content_piece,
-        interpretation_piece=interpretation_piece,
+    html = web_render_folio_document_html(
+        title=title,
+        folio=folio,
+        include_cover=include_cover,
     )
-    folio_links = "\n".join(
-        link
-        for link in [
-            f'<a class="folio-link" href="{escape(folio.navigation.home_href)}">Contents</a>' if folio.navigation.home_href else "",
-            f'<a class="folio-link" href="{escape(folio.navigation.prev_href)}">&larr; Previous Folio</a>' if folio.navigation.prev_href else "",
-            f'<a class="folio-link" href="{escape(folio.navigation.next_href)}">Next Folio &rarr;</a>' if folio.navigation.next_href else "",
-        ]
-        if link
-    )
-
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{escape(title)}</title>
-<style>
-{web_site_css()}
-</style>
-</head>
-<body>
-<div class="book">
-  {f'<div class="page cover active" data-page="0">{cover_piece}</div>' if include_cover else ''}
-  <div class="page{' active' if not include_cover else ''}" data-page="1">
-    {spread_piece}
-  </div>
-</div>
-<div class="folio-links">
-  {folio_links}
-</div>
-
-<script>
-  (function() {{
-    const cover = document.querySelector('.cover');
-    const spread = document.querySelector('[data-page="1"]');
-    const panel = document.getElementById('right-panel');
-    const symbol = document.getElementById('flip-symbol');
-    const symbolSvg = symbol ? symbol.querySelector('svg') : null;
-    let rotation = 0;
-
-    function openSpread() {{
-      if (!cover || !spread) {{
-        return;
-      }}
-      cover.classList.remove('active');
-      spread.classList.add('active');
-    }}
-
-    if (cover) {{
-      cover.addEventListener('click', openSpread);
-    }}
-
-    if (symbol && panel) {{
-      symbol.addEventListener('click', (event) => {{
-        event.stopPropagation();
-        panel.classList.toggle('flipped');
-        rotation += 180;
-        if (symbolSvg) {{
-          symbolSvg.style.transform = `rotate(${{rotation}}deg)`;
-        }}
-        const face = panel.querySelector(panel.classList.contains('flipped') ? '.face-interp' : '.face-witness');
-        if (face) {{
-          face.scrollTop = 0;
-        }}
-      }});
-    }}
-
-    const linkedNodes = Array.from(document.querySelectorAll('[data-region-id]'));
-    function setLinkedActive(regionId, active) {{
-      if (!regionId) {{
-        return;
-      }}
-      linkedNodes.forEach((node) => {{
-        if (node.dataset.regionId === regionId) {{
-          node.classList.toggle('is-linked-active', active);
-        }}
-      }});
-    }}
-
-    linkedNodes.forEach((node) => {{
-      node.addEventListener('mouseenter', () => setLinkedActive(node.dataset.regionId, true));
-      node.addEventListener('mouseleave', () => setLinkedActive(node.dataset.regionId, false));
-      node.addEventListener('focus', () => setLinkedActive(node.dataset.regionId, true));
-      node.addEventListener('blur', () => setLinkedActive(node.dataset.regionId, false));
-    }});
-
-    window.addEventListener('keydown', (event) => {{
-      if (cover && cover.classList.contains('active') && (event.key === 'ArrowRight' || event.key === ' ')) {{
-        event.preventDefault();
-        openSpread();
-        return;
-      }}
-      if (event.key === 'ArrowLeft' && spread && spread.classList.contains('active') && {str(bool(prev_href)).lower()}) {{
-        window.location.href = {json.dumps(prev_href or "")};
-      }} else if (event.key === 'ArrowRight' && spread && spread.classList.contains('active') && {str(bool(next_href)).lower()}) {{
-        window.location.href = {json.dumps(next_href or "")};
-      }}
-    }});
-  }})();
-</script>
-</body>
-</html>
-"""
     return html, folio
 
 
 def render_packet_folio_html(
     packet_path: Path,
     *,
+    packet: PagePacket | None = None,
     out_dir: Path | None = None,
     book_title: str | None = None,
     image_href: str | None = None,
@@ -263,8 +153,8 @@ def render_packet_folio_html(
     home_href: str | None = None,
     include_cover: bool = True,
 ) -> RenderedPacketHtmlArtifact:
-    packet = repair_packet_json(Path(packet_path))
     packet_path = Path(packet_path).resolve()
+    packet = packet or load_packet_json(packet_path)
     packet_dir = packet_path.parent
     target_dir = out_dir.resolve() if out_dir else packet_dir
     target_dir.mkdir(parents=True, exist_ok=True)

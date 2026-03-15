@@ -9,24 +9,18 @@ from typing import Iterable
 from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.contracts import (
     IMAGE_PARENT_DIRNAMES,
-    box_cleanup_path,
-    folio_render_path,
-    layout_probe_dir,
-    layout_probe_json_path,
-    layout_overlay_path,
     packet_file_path,
     packet_meta_path,
     packet_output_dir_for_image,
     packet_path as packet_json_path,
-    page_assembly_json_path,
-    region_reads_path,
-    render_html_path,
-    section_resolution_path,
 )
 from palimpsest.models.layout_probe import PageAssembly
 from palimpsest.models.packet import PacketContinuity, PacketFileRef, PagePacket, PacketWorkflow
 from palimpsest.reconstruct.prepare import PreparedPageArtifact, prepare_image
 from palimpsest.packets.templates import packet_markdown_template
+
+from .contract import packet_artifact_contracts
+from .state import load_packet_json, write_packet_json
 
 
 def _utc_now() -> str:
@@ -67,21 +61,13 @@ def create_page_packet(
     if prepare:
         prepared = prepare_image(image_path, out_dir=target_dir / "prepared")
 
-    probe_dir = layout_probe_dir(target_dir)
     witness_path = packet_file_path(target_dir, "witness")
     notes_path = packet_file_path(target_dir, "notes")
     translation_path = packet_file_path(target_dir, "translation")
     interpretation_path = packet_file_path(target_dir, "interpretation")
     terms_path = packet_file_path(target_dir, "terms")
     questions_path = packet_file_path(target_dir, "questions")
-    edition_html_path = render_html_path(target_dir)
-    resolved_folio_render_path = folio_render_path(target_dir)
-    resolved_layout_probe_path = layout_probe_json_path(probe_dir)
-    resolved_layout_overlay_path = layout_overlay_path(probe_dir)
-    resolved_region_reads_path = region_reads_path(probe_dir)
-    resolved_section_resolution_path = section_resolution_path(probe_dir)
-    resolved_box_cleanup_path = box_cleanup_path(probe_dir)
-    resolved_page_assembly_path = page_assembly_json_path(probe_dir)
+    artifact_contracts = packet_artifact_contracts(target_dir)
 
     if not witness_path.exists():
         witness_path.write_text(
@@ -127,14 +113,10 @@ def create_page_packet(
             "interpretation": PacketFileRef(kind="interpretation", path=str(interpretation_path), status="empty"),
             "terms": PacketFileRef(kind="terms", path=str(terms_path), status="empty"),
             "questions": PacketFileRef(kind="questions", path=str(questions_path), status="empty"),
-            "edition_html": PacketFileRef(kind="edition_html", path=str(edition_html_path), status="empty"),
-            "folio_render": PacketFileRef(kind="folio_render", path=str(resolved_folio_render_path), status="empty"),
-            "layout_probe": PacketFileRef(kind="layout_probe", path=str(resolved_layout_probe_path), status="empty"),
-            "layout_overlay": PacketFileRef(kind="layout_overlay", path=str(resolved_layout_overlay_path), status="empty"),
-            "region_reads": PacketFileRef(kind="region_reads", path=str(resolved_region_reads_path), status="empty"),
-            "section_resolution": PacketFileRef(kind="section_resolution", path=str(resolved_section_resolution_path), status="empty"),
-            "box_cleanup": PacketFileRef(kind="box_cleanup", path=str(resolved_box_cleanup_path), status="empty"),
-            "page_assembly": PacketFileRef(kind="page_assembly", path=str(resolved_page_assembly_path), status="empty"),
+            **{
+                key: PacketFileRef(kind=key, path=str(contract.path), status="empty")
+                for key, contract in artifact_contracts.items()
+            },
         },
         continuity=PacketContinuity(
             previous_packet_path=str(previous_packet_path.resolve()) if previous_packet_path else None,
@@ -171,24 +153,19 @@ def create_page_packet(
 def attach_layout_probe(packet_path: Path, probe_dir: Path) -> PagePacket:
     packet_path = packet_path.resolve()
     probe_dir = probe_dir.resolve()
-    packet = PagePacket.model_validate_json(packet_path.read_text(encoding="utf-8"))
-
-    mapping = {
-        "layout_probe": layout_probe_json_path(probe_dir),
-        "layout_overlay": layout_overlay_path(probe_dir),
-        "region_reads": region_reads_path(probe_dir),
-        "section_resolution": section_resolution_path(probe_dir),
-        "box_cleanup": box_cleanup_path(probe_dir),
-        "page_assembly": page_assembly_json_path(probe_dir),
-    }
-
-    for key, resolved_path in mapping.items():
+    packet = load_packet_json(packet_path)
+    artifact_contracts = packet_artifact_contracts(packet_path.parent, probe_dir=probe_dir)
+    for key in ("layout_probe", "layout_overlay", "region_reads", "section_resolution", "box_cleanup", "page_assembly"):
+        contract = artifact_contracts[key]
+        resolved_path = contract.path
         ref = packet.files.get(key)
         if ref is None:
-            ref = PacketFileRef(kind=key, path=str(resolved_path), status="empty")
+            ref = PacketFileRef(kind=key, path=str(resolved_path), status="empty", note=contract.note)
             packet.files[key] = ref
         else:
             ref.path = str(resolved_path)
+            if not ref.note:
+                ref.note = contract.note
         if resolved_path.exists():
             ref.status = "draft"
 
@@ -198,8 +175,7 @@ def attach_layout_probe(packet_path: Path, probe_dir: Path) -> PagePacket:
         notes.append(note)
     packet.notes = notes
 
-    packet_path.write_text(packet.model_dump_json(indent=2), encoding="utf-8")
-    return packet
+    return write_packet_json(packet_path, packet)
 
 
 def _parse_markdown_sections(text: str) -> tuple[str | None, dict[str, list[str]]]:
@@ -246,7 +222,7 @@ def _iter_bullets(lines: Iterable[str]) -> list[str]:
 
 
 def _load_packet(packet_path: Path) -> PagePacket:
-    return PagePacket.model_validate_json(packet_path.read_text(encoding="utf-8"))
+    return load_packet_json(packet_path)
 
 
 def _load_packet_assembly(packet: PagePacket, assembly_path: Path | None = None) -> PageAssembly:

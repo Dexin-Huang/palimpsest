@@ -23,7 +23,7 @@ from urllib.parse import quote_plus
 
 import requests
 
-from palimpsest.discovery.database import Enrichment
+from palimpsest.discovery.records import Enrichment
 
 
 # Common text patterns to detect (deprioritize these)

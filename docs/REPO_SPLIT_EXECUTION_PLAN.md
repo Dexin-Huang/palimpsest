@@ -252,40 +252,99 @@ Repo extraction gates:
 
 ## Immediate Execution Wave
 
-This is the next practical cleanup wave to run in parallel.
+This is the current cleanup wave to run in parallel before any repo extraction.
 
-### Lane 1: reader purity
+### Lane 1: packet purity and render boundary
+
+Owner:
+- main rollout
 
 Scope:
+- `palimpsest/packets/state.py`
+- `palimpsest/packets/workflow.py`
 - `palimpsest/reader/folio.py`
-- packet/page workflow callers that currently depend on render-time packet mutation
+- `palimpsest/reader/site.py`
+- `palimpsest/packets/__init__.py`
 
 Tasks:
-- remove packet-state writes from reader render
-- move packet render-output syncing into callers
-- keep site builds on the pure render path
+- split read-only packet normalization from explicit packet persistence
+- stop mutating `packet.json` during reader and site loads
+- keep packet render-output syncing explicit in packet workflow callers
+- narrow the packet public surface so mutating helpers are not exported as generic packet loading APIs
 
-### Lane 2: discovery orchestration extraction
+Acceptance:
+- reader and site code can load packets without writing them
+- packet mutation is only performed by explicit persist/update helpers
+- packet render-output syncing remains stable for workspace renders
+
+### Lane 2: discovery ingress cleanup
+
+Owner:
+- worker
 
 Scope:
 - `palimpsest/commands/discovery.py`
-- new or existing modules under `palimpsest/discovery/`
+- `palimpsest/discovery/workflow.py`
+- `palimpsest/discovery/database.py`
+- `palimpsest/discovery/__init__.py`
+- `palimpsest/discovery/iiif.py`
+- `palimpsest/library/iiif.py`
 
 Tasks:
-- move fetch, merge, and workflow helpers into discovery-owned modules
-- keep CLI subcommands stable
-- reduce command-layer ownership of discovery runtime logic
+- quarantine or remove the Vatican-only `discovery add` path
+- collapse duplicate IIIF parsing to one owner
+- trim package-root discovery re-exports that blur ownership
+- make the code match one discovery ingest story
 
-### Lane 3: page orchestration extraction
+Acceptance:
+- discovery has one canonical ingest path
+- discovery and library no longer carry duplicate IIIF summary logic
+- package imports make ownership clearer instead of wider
+
+### Lane 3: reconstruct contract cleanup
+
+Owner:
+- worker
 
 Scope:
-- `palimpsest/commands/page.py`
-- new workflow module under `palimpsest/reconstruct/` or `palimpsest/packets/`
+- `palimpsest/reconstruct/probe.py`
+- `palimpsest/reconstruct/artifacts.py`
+- `palimpsest/reconstruct/pipeline.py`
+- `palimpsest/models/layout_probe.py`
+- `docs/contracts/RECONSTRUCT_ARTIFACTS.md`
 
 Tasks:
-- move page selection, decode, and layout execution helpers out of the CLI
-- keep packet decode and refresh behavior stable
-- make the package API the owner of page decode flow
+- stop using the old `orientation` vocabulary for `region_reads.json`
+- route probe artifact paths through `palimpsest/contracts.py`
+- remove the probe stage's ambiguous ownership of region-read artifact naming
+- tighten the probe artifact metadata to match the contract docs
+
+Acceptance:
+- reconstruct artifact naming matches the current contract language
+- probe outputs use codified contract helpers instead of local string literals
+- callers print and consume `region read` terminology consistently
+
+### Lane 4: stale surface and docs cleanup
+
+Owner:
+- worker
+
+Scope:
+- `palimpsest/vision/**`
+- `palimpsest/templates/**`
+- empty legacy package dirs
+- root and contract docs under `docs/`
+
+Tasks:
+- remove orphaned modules and unreferenced templates
+- remove empty leftover package dirs from deleted lanes
+- delete or consolidate docs that describe superseded render or discovery stories
+- fix visible mojibake in repo-facing docs touched by this cleanup wave
+
+Acceptance:
+- repo root only advertises active product surfaces
+- there is one canonical reader/render contract doc
+- docs no longer point at deleted legacy runtime paths
 
 ## Milestones
 

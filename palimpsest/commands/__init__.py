@@ -1,8 +1,45 @@
-from .discovery import add_subparser as add_discovery_subparser
-from .library import add_subparser as add_library_subparser
-from .scholar import add_subparser as add_scholar_subparser
-from .book import add_subparser as add_book_subparser
-from .page import add_subparser as add_page_subparser
+"""CLI parser wiring surface.
+
+This package root intentionally exposes only the subparser registration
+functions used by ``palimpsest.cli``. It keeps those exports lazy so importing
+``palimpsest.commands`` does not eagerly pull in the full command dependency
+graph. Command workflow logic lives in the individual command modules and
+should not be treated as a broad package API.
+"""
+
+from __future__ import annotations
+
+import argparse
+
+
+def add_discovery_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    from .discovery import add_subparser
+
+    add_subparser(subparsers)
+
+
+def add_library_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    from .library import add_subparser
+
+    add_subparser(subparsers)
+
+
+def add_scholar_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    from .scholar import add_subparser
+
+    add_subparser(subparsers)
+
+
+def add_book_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    from .book import add_subparser
+
+    add_subparser(subparsers)
+
+
+def add_page_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    from .page import add_subparser
+
+    add_subparser(subparsers)
 
 __all__ = [
     "add_discovery_subparser",

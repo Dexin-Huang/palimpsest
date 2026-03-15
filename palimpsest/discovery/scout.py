@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from palimpsest.agent_sdk import run_agent_prompt
-from palimpsest.discovery import DiscoveryDB
+
+from .access import DiscoveryReadAccess, DiscoveryStore
 
 
 def utc_now_slug() -> str:
@@ -59,7 +60,7 @@ class ScoutCandidate:
 
 
 def collect_candidates(
-    db: DiscoveryDB,
+    db: DiscoveryReadAccess,
     *,
     repository: str | None = None,
     collection: str | None = None,
@@ -188,8 +189,7 @@ async def run_candidate_scout(
     max_thinking_tokens: int | None,
     permission_mode: str,
 ) -> dict[str, Any]:
-    db = DiscoveryDB(db_path)
-    try:
+    with DiscoveryStore.open(db_path) as db:
         candidates = collect_candidates(
             db,
             repository=repository,
@@ -197,8 +197,6 @@ async def run_candidate_scout(
             min_score=min_score,
             limit=limit,
         )
-    finally:
-        db.close()
 
     if not candidates:
         raise ValueError("No candidates matched the scout filters")

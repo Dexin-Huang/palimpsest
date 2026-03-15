@@ -34,3 +34,5 @@ Canonical render outputs:
 ## Notes
 
 - packet-state sync for `index.html` and `render.json` belongs in packet/page workflow code, not in `palimpsest/reader/folio.py`.
+- book/site cover, contents, and ending page composition belongs in `palimpsest/web`, not in `palimpsest/reader/site.py`.
+- folio page composition and navigation JS belong in `palimpsest/web`, not in `palimpsest/reader/folio.py`.

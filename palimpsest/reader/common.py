@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 
-from palimpsest.web import display_page_id as web_display_page_id
-from palimpsest.web import page_sort_key as web_page_sort_key
+from palimpsest.web.common import display_page_id as web_display_page_id
+from palimpsest.web.common import page_sort_key as web_page_sort_key
 
 
 def utc_now() -> str:

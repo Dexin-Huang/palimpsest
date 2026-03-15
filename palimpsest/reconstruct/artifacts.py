@@ -12,11 +12,19 @@ class PageLayoutProbeArtifact:
     layout_json_path: Path
     overlay_path: Path
     crops_dir: Path
-    orientations_path: Path
+    region_reads_path: Path
     meta_path: Path
     model: str
-    orientation_model: str
+    region_read_model: str
     finish_reason: str | None
+
+    @property
+    def orientations_path(self) -> Path:
+        return self.region_reads_path
+
+    @property
+    def orientation_model(self) -> str:
+        return self.region_read_model
 
 
 @dataclass

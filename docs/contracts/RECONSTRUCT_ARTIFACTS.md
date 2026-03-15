@@ -20,6 +20,7 @@ Canonical artifact filenames:
 - `page_assembly.md`
 
 Canonical meta sidecars:
+- `layout_probe_meta.json`
 - `region_reads_meta.json`
 - `section_resolution_meta.json`
 - `box_cleanup_meta.json`
@@ -29,6 +30,9 @@ Canonical meta sidecars:
 ## Supporting Outputs
 
 Additional reconstruct outputs:
+- probe prompt copy: `layout_prompt.txt`
+- probe raw response: `layout_probe_raw.json`
+- probe crops directory: `crops/`
 - prepared image workspace suffix: `_prepared`
 - prepared image metadata: `prepare_meta.json`
 - reading workspace suffix: `_reading`

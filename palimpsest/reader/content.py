@@ -17,7 +17,7 @@ from palimpsest.models.folio_render import (
 )
 from palimpsest.models.layout_probe import PageAssembly
 from palimpsest.models.packet import PagePacket
-from palimpsest.web import MarkdownDocument, MarkdownSection
+from palimpsest.web.markup import MarkdownDocument, MarkdownSection
 
 
 _TERM_RE = re.compile(r"\*\*(.+?)\*\*\s*(?:\(([^)]+)\))?\s*[:\-â€”]\s*(.+)")

@@ -1,14 +1,14 @@
 """Gemini-based manuscript triage for discovery pipeline.
 
 This module provides automated scoring of manuscript opportunities using
-Gemini Flash for fast, cheap metadata analysis. Mirrors the patterns in
-palimpsest/transcription/runner.py for consistency.
+Gemini Flash for fast, cheap metadata analysis. It follows the current
+discovery workflow conventions rather than the deleted legacy lane.
 
 Usage:
     from palimpsest.discovery.triage import triage_batch, triage_manuscript
-    from palimpsest.discovery import DiscoveryDB
+    from palimpsest.discovery.access import DiscoveryStore
 
-    db = DiscoveryDB("discovery/manuscripts.db")
+    db = DiscoveryStore.open("discovery/manuscripts.db")
     results = triage_batch(
         registry_path=Path("discovery/registry/master.jsonl"),
         db=db,
@@ -33,7 +33,7 @@ from google.genai import types
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
 from palimpsest.model_io import strip_json_fences
 
-from .database import DiscoveryDB, Manuscript, Enrichment
+from .access import DiscoveryWriteAccess, Enrichment, Manuscript
 
 BACKOFF_BASE = 2
 PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
@@ -339,7 +339,7 @@ def resolve_triage_method(
 
 
 def save_triage_result(
-    db: DiscoveryDB,
+    db: DiscoveryWriteAccess,
     result: TriageResult,
     with_thumbnail: bool = False,
     with_web_search: bool = True,
@@ -464,7 +464,7 @@ def _load_registry(registry_path: Path) -> list[dict]:
 
 def triage_batch(
     registry_path: Path,
-    db: DiscoveryDB,
+    db: DiscoveryWriteAccess,
     model: str = DEFAULT_MODEL_TRIAGE,
     workers: int = 10,
     limit: Optional[int] = None,
@@ -621,7 +621,7 @@ def triage_batch(
 
 
 def triage_from_db(
-    db: DiscoveryDB,
+    db: DiscoveryWriteAccess,
     model: str = DEFAULT_MODEL_TRIAGE,
     workers: int = 10,
     limit: Optional[int] = None,
@@ -743,7 +743,7 @@ def triage_from_db(
 
 
 def triage_high_scorers(
-    db: DiscoveryDB,
+    db: DiscoveryWriteAccess,
     model: str = DEFAULT_MODEL_TRIAGE,
     workers: int = 10,
     min_score: int = 10,

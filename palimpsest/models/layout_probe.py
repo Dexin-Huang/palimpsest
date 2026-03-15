@@ -83,7 +83,7 @@ class LayoutProbe(BaseModel):
     regions: List[LayoutProbeRegion] = Field(default_factory=list)
 
 
-class RegionOrientation(BaseModel):
+class RegionRead(BaseModel):
     """Full transcription read for one coarse page region."""
 
     artifact_type: Literal["page.region_read"] = Field(default="page.region_read")
@@ -102,6 +102,9 @@ class RegionOrientation(BaseModel):
         if not self.source_block and self.diplomatic_lines:
             self.source_block = "\n".join(self.diplomatic_lines)
         return self
+
+
+RegionOrientation = RegionRead
 
 
 class PageAssemblyUnit(BaseModel):

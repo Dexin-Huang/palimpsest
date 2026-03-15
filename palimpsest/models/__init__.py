@@ -1,4 +1,10 @@
-"""Pydantic models for Palimpsest page schema."""
+"""Compatibility re-export surface for shared Palimpsest models.
+
+Internal code should prefer concrete submodules such as
+``palimpsest.models.packet`` or ``palimpsest.models.layout_probe``.
+The package root keeps a narrower star-import surface around the current
+product contracts while retaining older root attributes for compatibility.
+"""
 
 from .zone import (
     ZoneType,
@@ -56,6 +62,7 @@ from .folio_render import (
 from .layout_probe import (
     LayoutProbeRegion,
     LayoutProbe,
+    RegionRead,
     RegionOrientation,
     PageAssemblyUnit,
     PageAssembly,
@@ -75,65 +82,24 @@ from .continuity import (
 )
 
 __all__ = [
-    "ZoneType",
-    "TextLayers",
-    "Confidence",
-    "ScriptInfo",
-    "ZoneStyle",
-    "ZoneStructure",
-    "ZoneRestorationHints",
-    "Note",
+    # Core page contracts
     "Zone",
-    "ImageInfo",
-    "PreparedImage",
-    "PreparationStep",
-    "PreparationInfo",
-    "Layout",
-    "Margins",
-    "PageClassification",
-    "PageReading",
-    "PageRestorationHints",
-    "PageQuality",
-    "Span",
-    "Claim",
-    "PipelineInfo",
-    "SourceInfo",
     "Page",
-    "ALLOWED_PACKET_STATUSES",
+    # Packet and continuity contracts
     "PacketFileRef",
     "PacketWorkflow",
     "PagePacket",
-    "SentencePair",
-    "ColumnWitness",
-    "MarginaliaEntry",
-    "WitnessContent",
-    "InterpretationBlock",
-    "TermEntry",
-    "QuestionEntry",
-    "NoteBlock",
-    "InterpretationContent",
-    "FolioRenderSection",
-    "FolioRenderCover",
-    "FolioRenderImageRegion",
-    "FolioRenderImagePanel",
-    "FolioRenderTextPanel",
-    "FolioRenderSpread",
-    "FolioRenderNavigation",
-    "FolioRender",
-    "LayoutProbeRegion",
-    "LayoutProbe",
-    "RegionOrientation",
-    "PageAssemblyUnit",
-    "PageAssembly",
-    "SectionResolutionAssignment",
-    "PageSectionResolution",
-    "BoxCleanupDecision",
-    "PageBoxCleanup",
-    "PageValidationIssue",
-    "PageValidation",
-    "ContinuityStatus",
-    "ContinuityItem",
-    "PageLink",
     "PageHandoff",
     "WindowSynthesis",
+    # Reconstruct contracts
+    "LayoutProbeRegion",
+    "LayoutProbe",
+    "RegionRead",
+    "PageAssemblyUnit",
+    "PageAssembly",
+    "PageSectionResolution",
+    "PageBoxCleanup",
+    "PageValidation",
+    # Reader/render contract
+    "FolioRender",
 ]

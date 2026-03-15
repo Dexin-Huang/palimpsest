@@ -12,7 +12,7 @@ from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.model_io import resolve_prompt_text, response_text
 from palimpsest.models.continuity import PageHandoff, WindowSynthesis
 from palimpsest.models.packet import PagePacket
-from palimpsest.packets.state import repair_packet_json
+from palimpsest.packets.state import load_packet_json
 
 
 DEFAULT_HANDOFF_PROMPT_NAME = "page_handoff_focused"
@@ -203,7 +203,7 @@ def _bundle_handoff_inputs(packet: PagePacket, packet_path: Path, previous_hando
 def _bundle_window_inputs(packet_paths: list[Path]) -> str:
     chunks: list[str] = []
     for index, packet_path in enumerate(packet_paths, start=1):
-        packet = repair_packet_json(packet_path)
+        packet = load_packet_json(packet_path)
         handoff_path = packet_path.parent / "page_handoff.md"
         chunks.extend(
             [
@@ -253,7 +253,7 @@ def run_page_handoff(
     previous_handoff_path: Path | None = None,
 ) -> PageHandoffArtifact:
     packet_path = packet_path.resolve()
-    packet = repair_packet_json(packet_path)
+    packet = load_packet_json(packet_path)
     target_dir = (out_dir.resolve() if out_dir else _default_handoff_dir(packet_path).resolve())
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -323,7 +323,7 @@ def run_window_synthesis(
     if len(resolved_packets) < 2:
         raise ValueError("At least two packet paths are required")
 
-    packets = [repair_packet_json(path) for path in resolved_packets]
+    packets = [load_packet_json(path) for path in resolved_packets]
     doc_ids = {packet.doc_id for packet in packets}
     if len(doc_ids) != 1:
         raise ValueError("All packet paths must belong to the same document")

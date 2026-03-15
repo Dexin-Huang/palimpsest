@@ -6,35 +6,25 @@ from pathlib import Path
 from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
 from palimpsest.config import DEFAULT_MODEL_VISION
-from palimpsest.packets import (
+from palimpsest.packets.continuity import run_page_handoff, run_window_synthesis
+from palimpsest.packets.decode import run_layout_pipeline, run_packet_decode
+from palimpsest.packets.doc_pages import load_doc_pages, packet_dir_for_page, select_doc_pages
+from palimpsest.packets.packet import (
     attach_layout_probe,
     create_page_packet,
     ingest_page_reading,
-    repair_packet_json,
-    run_page_handoff,
-    run_packet_translation,
-    run_window_synthesis,
     sync_packet_from_assembly,
 )
-from palimpsest.packets.workflow import (
-    load_doc_pages,
-    packet_dir_for_page,
-    render_packet_workspace,
-    run_layout_pipeline,
-    run_packet_decode,
-    select_doc_pages,
-)
-from palimpsest.reconstruct import (
-    prepare_image,
-    run_box_cleanup,
-    run_page_assembly,
-    run_page_layout_probe,
-    run_page_reading,
-    run_page_validate,
-    run_region_reads,
-    run_section_resolution,
-    run_section_synthesis,
-)
+from palimpsest.packets.state import load_packet_json, reconcile_packet_json
+from palimpsest.packets.translate import run_packet_translation
+from palimpsest.reader.packet import render_packet_workspace
+from palimpsest.reconstruct.assembly import run_page_assembly
+from palimpsest.reconstruct.prepare import prepare_image
+from palimpsest.reconstruct.probe import run_page_layout_probe
+from palimpsest.reconstruct.reading import run_page_reading, run_section_synthesis
+from palimpsest.reconstruct.region_reads import run_region_reads
+from palimpsest.reconstruct.resolve import run_box_cleanup, run_section_resolution
+from palimpsest.reconstruct.validate import run_page_validate
 
 
 def cmd_prepare(args: argparse.Namespace) -> None:
@@ -103,7 +93,7 @@ def cmd_packet(args: argparse.Namespace) -> None:
         if layout.region_artifact is not None:
             print(f"region_reads: {layout.region_artifact.reads_path}")
         else:
-            print(f"region_reads: {layout.probe_artifact.orientations_path}")
+            print(f"region_reads: {layout.probe_artifact.region_reads_path}")
         if layout.section_artifact is not None:
             print(f"section_resolution: {layout.section_artifact.resolution_json_path}")
         if layout.validation_artifact is not None:
@@ -173,7 +163,7 @@ def cmd_sync_doc_packets(args: argparse.Namespace) -> None:
             continue
 
         if args.skip_existing:
-            packet = repair_packet_json(packet_path)
+            packet = load_packet_json(packet_path)
             if packet.files["witness"].status in {"draft", "reviewed", "complete"}:
                 skipped += 1
                 print(f"[{index}/{total}] {page_id}: skip", flush=True)
@@ -245,7 +235,7 @@ def cmd_translate_doc_packets(args: argparse.Namespace) -> None:
             continue
 
         if args.skip_existing:
-            packet = repair_packet_json(packet_path)
+            packet = load_packet_json(packet_path)
             translation_status = packet.files["translation"].status
             if translation_status in {"draft", "reviewed", "complete"}:
                 skipped += 1
@@ -304,7 +294,7 @@ def cmd_render_html(args: argparse.Namespace) -> None:
 def cmd_refresh_packet(args: argparse.Namespace) -> None:
     skip_cleanup = args.skip_box_cleanup or getattr(args, "skip_cleanup", False)
     packet_path = Path(args.packet).resolve()
-    packet = repair_packet_json(packet_path)
+    packet = reconcile_packet_json(packet_path)
     probe_dir = packet_path.parent / "layout_probe"
 
     if not args.skip_layout_probe:
@@ -408,10 +398,10 @@ def cmd_layout_probe(args: argparse.Namespace) -> None:
     print(f"layout_json: {artifact.layout_json_path}")
     print(f"overlay: {artifact.overlay_path}")
     print(f"crops_dir: {artifact.crops_dir}")
-    print(f"region_reads: {artifact.orientations_path}")
+    print(f"region_reads: {artifact.region_reads_path}")
     print(f"meta: {artifact.meta_path}")
     print(f"model: {artifact.model}")
-    print(f"region_read_model: {artifact.orientation_model}")
+    print(f"region_read_model: {artifact.region_read_model}")
     if artifact.finish_reason:
         print(f"finish_reason: {artifact.finish_reason}")
 
@@ -506,16 +496,19 @@ def cmd_decode_doc(args: argparse.Namespace) -> None:
                 region_model=args.orient_model,
                 cleanup_model=args.cleanup_model,
                 retries=args.retries,
-                render_html=args.render_html,
-                title=args.title,
             )
             completed += 1
             status = "created" if result.created else "refreshed"
             print(f"[{index}/{total}] {page_id}: {status}", flush=True)
             print(f"  packet: {result.packet_path}", flush=True)
             print(f"  assembly: {result.layout.assembly_artifact.assembly_json_path}", flush=True)
-            if result.render_artifact is not None:
-                print(f"  html: {result.render_artifact.html_path}", flush=True)
+            if args.render_html:
+                render_artifact = render_packet_workspace(
+                    result.packet_path,
+                    out_dir=packet_dir,
+                    book_title=args.title,
+                )
+                print(f"  html: {render_artifact.html_path}", flush=True)
         except Exception as exc:
             failed += 1
             print(f"[{index}/{total}] {page_id}: failed ({exc.__class__.__name__}: {exc})", flush=True)

@@ -9,7 +9,8 @@ from typing import Any
 
 import requests
 
-from palimpsest.discovery.iiif import extract_canvases, extract_metadata as discovery_extract_metadata
+from palimpsest.discovery.access import DiscoveryStore, Manuscript
+from palimpsest.discovery.iiif import extract_metadata as discovery_extract_metadata
 
 REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Palimpsest discovery)",
@@ -35,13 +36,6 @@ def format_source_fit(
     if access:
         bits.append(f"access={access}")
     return " | ".join(bits) if bits else None
-
-
-def parse_range(value: str) -> tuple[int, int]:
-    parts = value.split("-")
-    if len(parts) != 2:
-        raise ValueError("range must be like 1500-2100")
-    return int(parts[0]), int(parts[1])
 
 
 def extract_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -164,108 +158,6 @@ def repository_code_for_source(source_id: str) -> str:
     return mapping.get(source_id, source_id.upper())
 
 
-def add_manuscripts(
-    *,
-    db_path: str,
-    count: int,
-    collection: str,
-    range_value: str | None,
-    delay: float,
-) -> None:
-    from google import genai
-
-    from palimpsest.discovery import DiscoveryDB, Manuscript
-    from palimpsest.discovery.triage import (
-        build_triage_metadata,
-        combined_interest_score,
-        load_triage_prompt,
-        save_triage_result,
-        triage_manuscript,
-    )
-
-    db = DiscoveryDB(db_path)
-    client = genai.Client()
-    prompt = load_triage_prompt()
-
-    existing_ids = {ms.id for ms in db.list_manuscripts(limit=100000)}
-    added = 0
-    triaged = 0
-    high_interest = 0
-
-    if range_value:
-        start, end = parse_range(range_value)
-    else:
-        start, end = 1, 3000
-
-    print(f"Adding up to {count} new manuscripts from {collection} (range {start}-{end})...")
-
-    for number in range(start, end + 1):
-        if added >= count:
-            break
-
-        manuscript_id = f"vat_{collection.lower().replace('.', '_')}_{number}"
-        if manuscript_id in existing_ids:
-            continue
-
-        shelfmark = f"{collection}.{number}"
-        manifest_url = f"https://digi.vatlib.it/iiif/MSS_{shelfmark}/manifest.json"
-        manifest = fetch_manifest(manifest_url, retries=3, delay=max(delay, 1.0))
-        if not manifest:
-            continue
-
-        canvases = extract_canvases(manifest)
-        content = extract_metadata(manifest)
-        title = content.get("title") if not content.get("title_is_shelfmark") else None
-        language = content.get("language")
-        description_parts = []
-        if content.get("author"):
-            description_parts.append(f"Author: {content['author']}")
-        if content.get("contributor"):
-            description_parts.append(f"Contributor: {content['contributor']}")
-        if content.get("place"):
-            description_parts.append(f"Place: {content['place']}")
-        if content.get("description"):
-            description_parts.append(content["description"])
-
-        manuscript = Manuscript(
-            id=manuscript_id,
-            shelfmark=shelfmark,
-            repository="BAV",
-            collection=collection,
-            iiif_manifest_url=manifest_url,
-            canvas_count=len(canvases),
-            title=title,
-            date_range=content.get("date"),
-            languages=[language] if language else None,
-            description="; ".join(description_parts) if description_parts else None,
-            source_catalog=content,
-        )
-        db.add_manuscript(manuscript, agent="discovery_add")
-        db.ensure_opportunity(manuscript_id)
-        added += 1
-
-        metadata = build_triage_metadata(manuscript)
-        try:
-            result = triage_manuscript(client, metadata, prompt)
-            save_triage_result(db, result, with_web_search=True)
-            combined_score = combined_interest_score(result)
-            triaged += 1
-            if combined_score >= 7:
-                high_interest += 1
-            status = (
-                f"{combined_score} "
-                f"(I:{result.interest_score or 0} R:{result.rarity_score or 0} U:{result.unstudied_score or 0})"
-            )
-        except Exception as exc:
-            status = f"triage error: {exc}"
-
-        print(f"  [{added}/{count}] {shelfmark}: {status}")
-        time.sleep(delay)
-
-    print(f"\nDone! Added {added}, triaged {triaged}, high interest (>=7): {high_interest}")
-    db.close()
-
-
 def triage_manuscripts(
     *,
     db_path: str,
@@ -277,50 +169,47 @@ def triage_manuscripts(
     model: str,
     workers: int,
 ) -> None:
-    from palimpsest.discovery import DiscoveryDB
     from palimpsest.discovery.triage import triage_from_db
 
-    db = DiscoveryDB(db_path)
-    collection_filter = set(collections or [])
-    manuscript_id_filter = set(manuscript_ids or [])
+    with DiscoveryStore.open(db_path) as db:
+        collection_filter = set(collections or [])
+        manuscript_id_filter = set(manuscript_ids or [])
 
-    if dry_run:
-        manuscripts = db.list_manuscripts(limit=10000)
-        to_triage = []
-        for manuscript in manuscripts:
-            if collection_filter and manuscript.collection not in collection_filter:
-                continue
-            if manuscript_id_filter and manuscript.id not in manuscript_id_filter:
-                continue
-            if not force:
-                opportunity = db.get_opportunity(manuscript.id)
-                if opportunity and opportunity.triage_at:
+        if dry_run:
+            manuscripts = db.list_manuscripts(limit=10000)
+            to_triage = []
+            for manuscript in manuscripts:
+                if collection_filter and manuscript.collection not in collection_filter:
                     continue
-            to_triage.append(manuscript)
-        if limit:
-            to_triage = to_triage[:limit]
+                if manuscript_id_filter and manuscript.id not in manuscript_id_filter:
+                    continue
+                if not force:
+                    opportunity = db.get_opportunity(manuscript.id)
+                    if opportunity and opportunity.triage_at:
+                        continue
+                to_triage.append(manuscript)
+            if limit:
+                to_triage = to_triage[:limit]
 
-        print(f"Would triage {len(to_triage)} manuscripts")
-        for index, manuscript in enumerate(to_triage[:10]):
-            title = safe_console_text(manuscript.title or "(no title)")
-            print(f"  {index + 1}. {manuscript.shelfmark}: {title}")
-        if len(to_triage) > 10:
-            print(f"  ... and {len(to_triage) - 10} more")
-        db.close()
-        return
+            print(f"Would triage {len(to_triage)} manuscripts")
+            for index, manuscript in enumerate(to_triage[:10]):
+                title = safe_console_text(manuscript.title or "(no title)")
+                print(f"  {index + 1}. {manuscript.shelfmark}: {title}")
+            if len(to_triage) > 10:
+                print(f"  ... and {len(to_triage) - 10} more")
+            return
 
-    results = triage_from_db(
-        db=db,
-        model=model,
-        workers=workers,
-        limit=limit,
-        force=force,
-        collections=collections,
-        manuscript_ids=manuscript_ids,
-        verbose=True,
-    )
-    print(f"\nTriaged {len(results)} manuscripts")
-    db.close()
+        results = triage_from_db(
+            db=db,
+            model=model,
+            workers=workers,
+            limit=limit,
+            force=force,
+            collections=collections,
+            manuscript_ids=manuscript_ids,
+            verbose=True,
+        )
+        print(f"\nTriaged {len(results)} manuscripts")
 
 
 def enrich_manuscripts(
@@ -331,102 +220,95 @@ def enrich_manuscripts(
     collections: list[str] | None,
     manuscript_ids: list[str] | None,
 ) -> None:
-    from palimpsest.discovery import DiscoveryDB
+    with DiscoveryStore.open(db_path) as db:
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manuscripts = db.list_manuscripts(limit=100000)
+        collection_filter = set(collections or [])
+        manuscript_id_filter = set(manuscript_ids or [])
+        enriched = 0
 
-    db = DiscoveryDB(db_path)
-    manifest_dir.mkdir(parents=True, exist_ok=True)
-    manuscripts = db.list_manuscripts(limit=100000)
-    collection_filter = set(collections or [])
-    manuscript_id_filter = set(manuscript_ids or [])
-    enriched = 0
+        print(f"Enriching manifests into {manifest_dir}...")
 
-    print(f"Enriching manifests into {manifest_dir}...")
-
-    for manuscript in manuscripts:
-        if collection_filter and manuscript.collection not in collection_filter:
-            continue
-        if manuscript_id_filter and manuscript.id not in manuscript_id_filter:
-            continue
-
-        manifest_path = manifest_dir / f"{manuscript.id}.json"
-        manifest = None
-        if manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        elif fetch_missing and manuscript.iiif_manifest_url:
-            try:
-                manifest = fetch_manifest(manuscript.iiif_manifest_url)
-                if manifest:
-                    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-            except Exception as exc:
-                print(f"  Error fetching {manuscript.id}: {exc}")
+        for manuscript in manuscripts:
+            if collection_filter and manuscript.collection not in collection_filter:
                 continue
-        else:
-            continue
+            if manuscript_id_filter and manuscript.id not in manuscript_id_filter:
+                continue
 
-        try:
-            meta = extract_metadata(manifest)
-            updates: dict[str, Any] = {"source_catalog": meta}
-            if meta.get("title") and not meta.get("title_is_shelfmark"):
-                updates["title"] = meta["title"]
-            if meta.get("date"):
-                updates["date_range"] = meta["date"]
-            if meta.get("language"):
-                updates["languages"] = [meta["language"]]
-            if meta.get("canvas_count"):
-                updates["canvas_count"] = meta["canvas_count"]
+            manifest_path = manifest_dir / f"{manuscript.id}.json"
+            manifest = None
+            if manifest_path.exists():
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            elif fetch_missing and manuscript.iiif_manifest_url:
+                try:
+                    manifest = fetch_manifest(manuscript.iiif_manifest_url)
+                    if manifest:
+                        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+                except Exception as exc:
+                    print(f"  Error fetching {manuscript.id}: {exc}")
+                    continue
+            else:
+                continue
 
-            desc_parts = []
-            if meta.get("author"):
-                desc_parts.append(f"Author: {meta['author']}")
-            if meta.get("contributor"):
-                desc_parts.append(f"Contributor: {meta['contributor']}")
-            if meta.get("place"):
-                desc_parts.append(f"Place: {meta['place']}")
-            if desc_parts:
-                updates["description"] = "; ".join(desc_parts)
+            try:
+                meta = extract_metadata(manifest)
+                updates: dict[str, Any] = {"source_catalog": meta}
+                if meta.get("title") and not meta.get("title_is_shelfmark"):
+                    updates["title"] = meta["title"]
+                if meta.get("date"):
+                    updates["date_range"] = meta["date"]
+                if meta.get("language"):
+                    updates["languages"] = [meta["language"]]
+                if meta.get("canvas_count"):
+                    updates["canvas_count"] = meta["canvas_count"]
 
-            if updates:
-                db.update_manuscript(manuscript.id, updates, agent="enrich")
-                enriched += 1
-        except Exception as exc:
-            print(f"  Error enriching {manuscript.id}: {exc}")
+                desc_parts = []
+                if meta.get("author"):
+                    desc_parts.append(f"Author: {meta['author']}")
+                if meta.get("contributor"):
+                    desc_parts.append(f"Contributor: {meta['contributor']}")
+                if meta.get("place"):
+                    desc_parts.append(f"Place: {meta['place']}")
+                if desc_parts:
+                    updates["description"] = "; ".join(desc_parts)
 
-    print(f"Enriched {enriched} manuscripts")
-    db.close()
+                if updates:
+                    db.update_manuscript(manuscript.id, updates, agent="enrich")
+                    enriched += 1
+            except Exception as exc:
+                print(f"  Error enriching {manuscript.id}: {exc}")
+
+        print(f"Enriched {enriched} manuscripts")
 
 
 def show_stats(*, db_path: str) -> None:
-    from palimpsest.discovery import DiscoveryDB
+    with DiscoveryStore.open(db_path) as db:
+        manuscripts = db.list_manuscripts(limit=100000)
+        opportunities = db.list_opportunities()
 
-    db = DiscoveryDB(db_path)
-    manuscripts = db.list_manuscripts(limit=100000)
-    opportunities = db.list_opportunities()
+        print(f"Database: {db_path}")
+        print(f"Total manuscripts: {len(manuscripts)}")
+        print(f"Total opportunities: {len(opportunities)}")
 
-    print(f"Database: {db_path}")
-    print(f"Total manuscripts: {len(manuscripts)}")
-    print(f"Total opportunities: {len(opportunities)}")
+        triaged = [opportunity for opportunity in opportunities if opportunity.initial_score is not None]
+        print(f"\nTriaged: {len(triaged)}")
 
-    triaged = [opportunity for opportunity in opportunities if opportunity.initial_score is not None]
-    print(f"\nTriaged: {len(triaged)}")
+        if triaged:
+            scores: dict[int, int] = {}
+            for opportunity in triaged:
+                bucket = int(opportunity.initial_score) if opportunity.initial_score else 0
+                scores[bucket] = scores.get(bucket, 0) + 1
 
-    if triaged:
-        scores: dict[int, int] = {}
-        for opportunity in triaged:
-            bucket = int(opportunity.initial_score) if opportunity.initial_score else 0
-            scores[bucket] = scores.get(bucket, 0) + 1
+            print("\nScore distribution:")
+            for score in sorted(scores.keys(), reverse=True):
+                bar = "#" * scores[score]
+                print(f"  {score:2d}: {scores[score]:4d} {bar}")
 
-        print("\nScore distribution:")
-        for score in sorted(scores.keys(), reverse=True):
-            bar = "#" * scores[score]
-            print(f"  {score:2d}: {scores[score]:4d} {bar}")
-
-    top = sorted(triaged, key=lambda item: item.initial_score or 0, reverse=True)[:10]
-    if top:
-        print("\nTop 10 by combined score:")
-        for opportunity in top:
-            print(f"  {opportunity.initial_score:.1f} | {opportunity.manuscript_id}")
-
-    db.close()
+        top = sorted(triaged, key=lambda item: item.initial_score or 0, reverse=True)[:10]
+        if top:
+            print("\nTop 10 by combined score:")
+            for opportunity in top:
+                print(f"  {opportunity.initial_score:.1f} | {opportunity.manuscript_id}")
 
 
 def list_sources(*, source: str | None) -> None:
@@ -515,7 +397,6 @@ def ingest_sources(
     model: str,
     workers: int,
 ) -> None:
-    from palimpsest.discovery import DiscoveryDB, Manuscript
     from palimpsest.discovery.sources import get_source_adapter
     from palimpsest.discovery.triage import triage_from_db
 
@@ -528,91 +409,89 @@ def ingest_sources(
         include_details=include_details,
     )
 
-    db = DiscoveryDB(db_path)
-    added = 0
-    updated = 0
-    skipped = 0
-    ingested_ids: list[str] = []
+    with DiscoveryStore.open(db_path) as db:
+        added = 0
+        updated = 0
+        skipped = 0
+        ingested_ids: list[str] = []
 
-    print(f"Ingesting {len(refs)} refs from {source}:{collection} into {db_path}")
+        print(f"Ingesting {len(refs)} refs from {source}:{collection} into {db_path}")
 
-    for ref in refs:
-        manifest_summary = None
-        canvas_count = None
-        if ref.manifest_url and fetch_manifests:
-            try:
-                manifest = fetch_manifest(ref.manifest_url)
-                manifest_summary = extract_metadata(manifest)
-                canvas_count = manifest_summary.get("canvas_count")
-            except Exception as exc:
-                print(f"  ! manifest fetch failed for {safe_console_text(ref.shelfmark)}: {exc}")
+        for ref in refs:
+            manifest_summary = None
+            canvas_count = None
+            if ref.manifest_url and fetch_manifests:
+                try:
+                    manifest = fetch_manifest(ref.manifest_url)
+                    manifest_summary = extract_metadata(manifest)
+                    canvas_count = manifest_summary.get("canvas_count")
+                except Exception as exc:
+                    print(f"  ! manifest fetch failed for {safe_console_text(ref.shelfmark)}: {exc}")
 
-        source_catalog = merge_source_catalog_with_manifest(ref.source_catalog, manifest_summary)
-        title = source_catalog.get("title") if source_catalog else None
-        date_range = source_catalog.get("date") if source_catalog else None
+            source_catalog = merge_source_catalog_with_manifest(ref.source_catalog, manifest_summary)
+            title = source_catalog.get("title") if source_catalog else None
+            date_range = source_catalog.get("date") if source_catalog else None
 
-        manuscript = Manuscript(
-            id=ref.manuscript_id,
-            shelfmark=ref.shelfmark,
-            repository=repository_code_for_source(ref.source_id),
-            iiif_manifest_url=ref.manifest_url,
-            canvas_count=canvas_count,
-            collection=ref.collection,
-            title=title,
-            date_range=date_range,
-            languages=language_labels_from_source_catalog(source_catalog) or None,
-            subject_areas=subject_labels_from_source_catalog(source_catalog) or None,
-            description=build_description_from_source_catalog(source_catalog),
-            source_catalog=source_catalog,
-        )
-
-        existing = db.get_manuscript(ref.manuscript_id) or db.get_manuscript_by_shelfmark(ref.shelfmark)
-        target_manuscript_id = existing.id if existing else ref.manuscript_id
-
-        if existing and not update_existing:
-            skipped += 1
-            db.ensure_opportunity(target_manuscript_id)
-            continue
-
-        if existing:
-            db.update_manuscript(
-                target_manuscript_id,
-                {
-                    "iiif_manifest_url": manuscript.iiif_manifest_url,
-                    "canvas_count": manuscript.canvas_count,
-                    "collection": manuscript.collection,
-                    "title": manuscript.title,
-                    "date_range": manuscript.date_range,
-                    "languages": manuscript.languages,
-                    "subject_areas": manuscript.subject_areas,
-                    "description": manuscript.description,
-                    "source_catalog": manuscript.source_catalog,
-                },
-                agent=f"{source}_sources_ingest",
+            manuscript = Manuscript(
+                id=ref.manuscript_id,
+                shelfmark=ref.shelfmark,
+                repository=repository_code_for_source(ref.source_id),
+                iiif_manifest_url=ref.manifest_url,
+                canvas_count=canvas_count,
+                collection=ref.collection,
+                title=title,
+                date_range=date_range,
+                languages=language_labels_from_source_catalog(source_catalog) or None,
+                subject_areas=subject_labels_from_source_catalog(source_catalog) or None,
+                description=build_description_from_source_catalog(source_catalog),
+                source_catalog=source_catalog,
             )
-            updated += 1
-        else:
-            db.add_manuscript(manuscript, agent=f"{source}_sources_ingest")
-            added += 1
 
-        db.ensure_opportunity(target_manuscript_id)
-        ingested_ids.append(target_manuscript_id)
-        print(f"  - {safe_console_text(ref.shelfmark)}")
+            existing = db.get_manuscript(ref.manuscript_id) or db.get_manuscript_by_shelfmark(ref.shelfmark)
+            target_manuscript_id = existing.id if existing else ref.manuscript_id
 
-    print(f"Added {added}, updated {updated}, skipped {skipped}")
+            if existing and not update_existing:
+                skipped += 1
+                db.ensure_opportunity(target_manuscript_id)
+                continue
 
-    if run_triage and ingested_ids:
-        print(f"Triage on {len(ingested_ids)} ingested manuscripts...")
-        triage_from_db(
-            db=db,
-            model=model,
-            workers=workers,
-            manuscript_ids=ingested_ids,
-            force=force_triage,
-            verbose=True,
-        )
+            if existing:
+                db.update_manuscript(
+                    target_manuscript_id,
+                    {
+                        "iiif_manifest_url": manuscript.iiif_manifest_url,
+                        "canvas_count": manuscript.canvas_count,
+                        "collection": manuscript.collection,
+                        "title": manuscript.title,
+                        "date_range": manuscript.date_range,
+                        "languages": manuscript.languages,
+                        "subject_areas": manuscript.subject_areas,
+                        "description": manuscript.description,
+                        "source_catalog": manuscript.source_catalog,
+                    },
+                    agent=f"{source}_sources_ingest",
+                )
+                updated += 1
+            else:
+                db.add_manuscript(manuscript, agent=f"{source}_sources_ingest")
+                added += 1
 
-    db.close()
+            db.ensure_opportunity(target_manuscript_id)
+            ingested_ids.append(target_manuscript_id)
+            print(f"  - {safe_console_text(ref.shelfmark)}")
+
+        print(f"Added {added}, updated {updated}, skipped {skipped}")
+
+        if run_triage and ingested_ids:
+            print(f"Triage on {len(ingested_ids)} ingested manuscripts...")
+            triage_from_db(
+                db=db,
+                model=model,
+                workers=workers,
+                manuscript_ids=ingested_ids,
+                force=force_triage,
+                verbose=True,
+            )
 
 
 def run_scout(

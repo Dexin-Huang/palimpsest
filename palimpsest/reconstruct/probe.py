@@ -7,24 +7,29 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_READING, DEFAULT_MODEL_VISION
-from palimpsest.models.layout_probe import LayoutProbe, RegionOrientation
+from palimpsest.contracts import (
+    layout_crops_dir,
+    layout_overlay_path,
+    layout_probe_json_path,
+    layout_probe_meta_path,
+    layout_probe_raw_response_path,
+    layout_prompt_copy_path,
+    region_reads_path,
+)
+from palimpsest.model_io import resolve_prompt_text as _resolve_prompt_text
+from palimpsest.model_io import response_text as _response_text
+from palimpsest.models.layout_probe import LayoutProbe, RegionRead
 from palimpsest.reconstruct.artifacts import PageLayoutProbeArtifact
-
-from .pipeline import (
-    DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
-    DEFAULT_REGION_PROMPT_NAME,
+from palimpsest.reconstruct.common import DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS, _coerce_json_text, _utc_now
+from palimpsest.reconstruct.probe_layout import (
     _coarsen_layout,
-    _coerce_json_text,
     _default_output_dir,
     _draw_overlay,
     _image_page_unit,
     _resolve_doc_id,
-    _resolve_prompt_text,
-    _response_text,
-    _run_region_orientation,
     _save_crops,
-    _utc_now,
 )
+from palimpsest.reconstruct.region_reads import DEFAULT_REGION_PROMPT_NAME, _run_region_read
 
 
 def run_page_layout_probe(
@@ -42,8 +47,8 @@ def run_page_layout_probe(
 
     prompt_text, prompt_path = _resolve_prompt_text(prompt_file, "page_layout_probe")
     prompt_text = prompt_text.replace("{PAGE_ID}", image_path.stem)
-    prompt_copy_path = target_dir / "layout_prompt.txt"
-    prompt_copy_path.write_text(prompt_text, encoding="utf-8")
+    prompt_copy_artifact_path = layout_prompt_copy_path(target_dir)
+    prompt_copy_artifact_path.write_text(prompt_text, encoding="utf-8")
 
     client = genai.Client()
     response = client.models.generate_content(
@@ -71,18 +76,18 @@ def run_page_layout_probe(
     )
     layout = _coarsen_layout(LayoutProbe.model_validate(payload))
 
-    layout_json_path = target_dir / "layout_probe.json"
-    raw_response_path = target_dir / "layout_probe_raw.json"
+    layout_json_path = layout_probe_json_path(target_dir)
+    raw_response_path = layout_probe_raw_response_path(target_dir)
     layout_json_path.write_text(layout.model_dump_json(indent=2), encoding="utf-8")
     raw_response_path.write_text(_coerce_json_text(text), encoding="utf-8")
 
-    overlay_path = target_dir / "layout_overlay.png"
+    overlay_path = layout_overlay_path(target_dir)
     _draw_overlay(image_path, layout, overlay_path)
 
-    crops_dir = target_dir / "crops"
+    crops_dir = layout_crops_dir(target_dir)
     crop_rows = _save_crops(image_path, layout, crops_dir)
 
-    orientations: list[RegionOrientation] = []
+    region_reads: list[RegionRead] = []
     if orient_regions:
         region_prompt_path = (Path(__file__).resolve().parents[1] / "prompts" / f"{DEFAULT_REGION_PROMPT_NAME}.txt").resolve()
         for row, region in zip(crop_rows, layout.regions):
@@ -91,8 +96,8 @@ def run_page_layout_probe(
             if not region.contains_text and region.role not in {"header", "page_number", "marginalia"}:
                 continue
             try:
-                orientations.append(
-                    _run_region_orientation(
+                region_reads.append(
+                    _run_region_read(
                         client,
                         page_id=layout.page_id,
                         region_id=region.region_id,
@@ -107,25 +112,25 @@ def run_page_layout_probe(
             except Exception:
                 continue
 
-    orientations_path = target_dir / "region_reads.json"
-    orientations_path.write_text(
-        json.dumps([item.model_dump() for item in orientations], indent=2, ensure_ascii=False),
+    region_reads_output_path = region_reads_path(target_dir)
+    region_reads_output_path.write_text(
+        json.dumps([item.model_dump() for item in region_reads], indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 
-    meta_path = target_dir / "layout_probe_meta.json"
+    meta_path = layout_probe_meta_path(target_dir)
     meta = {
         "generated_at": _utc_now(),
         "image_path": str(image_path),
         "prompt_path": str(prompt_path),
-        "prompt_copy_path": str(prompt_copy_path),
+        "prompt_copy_path": str(prompt_copy_artifact_path),
         "layout_json_path": str(layout_json_path),
         "raw_response_path": str(raw_response_path),
         "overlay_path": str(overlay_path),
         "crops_dir": str(crops_dir),
-        "orientations_path": str(orientations_path),
+        "region_reads_path": str(region_reads_output_path),
         "model": model,
-        "orientation_model": orient_model,
+        "region_read_model": orient_model,
         "finish_reason": finish_reason,
     }
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -137,9 +142,9 @@ def run_page_layout_probe(
         layout_json_path=layout_json_path,
         overlay_path=overlay_path,
         crops_dir=crops_dir,
-        orientations_path=orientations_path,
+        region_reads_path=region_reads_output_path,
         meta_path=meta_path,
         model=model,
-        orientation_model=orient_model,
+        region_read_model=orient_model,
         finish_reason=finish_reason,
     )

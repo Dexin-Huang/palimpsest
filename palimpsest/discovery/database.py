@@ -1,181 +1,89 @@
 """SQLite-based discovery database for manuscript cataloging.
 
-This module provides a structured database for tracking:
-- Discovered manuscripts (from IIIF crawls, catalog searches)
-- Scholarship status (existing editions, transcriptions)
-- Our work (transcription progress, page JSON files)
-- Audit log (all actions taken on manuscripts)
+Canonical discovery-owned schema:
+- manuscripts
+- opportunities
+- enrichment
+- audit_log
+
+Quarantined carryover schema kept only for compatibility until extraction:
+- scholarship
+- our_work
 
 Usage:
-    from palimpsest.discovery import DiscoveryDB
+    from palimpsest.discovery.access import DiscoveryStore
 
-    db = DiscoveryDB("discovery/manuscripts.db")
-    db.add_manuscript(Manuscript(
-        id="vat_pal_lat_1267",
-        shelfmark="Pal.lat.1267",
-        repository="BAV",
-        ...
-    ))
+    with DiscoveryStore.open("discovery/manuscripts.db") as db:
+        db.add_manuscript(Manuscript(
+            id="vat_pal_lat_1267",
+            shelfmark="Pal.lat.1267",
+            repository="BAV",
+            ...
+        ))
 """
 
 import json
 import sqlite3
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Iterator
+from typing import Any, Dict, List, Optional
 
+from .records import (
+    AuditEntry,
+    Enrichment,
+    Manuscript,
+    Opportunity,
+    audit_entry_from_row,
+    encode_json_field,
+    enrichment_from_row,
+    manuscript_from_row,
+    normalize_manuscript_updates,
+    opportunity_from_row,
+)
+from .stats import collect_discovery_stats
 
-def _json_dumps(value: Any) -> Optional[str]:
-    if value is None:
-        return None
-    return json.dumps(value, ensure_ascii=False)
+DISCOVERY_CANONICAL_TABLES = (
+    "manuscripts",
+    "opportunities",
+    "enrichment",
+    "audit_log",
+)
 
+DISCOVERY_QUARANTINED_TABLES = (
+    "scholarship",
+    "our_work",
+)
 
-def _json_loads(value: Optional[str]) -> Any:
-    if not value:
-        return None
-    return json.loads(value)
+DISCOVERY_CANONICAL_MANUSCRIPT_FIELDS = (
+    "id",
+    "shelfmark",
+    "repository",
+    "iiif_manifest_url",
+    "canvas_count",
+    "collection",
+    "title",
+    "date_range",
+    "languages",
+    "subject_areas",
+    "description",
+    "source_catalog",
+    "discovered_at",
+    "updated_at",
+)
 
-
-@dataclass
-class Manuscript:
-    """Core manuscript record."""
-
-    id: str  # e.g., "vat_pal_lat_1267"
-    shelfmark: str  # e.g., "Pal.lat.1267"
-    repository: str  # e.g., "BAV"
-
-    # IIIF info
-    iiif_manifest_url: Optional[str] = None
-    canvas_count: Optional[int] = None
-
-    # Scores
-    obscurity_score: Optional[int] = None  # 1-10
-    wtf_score: Optional[int] = None  # 1-10
-    interest_score: Optional[int] = None  # computed or manual
-
-    # Status
-    status: str = "discovered"  # discovered/analyzing/transcribed/scanlated
-    priority: int = 50  # 1-100
-
-    # Metadata
-    collection: Optional[str] = None
-    title: Optional[str] = None
-    date_range: Optional[str] = None
-    languages: Optional[List[str]] = None
-    subject_areas: Optional[List[str]] = None
-    description: Optional[str] = None
-    source_catalog: Optional[Dict[str, Any]] = None
-
-    # Timestamps
-    discovered_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-
-@dataclass
-class Opportunity:
-    """Triage record for discovery opportunities."""
-
-    manuscript_id: str
-    initial_interest: Optional[bool] = None
-    initial_score: Optional[int] = None
-    interest_score: Optional[int] = None
-    interest_reason: Optional[str] = None
-    triage_method: Optional[str] = None  # metadata_only, gemini_flash, human
-    triage_model: Optional[str] = None
-    triage_at: Optional[str] = None
-    triage_json: Optional[str] = None
-    first_seen_at: Optional[str] = None
-    last_seen_at: Optional[str] = None
-    status: str = "new"
-
-
-@dataclass
-class Enrichment:
-    """Enrichment signals for manuscript discovery triage.
-
-    These signals help determine if a manuscript is truly unstudied
-    vs. just poorly cataloged.
-    """
-
-    manuscript_id: str
-
-    # Catalog analysis
-    catalog_description_words: Optional[int] = None  # Length of catalog entry
-    manifest_metadata_fields: Optional[int] = None   # How many IIIF fields populated
-    has_bibliography: Optional[bool] = None          # Catalog cites scholarship?
-    has_incipit: Optional[bool] = None               # Opening text recorded?
-
-    # External database presence
-    in_viaf: Optional[bool] = None                   # Author in authority file?
-    viaf_id: Optional[str] = None
-    in_europeana: Optional[bool] = None              # Aggregated to Europeana?
-    in_mirabile: Optional[bool] = None               # In medieval Latin DB?
-    in_pinakes: Optional[bool] = None                # In Greek MS DB?
-
-    # Scholarship signals
-    google_scholar_hits: Optional[int] = None        # Citations found
-    google_search_hits: Optional[int] = None         # General web mentions
-    transcription_exists: Optional[bool] = None      # Online transcription?
-    transcription_source: Optional[str] = None       # Where? (Transkribus, etc.)
-
-    # Content signals
-    common_text_detected: Optional[str] = None       # "physiologus", "bible", etc.
-    original_content_signals: Optional[List[str]] = None  # ["epistolae", "registrum"]
-    author_famous: Optional[bool] = None             # Known author?
-
-    # Computed
-    studied_score: Optional[int] = None              # 0-10, higher = more studied
-
-    # Metadata
-    enriched_at: Optional[str] = None
-    enrichment_notes: Optional[str] = None
-
-
-@dataclass
-class Scholarship:
-    """Scholarship tracking for a manuscript."""
-
-    id: Optional[int] = None
-    manuscript_id: str = ""
-    source: str = ""  # e.g., "Schuba 1981"
-    has_edition: bool = False
-    has_transcription: bool = False
-    citation: Optional[str] = None
-    notes: Optional[str] = None
-
-
-@dataclass
-class OurWork:
-    """Our work tracking for a manuscript page."""
-
-    id: Optional[int] = None
-    manuscript_id: str = ""
-    page_id: str = ""  # e.g., "f020r"
-    status: str = "pending"  # pending/in_progress/complete
-    page_json_path: Optional[str] = None
-    transcribed_at: Optional[str] = None
-    quality_score: Optional[str] = None
-    notes: Optional[str] = None
-
-
-@dataclass
-class AuditEntry:
-    """Audit log entry."""
-
-    id: Optional[int] = None
-    manuscript_id: str = ""
-    timestamp: str = ""
-    action: str = ""  # discovered/analyzed/transcribed/reconstructed
-    agent: str = ""  # human/gemini-3-flash/etc.
-    details: Optional[str] = None  # JSON string
-
+DISCOVERY_QUARANTINED_MANUSCRIPT_FIELDS = (
+    "obscurity_score",
+    "wtf_score",
+    "priority",
+)
 
 class DiscoveryDB:
     """SQLite database for manuscript discovery and tracking.
 
     Provides CRUD operations with automatic audit logging.
+    The canonical discovery-owned surface is limited to manuscripts,
+    opportunities, enrichment, and audit. Compatibility-only carryover
+    tables live in ``palimpsest.discovery.compat``.
     """
 
     SCHEMA_VERSION = 1
@@ -196,7 +104,7 @@ class DiscoveryDB:
         """Create tables if they don't exist."""
         cursor = self.conn.cursor()
 
-        # Manuscripts table
+        # Canonical discovery schema: manuscripts + opportunities + enrichment + audit_log.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS manuscripts (
                 id TEXT PRIMARY KEY,
@@ -226,7 +134,7 @@ class DiscoveryDB:
         """)
         self._ensure_column("manuscripts", "source_catalog_json", "TEXT")
 
-        # Opportunities table (triage + digitization tracking)
+        # Canonical opportunity tracking for DB-first ingest and triage.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS opportunities (
                 manuscript_id TEXT PRIMARY KEY REFERENCES manuscripts(id),
@@ -244,7 +152,8 @@ class DiscoveryDB:
             )
         """)
 
-        # Scholarship table
+        # Quarantined carryover tables. Keep them readable for compatibility, but
+        # treat them as non-canonical when planning extraction or new features.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS scholarship (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -257,7 +166,6 @@ class DiscoveryDB:
             )
         """)
 
-        # Our work table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS our_work (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -272,7 +180,7 @@ class DiscoveryDB:
             )
         """)
 
-        # Audit log table
+        # Canonical audit trail for discovery actions.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS audit_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -284,7 +192,7 @@ class DiscoveryDB:
             )
         """)
 
-        # Enrichment table for triage signals
+        # Canonical enrichment signals for discovery triage.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS enrichment (
                 manuscript_id TEXT PRIMARY KEY REFERENCES manuscripts(id),
@@ -400,10 +308,10 @@ class DiscoveryDB:
             ms.obscurity_score, ms.wtf_score, ms.interest_score,
             ms.status, ms.priority,
             ms.collection, ms.title, ms.date_range,
-            _json_dumps(ms.languages),
-            _json_dumps(ms.subject_areas),
+            encode_json_field(ms.languages),
+            encode_json_field(ms.subject_areas),
             ms.description,
-            _json_dumps(ms.source_catalog),
+            encode_json_field(ms.source_catalog),
             ms.discovered_at, ms.updated_at
         ))
         self.conn.commit()
@@ -417,7 +325,7 @@ class DiscoveryDB:
         row = cursor.fetchone()
         if not row:
             return None
-        return self._row_to_manuscript(row)
+        return manuscript_from_row(row)
 
     def get_manuscript_by_shelfmark(self, shelfmark: str) -> Optional[Manuscript]:
         """Get a manuscript by shelfmark."""
@@ -426,7 +334,7 @@ class DiscoveryDB:
         row = cursor.fetchone()
         if not row:
             return None
-        return self._row_to_manuscript(row)
+        return manuscript_from_row(row)
 
     def update_manuscript(
         self,
@@ -447,13 +355,7 @@ class DiscoveryDB:
         if not updates:
             return False
 
-        # Handle JSON fields
-        if "languages" in updates and isinstance(updates["languages"], list):
-            updates["languages"] = _json_dumps(updates["languages"])
-        if "subject_areas" in updates and isinstance(updates["subject_areas"], list):
-            updates["subject_areas"] = _json_dumps(updates["subject_areas"])
-        if "source_catalog" in updates:
-            updates["source_catalog_json"] = _json_dumps(updates.pop("source_catalog"))
+        updates = normalize_manuscript_updates(updates)
 
         updates["updated_at"] = datetime.utcnow().isoformat() + "Z"
 
@@ -499,14 +401,14 @@ class DiscoveryDB:
 
         cursor = self.conn.cursor()
         cursor.execute(query, params)
-        return [self._row_to_manuscript(row) for row in cursor.fetchall()]
+        return [manuscript_from_row(row) for row in cursor.fetchall()]
 
     def get_next_priority(
         self,
         min_obscurity: int = 7,
         status: str = "discovered"
     ) -> Optional[Manuscript]:
-        """Get the next highest-priority manuscript to work on.
+        """Legacy prioritization helper over quarantined manuscript fields.
 
         Args:
             min_obscurity: Minimum obscurity score (default 7)
@@ -525,31 +427,7 @@ class DiscoveryDB:
         row = cursor.fetchone()
         if not row:
             return None
-        return self._row_to_manuscript(row)
-
-    def _row_to_manuscript(self, row: sqlite3.Row) -> Manuscript:
-        """Convert database row to Manuscript object."""
-        return Manuscript(
-            id=row["id"],
-            shelfmark=row["shelfmark"],
-            repository=row["repository"],
-            iiif_manifest_url=row["iiif_manifest_url"],
-            canvas_count=row["canvas_count"],
-            obscurity_score=row["obscurity_score"],
-            wtf_score=row["wtf_score"],
-            interest_score=row["interest_score"],
-            status=row["status"],
-            priority=row["priority"],
-            collection=row["collection"],
-            title=row["title"],
-            date_range=row["date_range"],
-            languages=_json_loads(row["languages"]),
-            subject_areas=_json_loads(row["subject_areas"]),
-            description=row["description"],
-            source_catalog=_json_loads(row["source_catalog_json"]) if "source_catalog_json" in row.keys() else None,
-            discovered_at=row["discovered_at"],
-            updated_at=row["updated_at"],
-        )
+        return manuscript_from_row(row)
 
     # ==================== Opportunities CRUD ====================
 
@@ -589,20 +467,7 @@ class DiscoveryDB:
         row = cursor.fetchone()
         if not row:
             return None
-        return Opportunity(
-            manuscript_id=row["manuscript_id"],
-            initial_interest=bool(row["initial_interest"]) if row["initial_interest"] is not None else None,
-            initial_score=row["initial_score"],
-            interest_score=row["interest_score"],
-            interest_reason=row["interest_reason"],
-            triage_method=row["triage_method"],
-            triage_model=row["triage_model"],
-            triage_at=row["triage_at"],
-            triage_json=row["triage_json"],
-            first_seen_at=row["first_seen_at"],
-            last_seen_at=row["last_seen_at"],
-            status=row["status"] or "new",
-        )
+        return opportunity_from_row(row)
 
     def update_opportunity(
         self,
@@ -652,23 +517,7 @@ class DiscoveryDB:
         cursor = self.conn.cursor()
         cursor.execute(query, params)
         rows = cursor.fetchall()
-        return [
-            Opportunity(
-                manuscript_id=r["manuscript_id"],
-                initial_interest=bool(r["initial_interest"]) if r["initial_interest"] is not None else None,
-                initial_score=r["initial_score"],
-                interest_score=r["interest_score"],
-                interest_reason=r["interest_reason"],
-                triage_method=r["triage_method"],
-                triage_model=r["triage_model"],
-                triage_at=r["triage_at"],
-                triage_json=r["triage_json"],
-                first_seen_at=r["first_seen_at"],
-                last_seen_at=r["last_seen_at"],
-                status=r["status"] or "new",
-            )
-            for r in rows
-        ]
+        return [opportunity_from_row(row) for row in rows]
 
     # ==================== Enrichment CRUD ====================
 
@@ -705,7 +554,7 @@ class DiscoveryDB:
             enrichment.transcription_exists,
             enrichment.transcription_source,
             enrichment.common_text_detected,
-            json.dumps(enrichment.original_content_signals) if enrichment.original_content_signals else None,
+            encode_json_field(enrichment.original_content_signals),
             enrichment.author_famous,
             enrichment.studied_score,
             enrichment.enriched_at,
@@ -723,28 +572,7 @@ class DiscoveryDB:
         row = cursor.fetchone()
         if not row:
             return None
-        return Enrichment(
-            manuscript_id=row["manuscript_id"],
-            catalog_description_words=row["catalog_description_words"],
-            manifest_metadata_fields=row["manifest_metadata_fields"],
-            has_bibliography=bool(row["has_bibliography"]) if row["has_bibliography"] is not None else None,
-            has_incipit=bool(row["has_incipit"]) if row["has_incipit"] is not None else None,
-            in_viaf=bool(row["in_viaf"]) if row["in_viaf"] is not None else None,
-            viaf_id=row["viaf_id"],
-            in_europeana=bool(row["in_europeana"]) if row["in_europeana"] is not None else None,
-            in_mirabile=bool(row["in_mirabile"]) if row["in_mirabile"] is not None else None,
-            in_pinakes=bool(row["in_pinakes"]) if row["in_pinakes"] is not None else None,
-            google_scholar_hits=row["google_scholar_hits"],
-            google_search_hits=row["google_search_hits"],
-            transcription_exists=bool(row["transcription_exists"]) if row["transcription_exists"] is not None else None,
-            transcription_source=row["transcription_source"],
-            common_text_detected=row["common_text_detected"],
-            original_content_signals=json.loads(row["original_content_signals"]) if row["original_content_signals"] else None,
-            author_famous=bool(row["author_famous"]) if row["author_famous"] is not None else None,
-            studied_score=row["studied_score"],
-            enriched_at=row["enriched_at"],
-            enrichment_notes=row["enrichment_notes"],
-        )
+        return enrichment_from_row(row)
 
     def list_unenriched(self, limit: int = 100) -> List[str]:
         """List manuscript IDs that don't have enrichment records."""
@@ -756,131 +584,6 @@ class DiscoveryDB:
             LIMIT ?
         """, (limit,))
         return [row["id"] for row in cursor.fetchall()]
-
-    # ==================== Scholarship CRUD ====================
-
-    def add_scholarship(self, entry: Scholarship) -> int:
-        """Add a scholarship entry. Returns the new ID."""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO scholarship (
-                manuscript_id, source, has_edition, has_transcription, citation, notes
-            ) VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            entry.manuscript_id, entry.source, entry.has_edition,
-            entry.has_transcription, entry.citation, entry.notes
-        ))
-        self.conn.commit()
-        return cursor.lastrowid
-
-    def get_scholarship(self, manuscript_id: str) -> List[Scholarship]:
-        """Get all scholarship entries for a manuscript."""
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT * FROM scholarship WHERE manuscript_id = ?",
-            (manuscript_id,)
-        )
-        return [
-            Scholarship(
-                id=row["id"],
-                manuscript_id=row["manuscript_id"],
-                source=row["source"],
-                has_edition=bool(row["has_edition"]),
-                has_transcription=bool(row["has_transcription"]),
-                citation=row["citation"],
-                notes=row["notes"],
-            )
-            for row in cursor.fetchall()
-        ]
-
-    # ==================== Our Work CRUD ====================
-
-    def add_work(self, work: OurWork, agent: str = "system") -> int:
-        """Add a work entry for a page. Returns the new ID."""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT OR REPLACE INTO our_work (
-                manuscript_id, page_id, status, page_json_path,
-                transcribed_at, quality_score, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            work.manuscript_id, work.page_id, work.status, work.page_json_path,
-            work.transcribed_at, work.quality_score, work.notes
-        ))
-        self.conn.commit()
-
-        self._log_action(
-            work.manuscript_id,
-            f"work_{work.status}",
-            agent,
-            {"page_id": work.page_id, "status": work.status}
-        )
-
-        return cursor.lastrowid
-
-    def update_work(
-        self,
-        manuscript_id: str,
-        page_id: str,
-        updates: Dict[str, Any],
-        agent: str = "system"
-    ) -> bool:
-        """Update a work entry."""
-        if not updates:
-            return False
-
-        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
-        values = list(updates.values()) + [manuscript_id, page_id]
-
-        cursor = self.conn.cursor()
-        cursor.execute(
-            f"UPDATE our_work SET {set_clause} WHERE manuscript_id = ? AND page_id = ?",
-            values
-        )
-        self.conn.commit()
-
-        if cursor.rowcount > 0:
-            self._log_action(manuscript_id, "work_updated", agent, {
-                "page_id": page_id, **updates
-            })
-            return True
-        return False
-
-    def get_work(self, manuscript_id: str) -> List[OurWork]:
-        """Get all work entries for a manuscript."""
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "SELECT * FROM our_work WHERE manuscript_id = ? ORDER BY page_id",
-            (manuscript_id,)
-        )
-        return [
-            OurWork(
-                id=row["id"],
-                manuscript_id=row["manuscript_id"],
-                page_id=row["page_id"],
-                status=row["status"],
-                page_json_path=row["page_json_path"],
-                transcribed_at=row["transcribed_at"],
-                quality_score=row["quality_score"],
-                notes=row["notes"],
-            )
-            for row in cursor.fetchall()
-        ]
-
-    def get_work_stats(self, manuscript_id: str) -> Dict[str, int]:
-        """Get work progress stats for a manuscript."""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            SELECT status, COUNT(*) as count
-            FROM our_work
-            WHERE manuscript_id = ?
-            GROUP BY status
-        """, (manuscript_id,))
-
-        stats = {"pending": 0, "in_progress": 0, "complete": 0}
-        for row in cursor.fetchall():
-            stats[row["status"]] = row["count"]
-        return stats
 
     # ==================== Audit Log ====================
 
@@ -937,211 +640,10 @@ class DiscoveryDB:
                 LIMIT ?
             """, (limit,))
 
-        return [
-            AuditEntry(
-                id=row["id"],
-                manuscript_id=row["manuscript_id"],
-                timestamp=row["timestamp"],
-                action=row["action"],
-                agent=row["agent"],
-                details=row["details"],
-            )
-            for row in cursor.fetchall()
-        ]
-
-    # ==================== Import/Export ====================
-
-    def import_jsonl(self, jsonl_path: str | Path, agent: str = "import") -> int:
-        """Import manuscripts from JSONL file.
-
-        Expects each line to be a JSON object with at least:
-        - manuscript_id (used as id)
-        - shelfmark
-        - repository
-
-        Returns:
-            Number of manuscripts imported
-        """
-        path = Path(jsonl_path)
-        count = 0
-
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-
-                data = json.loads(line)
-
-                # Map from JSONL format to Manuscript
-                ms = Manuscript(
-                    id=data.get("manuscript_id", data.get("id")),
-                    shelfmark=data["shelfmark"],
-                    repository=data.get("repository", "unknown"),
-                    iiif_manifest_url=data.get("iiif", {}).get("manifest_url"),
-                    canvas_count=data.get("iiif", {}).get("canvas_count"),
-                    obscurity_score=data.get("scholarship", {}).get("obscurity_score"),
-                    wtf_score=data.get("discovery", {}).get("wtf_factor"),
-                    status=data.get("status", "discovered"),
-                    collection=data.get("collection"),
-                    title=data.get("content", {}).get("title"),
-                    date_range=data.get("physical", {}).get("date_range"),
-                    languages=data.get("content", {}).get("languages"),
-                    subject_areas=data.get("content", {}).get("subject_areas"),
-                    description=data.get("content", {}).get("description"),
-                    source_catalog=data.get("source_catalog"),
-                    discovered_at=data.get("discovery", {}).get("discovered_date"),
-                )
-
-                try:
-                    self.add_manuscript(ms, agent=agent)
-                    count += 1
-
-                    # Import scholarship entries
-                    for entry in data.get("scholarship", {}).get("catalog_entries", []):
-                        self.add_scholarship(Scholarship(
-                            manuscript_id=ms.id,
-                            source=entry.get("source", "unknown"),
-                            has_edition=False,
-                            has_transcription=data.get("scholarship", {}).get(
-                                "transcriptions_exist", False
-                            ),
-                            citation=entry.get("citation"),
-                        ))
-
-                    # Import our work entries
-                    for entry in data.get("our_work", {}).get("findings", []):
-                        self.add_work(OurWork(
-                            manuscript_id=ms.id,
-                            page_id=entry.get("folio", "unknown"),
-                            status="complete" if entry.get("type") else "pending",
-                            notes=entry.get("description"),
-                        ))
-
-                    # Import audit log entries
-                    for entry in data.get("audit_log", []):
-                        self._log_action(
-                            ms.id,
-                            entry.get("action", "imported"),
-                            entry.get("agent", "import"),
-                            {"original_details": entry.get("details")}
-                        )
-
-                except sqlite3.IntegrityError:
-                    # Already exists, skip
-                    pass
-
-        return count
-
-    def export_jsonl(self, output_path: str | Path) -> int:
-        """Export all manuscripts to JSONL file."""
-        path = Path(output_path)
-        count = 0
-
-        with open(path, "w", encoding="utf-8") as f:
-            for ms in self.list_manuscripts(limit=10000):
-                data = {
-                    "manuscript_id": ms.id,
-                    "shelfmark": ms.shelfmark,
-                    "repository": ms.repository,
-                    "iiif": {
-                        "manifest_url": ms.iiif_manifest_url,
-                        "canvas_count": ms.canvas_count,
-                    } if ms.iiif_manifest_url else None,
-                    "status": ms.status,
-                    "scholarship": {
-                        "obscurity_score": ms.obscurity_score,
-                    },
-                    "discovery": {
-                        "wtf_factor": ms.wtf_score,
-                        "discovered_date": ms.discovered_at,
-                    },
-                    "content": {
-                        "title": ms.title,
-                        "languages": ms.languages,
-                        "subject_areas": ms.subject_areas,
-                        "description": ms.description,
-                    },
-                    "source_catalog": ms.source_catalog,
-                    "physical": {
-                        "date_range": ms.date_range,
-                    },
-                }
-
-                opp = self.get_opportunity(ms.id)
-                if opp:
-                    data["opportunity"] = {
-                        "initial_interest": opp.initial_interest,
-                        "initial_score": opp.initial_score,
-                        "interest_score": opp.interest_score,
-                        "interest_reason": opp.interest_reason,
-                        "triage_method": opp.triage_method,
-                        "triage_model": opp.triage_model,
-                        "triage_at": opp.triage_at,
-                        "first_seen_at": opp.first_seen_at,
-                        "last_seen_at": opp.last_seen_at,
-                        "status": opp.status,
-                    }
-                    if opp.triage_json:
-                        data["opportunity"]["triage_json"] = opp.triage_json
-
-                # Remove None values
-                data = {k: v for k, v in data.items() if v is not None}
-
-                f.write(json.dumps(data, ensure_ascii=False) + "\n")
-                count += 1
-
-        return count
+        return [audit_entry_from_row(row) for row in cursor.fetchall()]
 
     # ==================== Statistics ====================
 
     def get_stats(self) -> Dict[str, Any]:
         """Get database statistics."""
-        cursor = self.conn.cursor()
-
-        # Manuscript counts by status
-        cursor.execute("""
-            SELECT status, COUNT(*) as count
-            FROM manuscripts
-            GROUP BY status
-        """)
-        status_counts = {row["status"]: row["count"] for row in cursor.fetchall()}
-
-        # Total manuscripts
-        cursor.execute("SELECT COUNT(*) as count FROM manuscripts")
-        total = cursor.fetchone()["count"]
-
-        # Obscurity distribution
-        cursor.execute("""
-            SELECT obscurity_score, COUNT(*) as count
-            FROM manuscripts
-            WHERE obscurity_score IS NOT NULL
-            GROUP BY obscurity_score
-            ORDER BY obscurity_score
-        """)
-        obscurity_dist = {row["obscurity_score"]: row["count"] for row in cursor.fetchall()}
-
-        # Work progress
-        cursor.execute("""
-            SELECT status, COUNT(*) as count
-            FROM our_work
-            GROUP BY status
-        """)
-        work_counts = {row["status"]: row["count"] for row in cursor.fetchall()}
-
-        # Recent activity
-        cursor.execute("""
-            SELECT action, COUNT(*) as count
-            FROM audit_log
-            WHERE timestamp > datetime('now', '-7 days')
-            GROUP BY action
-        """)
-        recent_actions = {row["action"]: row["count"] for row in cursor.fetchall()}
-
-        return {
-            "total_manuscripts": total,
-            "by_status": status_counts,
-            "by_obscurity": obscurity_dist,
-            "work_progress": work_counts,
-            "recent_actions": recent_actions,
-        }
+        return collect_discovery_stats(self.conn)

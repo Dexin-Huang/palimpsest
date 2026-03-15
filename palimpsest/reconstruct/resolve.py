@@ -30,21 +30,21 @@ from palimpsest.reconstruct.artifacts import (
     SectionResolutionArtifact,
     VisualPairRepairArtifact,
 )
-from palimpsest.reconstruct.pipeline import (
+from palimpsest.reconstruct.resolve_support import (
     DEFAULT_LAYOUT_MAX_OUTPUT_TOKENS,
-    _bbox_overlap_ratio,
-    _coerce_json_text,
-    _draw_pair_overlay,
-    _line_similarity,
-    _load_box_cleanup,
-    _load_layout_probe,
-    _load_page_validation,
-    _load_region_reads,
-    _load_section_resolution,
-    _region_crop_path,
-    _resolve_prompt_text,
-    _response_text,
-    _utc_now,
+    bbox_overlap_ratio as _bbox_overlap_ratio,
+    coerce_json_text as _coerce_json_text,
+    draw_pair_overlay as _draw_pair_overlay,
+    line_similarity as _line_similarity,
+    load_box_cleanup as _load_box_cleanup,
+    load_layout_probe as _load_layout_probe,
+    load_page_validation as _load_page_validation,
+    load_region_reads as _load_region_reads,
+    load_section_resolution as _load_section_resolution,
+    region_crop_path as _region_crop_path,
+    resolve_prompt_text as _resolve_prompt_text,
+    response_text as _response_text,
+    utc_now as _utc_now,
 )
 
 

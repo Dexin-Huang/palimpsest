@@ -6,7 +6,7 @@ from pathlib import Path
 
 from palimpsest.agent_sdk import AgentRunResult, run_agent_prompt
 from palimpsest.models.packet import ALLOWED_PACKET_STATUSES, PagePacket
-from palimpsest.packets.state import PACKET_NEXT_ACTIONS, repair_packet_json
+from palimpsest.packets.state import PACKET_NEXT_ACTIONS, load_packet_json, reconcile_packet_json
 from palimpsest.packets.templates import packet_format_contract_block, packet_heading_contract_block
 
 
@@ -60,7 +60,7 @@ def prepare_packet_workspace(
     packet_path = packet_path.resolve()
     if not packet_path.exists():
         raise FileNotFoundError(f"Packet not found: {packet_path}")
-    packet = repair_packet_json(packet_path)
+    packet = load_packet_json(packet_path)
     workspace = packet_path.parent.resolve()
 
     inputs_dir = workspace / "inputs"
@@ -265,5 +265,5 @@ async def run_packet_scholar(
         max_thinking_tokens=max_thinking_tokens,
         permission_mode=permission_mode,
     )
-    repair_packet_json(packet_inputs.packet_path)
+    reconcile_packet_json(packet_inputs.packet_path)
     return result
