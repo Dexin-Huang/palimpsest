@@ -1,0 +1,119 @@
+{
+  "schema_version": "rescript.page.v1",
+  "created_at": "2026-01-29T20:04:52.500673Z",
+  "page_id": "pal_lat_1267_f001r",
+  "doc_id": "vatican_alchemy",
+  "image": {
+    "path": "projects\\vatican_alchemy\\images\\pal_lat_1267_f001r.jpg",
+    "width_px": 1000,
+    "height_px": 1393
+  },
+  "reading_direction": "ltr",
+  "coordinate_space": "norm01",
+  "layout": {
+    "columns": 2,
+    "column_gap_norm": 0.02,
+    "margins": {
+      "top": 0.08,
+      "bottom": 0.16,
+      "inner": 0.15,
+      "outer": 0.17
+    },
+    "ruling": "ink"
+  },
+  "zones": [
+    {
+      "zone_id": "r1",
+      "type": "rubric",
+      "order": 1,
+      "bbox_norm": [
+        0.155,
+        0.085,
+        0.32,
+        0.09
+      ],
+      "text": {}
+    },
+    {
+      "zone_id": "r3",
+      "type": "line",
+      "order": 3,
+      "bbox_norm": [
+        0.16,
+        0.21,
+        0.32,
+        0.32
+      ],
+      "text": {}
+    },
+    {
+      "zone_id": "r4",
+      "type": "rubric",
+      "order": 4,
+      "bbox_norm": [
+        0.16,
+        0.53,
+        0.32,
+        0.03
+      ],
+      "text": {}
+    },
+    {
+      "zone_id": "r6",
+      "type": "line",
+      "order": 6,
+      "bbox_norm": [
+        0.16,
+        0.6,
+        0.32,
+        0.23
+      ],
+      "text": {}
+    },
+    {
+      "zone_id": "r7",
+      "type": "line",
+      "order": 7,
+      "bbox_norm": [
+        0.5,
+        0.08,
+        0.33,
+        0.7
+      ],
+      "text": {}
+    },
+    {
+      "zone_id": "r8",
+      "type": "rubric",
+      "order": 8,
+      "bbox_norm": [
+        0.5,
+        0.78,
+        0.33,
+        0.05
+      ],
+      "text": {}
+    },
+    {
+      "zone_id": "r10",
+      "type": "line",
+      "order": 10,
+      "bbox_norm": [
+        0.5,
+        0.81,
+        0.33,
+        0.03
+      ],
+      "text": {}
+    }
+  ],
+  "pipeline": {
+    "assumed_components": {
+      "segmentation": "gemini:gemini-3-flash-preview"
+    },
+    "model_versions": {
+      "vision_pipeline": "gemini-3-flash-preview"
+    },
+    "notes": "Processed in 53391ms with passes: segmentation"
+  }
+}
