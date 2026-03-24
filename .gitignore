@@ -23,6 +23,15 @@ tmp/
 # Local databases
 **/*.db
 
+# Training artifacts
+training/data/
+training/checkpoints/
+training/logs/
+training/models/
+*.safetensors
+*.bin
+*.gguf
+
 # Discovery cache
 discovery/manifests/
 discovery/detail_*.html
