@@ -1,0 +1,1 @@
+Transcribe all visible text in this image exactly as written. Include everything — main text, marginalia, annotations, page numbers. Do not translate, modernize, or add punctuation not present on the page. Output only the transcribed text.

@@ -8,6 +8,7 @@ from palimpsest.commands import (
     add_library_subparser,
     add_page_subparser,
     add_scholar_subparser,
+    add_transcribe_subparser,
 )
 
 
@@ -19,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_scholar_subparser(subparsers)
     add_page_subparser(subparsers)
     add_book_subparser(subparsers)
+    add_transcribe_subparser(subparsers)
     return parser
 
 
