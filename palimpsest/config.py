@@ -16,12 +16,12 @@ def _env(key: str, default: str = "") -> str:
     return value if value is not None and value != "" else default
 
 
-DEFAULT_MODEL_TRIAGE = _env("PALIMPSEST_MODEL_TRIAGE", _env("PALIMPSEST_MODEL", "gemini-3.1-flash-lite-preview"))
-DEFAULT_MODEL_VISION = _env("PALIMPSEST_MODEL_VISION", "gemini-3.1-flash-lite-preview")
-DEFAULT_MODEL_READING = _env("PALIMPSEST_MODEL_READING", DEFAULT_MODEL_VISION)
-DEFAULT_MODEL_RECON = _env("PALIMPSEST_MODEL_RECON", "gemini-3.1-flash-image-preview")
-DEFAULT_MODEL_AGENT = _env("PALIMPSEST_MODEL_AGENT", "claude-sonnet-4-5")
-DEFAULT_MODEL_SCHOLAR_AGENT = _env("PALIMPSEST_MODEL_SCHOLAR_AGENT", DEFAULT_MODEL_AGENT)
+# Transcription (VLM OCR) — Pro for quality
+DEFAULT_MODEL_TRANSCRIPTION = _env("PALIMPSEST_MODEL_TRANSCRIPTION", "gemini-3.1-pro-preview")
 
-DEFAULT_THINKING_LEVEL = _env("PALIMPSEST_THINKING_LEVEL", "")  # Disabled: SDK uses thinkingBudget not thinking_level
-DEFAULT_MEDIA_RESOLUTION = _env("PALIMPSEST_MEDIA_RESOLUTION", "high")
+# Lightweight tasks (triage, translation, continuity) — Flash Lite for cost
+DEFAULT_MODEL_READING = _env("PALIMPSEST_MODEL_READING", "gemini-3.1-flash-lite-preview")
+DEFAULT_MODEL_TRIAGE = _env("PALIMPSEST_MODEL_TRIAGE", DEFAULT_MODEL_READING)
+
+# Agent tasks (scholar, scout) — Claude
+DEFAULT_MODEL_SCHOLAR_AGENT = _env("PALIMPSEST_MODEL_SCHOLAR_AGENT", "claude-sonnet-4-5")

@@ -23,7 +23,7 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-from palimpsest.config import DEFAULT_MODEL_READING
+from palimpsest.config import DEFAULT_MODEL_TRANSCRIPTION
 from palimpsest.model_io import load_prompt
 from palimpsest.transcribe import (
     DEFAULT_MAX_OUTPUT_TOKENS,
@@ -144,7 +144,7 @@ def create_manifest(
     *,
     source: str = "",
     book_title: str = "",
-    model: str = DEFAULT_MODEL_READING,
+    model: str = DEFAULT_MODEL_TRANSCRIPTION,
     prompt_name: str = DEFAULT_PROMPT_NAME,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
 ) -> dict:
@@ -323,7 +323,9 @@ def poll_batch(output_dir: Path) -> dict:
 
     # Derive overall status
     states = {job["state"] for job in manifest["jobs"]}
-    if all(s == "JOB_STATE_SUCCEEDED" for s in states):
+    if not states:
+        manifest["status"] = "created"
+    elif all(s == "JOB_STATE_SUCCEEDED" for s in states):
         manifest["status"] = "completed"
     elif any(s == "JOB_STATE_FAILED" for s in states):
         manifest["status"] = "partial"

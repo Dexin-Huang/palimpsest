@@ -15,7 +15,7 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-from palimpsest.config import DEFAULT_MODEL_READING
+from palimpsest.config import DEFAULT_MODEL_TRANSCRIPTION
 from palimpsest.model_io import load_prompt, response_text
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp"}
@@ -85,7 +85,7 @@ def transcribe_page(
     *,
     prompt_text: str,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
-    model: str = DEFAULT_MODEL_READING,
+    model: str = DEFAULT_MODEL_TRANSCRIPTION,
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
 ) -> tuple[str, dict]:
     """Transcribe a single page image. Returns (text, usage_info)."""
@@ -181,7 +181,7 @@ async def run_transcription(
     output_path: Path,
     source: str = "",
     book_title: str = "",
-    model: str = DEFAULT_MODEL_READING,
+    model: str = DEFAULT_MODEL_TRANSCRIPTION,
     prompt_name: str = DEFAULT_PROMPT_NAME,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
     workers: int = DEFAULT_WORKERS,
@@ -252,7 +252,7 @@ def run_transcription_sync(
     output_path: Path,
     source: str = "",
     book_title: str = "",
-    model: str = DEFAULT_MODEL_READING,
+    model: str = DEFAULT_MODEL_TRANSCRIPTION,
     prompt_name: str = DEFAULT_PROMPT_NAME,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
     workers: int = DEFAULT_WORKERS,
