@@ -439,3 +439,96 @@ def _merge_shards(manifest: dict, shards_dir: Path, final_path: Path) -> None:
             ordered_lines.append(all_records[page["page_id"]])
 
     final_path.write_text("\n".join(ordered_lines) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Unpack — generate per-page text files and stitched full text
+# ---------------------------------------------------------------------------
+
+def unpack_transcription(output_dir: Path) -> dict:
+    """Unpack JSONL into per-page .txt files and a stitched full text.
+
+    Creates:
+      output_dir/pages/          — one .txt per page (same stem as image)
+      output_dir/full_text.txt   — all pages stitched in order
+      output_dir/summary.json    — page count, char counts, quality flags
+
+    Returns summary dict.
+    """
+    output_dir = Path(output_dir).resolve()
+    jsonl_path = output_dir / "transcriptions.jsonl"
+    if not jsonl_path.exists():
+        raise FileNotFoundError(f"No transcriptions.jsonl in {output_dir}")
+
+    pages_dir = output_dir / "pages"
+    pages_dir.mkdir(exist_ok=True)
+
+    records: list[dict] = []
+    for line in jsonl_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+
+    full_text_parts: list[str] = []
+    page_stats: list[dict] = []
+
+    for record in records:
+        page_id = record["page_id"]
+        text = record.get("text", "")
+        char_count = len(text)
+
+        # Per-page text file
+        page_path = pages_dir / f"{page_id}.txt"
+        page_path.write_text(text, encoding="utf-8")
+
+        # Quality flags
+        flags: list[str] = []
+        if char_count < 20:
+            flags.append("blank_or_cover")
+        elif char_count < 100:
+            flags.append("minimal_text")
+        stripped = text.replace("q", "").replace(".", "").replace(" ", "").replace("\n", "")
+        if char_count > 100 and len(stripped) < char_count * 0.3:
+            flags.append("possible_garbled")
+        if "^" in text and text.count("^") > char_count * 0.05:
+            flags.append("caret_artifacts")
+
+        page_stats.append({
+            "page_id": page_id,
+            "chars": char_count,
+            "flags": flags,
+        })
+
+        # Stitched text
+        if char_count > 20 and "blank_or_cover" not in flags:
+            full_text_parts.append(f"[{page_id}]\n{text}")
+
+    # Write full text
+    full_text_path = output_dir / "full_text.txt"
+    full_text_path.write_text("\n\n".join(full_text_parts), encoding="utf-8")
+
+    # Summary
+    total_chars = sum(p["chars"] for p in page_stats)
+    content_pages = [p for p in page_stats if "blank_or_cover" not in p.get("flags", [])]
+    flagged_pages = [p for p in page_stats if p.get("flags")]
+
+    summary = {
+        "total_pages": len(records),
+        "content_pages": len(content_pages),
+        "total_chars": total_chars,
+        "flagged_pages": len(flagged_pages),
+        "flags": {p["page_id"]: p["flags"] for p in flagged_pages if p["flags"]},
+    }
+
+    summary_path = output_dir / "summary.json"
+    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    print(f"Unpacked {len(records)} pages to {pages_dir}")
+    print(f"Full text: {full_text_path} ({total_chars} chars)")
+    print(f"Content pages: {len(content_pages)}, flagged: {len(flagged_pages)}")
+
+    return summary

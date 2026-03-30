@@ -67,6 +67,16 @@ def cmd_batch_collect(args: argparse.Namespace) -> None:
     print(f"\nCollected to: {final_path}")
 
 
+def cmd_unpack(args: argparse.Namespace) -> None:
+    from palimpsest.batch import unpack_transcription
+
+    summary = unpack_transcription(Path(args.output_dir))
+    if summary["flagged_pages"]:
+        print(f"\nFlagged pages:")
+        for page_id, flags in summary["flags"].items():
+            print(f"  {page_id}: {', '.join(flags)}")
+
+
 def add_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparsers.add_parser("transcribe", help="Single-call VLM transcription")
     sub = parser.add_subparsers(dest="transcribe_command", required=True)
@@ -104,3 +114,8 @@ def add_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser
     collect_parser = sub.add_parser("batch-collect", help="Collect completed batch results into final JSONL")
     collect_parser.add_argument("--output-dir", required=True, help="Output directory with batch manifest")
     collect_parser.set_defaults(func=cmd_batch_collect)
+
+    # --- Unpack ---
+    unpack_parser = sub.add_parser("unpack", help="Unpack JSONL into per-page text files and stitched full text")
+    unpack_parser.add_argument("--output-dir", required=True, help="Transcription output directory with transcriptions.jsonl")
+    unpack_parser.set_defaults(func=cmd_unpack)
