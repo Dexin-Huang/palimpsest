@@ -1,10 +1,4 @@
-"""Compatibility re-export surface for shared Palimpsest models.
-
-Internal code should prefer concrete submodules such as
-``palimpsest.models.packet`` or ``palimpsest.models.layout_probe``.
-The package root keeps a narrower star-import surface around the current
-product contracts while retaining older root attributes for compatibility.
-"""
+"""Re-export surface for shared Palimpsest models."""
 
 from .zone import (
     ZoneType,
@@ -59,20 +53,6 @@ from .folio_render import (
     FolioRenderNavigation,
     FolioRender,
 )
-from .layout_probe import (
-    LayoutProbeRegion,
-    LayoutProbe,
-    RegionRead,
-    RegionOrientation,
-    PageAssemblyUnit,
-    PageAssembly,
-    SectionResolutionAssignment,
-    PageSectionResolution,
-    BoxCleanupDecision,
-    PageBoxCleanup,
-    PageValidationIssue,
-    PageValidation,
-)
 from .continuity import (
     ContinuityStatus,
     ContinuityItem,
@@ -82,24 +62,12 @@ from .continuity import (
 )
 
 __all__ = [
-    # Core page contracts
     "Zone",
     "Page",
-    # Packet and continuity contracts
     "PacketFileRef",
     "PacketWorkflow",
     "PagePacket",
     "PageHandoff",
     "WindowSynthesis",
-    # Reconstruct contracts
-    "LayoutProbeRegion",
-    "LayoutProbe",
-    "RegionRead",
-    "PageAssemblyUnit",
-    "PageAssembly",
-    "PageSectionResolution",
-    "PageBoxCleanup",
-    "PageValidation",
-    # Reader/render contract
     "FolioRender",
 ]

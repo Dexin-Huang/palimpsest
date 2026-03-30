@@ -1,5 +1,5 @@
 from .continuity import run_page_handoff, run_window_synthesis
-from .packet import attach_layout_probe, create_page_packet, ingest_page_reading, sync_packet_from_assembly
+from .packet import create_page_packet, ingest_page_reading
 from .state import load_packet_json, reconcile_packet_json
 from .scholar import (
     TASK_CHOICES,
@@ -12,7 +12,6 @@ from .translate import run_packet_translation
 
 __all__ = [
     "TASK_CHOICES",
-    "attach_layout_probe",
     "build_packet_scholar_prompt",
     "create_page_packet",
     "ingest_page_reading",
@@ -26,5 +25,4 @@ __all__ = [
     "run_packet_scholar",
     "run_packet_translation",
     "run_window_synthesis",
-    "sync_packet_from_assembly",
 ]
