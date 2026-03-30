@@ -282,6 +282,15 @@ def submit_batch(output_dir: Path) -> dict:
 # Poll / Status
 # ---------------------------------------------------------------------------
 
+def _normalize_state(state) -> str:
+    """Normalize JobState enum to plain string."""
+    s = str(state)
+    # str(JobState.JOB_STATE_SUCCEEDED) -> "JobState.JOB_STATE_SUCCEEDED"
+    if "." in s:
+        s = s.rsplit(".", 1)[-1]
+    return s
+
+
 def poll_batch(output_dir: Path) -> dict:
     """Poll all jobs and update manifest state. Returns updated manifest."""
     manifest = load_manifest(output_dir)
@@ -290,11 +299,13 @@ def poll_batch(output_dir: Path) -> dict:
     page_index = {p["page_id"]: p for p in manifest["pages"]}
 
     for job in manifest["jobs"]:
-        if job["state"] in ("JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED"):
+        normalized = _normalize_state(job["state"])
+        if normalized in ("JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED"):
+            job["state"] = normalized  # fix any previously stored prefixed values
             continue
 
         batch_job = client.batches.get(name=job["job_name"])
-        job["state"] = str(batch_job.state)
+        job["state"] = _normalize_state(batch_job.state)
         job["last_polled_at"] = _utc_now()
 
         if batch_job.completion_stats:
@@ -303,10 +314,10 @@ def poll_batch(output_dir: Path) -> dict:
                 "failure_count": batch_job.completion_stats.failure_count,
             }
 
-        if str(batch_job.state) == "JOB_STATE_SUCCEEDED":
+        if job["state"] == "JOB_STATE_SUCCEEDED":
             for page_id in job["page_ids"]:
                 page_index[page_id]["status"] = "completed"
-        elif str(batch_job.state) == "JOB_STATE_FAILED":
+        elif job["state"] == "JOB_STATE_FAILED":
             for page_id in job["page_ids"]:
                 page_index[page_id]["status"] = "failed"
 
@@ -353,92 +364,57 @@ def collect_batch(output_dir: Path) -> Path:
     shards_dir = output_dir / SHARDS_DIRNAME
     shards_dir.mkdir(exist_ok=True)
 
+    source = manifest["source"]
+    book_title = manifest["book_title"]
+    model = manifest["config"]["model"]
+
     for job in manifest["jobs"]:
-        if job["state"] != "JOB_STATE_SUCCEEDED":
+        if _normalize_state(job["state"]) != "JOB_STATE_SUCCEEDED":
             continue
 
         shard_path = shards_dir / f"{job['chunk_id']}.jsonl"
         if shard_path.exists():
             continue
 
-        batch_job = client.batches.get(name=job["job_name"])
-        # The batch API returns results as a list of GenerateContentResponse
-        # matched to InlinedRequests by order
-        lines: list[str] = []
-
-        if hasattr(batch_job, 'dest') and batch_job.dest:
-            # Results may be in GCS or inline depending on API version
-            # For inline results, iterate the response
-            pass
-
-        # For Developer API: results come back via the batch job response
-        # We need to retrieve them — the exact method depends on SDK version
-        # Try the standard pattern
         try:
-            results = list(client.batches.list())  # This lists jobs, not results
-            # Actually, for the Developer API, results are returned inline
-            # in the batch job object or need to be fetched differently
-            # Let's use the direct approach
-            _collect_job_results(client, job, shard_path, manifest)
+            batch_job = client.batches.get(name=job["job_name"])
+            inlined_responses = getattr(batch_job.dest, 'inlined_responses', None) or []
+
+            lines: list[str] = []
+            for resp in inlined_responses:
+                metadata = getattr(resp, 'metadata', {}) or {}
+                page_id = metadata.get("page_id", "unknown")
+
+                text = ""
+                response = getattr(resp, 'response', None)
+                if response:
+                    for candidate in (getattr(response, 'candidates', []) or []):
+                        for part in (getattr(getattr(candidate, 'content', None), 'parts', []) or []):
+                            t = getattr(part, 'text', None)
+                            if t:
+                                text += t
+
+                record = {
+                    "source": source,
+                    "book_title": book_title,
+                    "page_id": page_id,
+                    "text": text.strip(),
+                    "model": model,
+                    "timestamp": _utc_now(),
+                }
+                lines.append(json.dumps(record, ensure_ascii=False))
+
+            shard_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            print(f"  Collected {job['chunk_id']} -> {shard_path} ({len(lines)} pages)")
         except Exception as exc:
             print(f"  [WARN] Could not collect {job['chunk_id']}: {exc}")
             continue
-
-        print(f"  Collected {job['chunk_id']} -> {shard_path}")
 
     # Merge shards into final JSONL in page order
     final_path = output_dir / "transcriptions.jsonl"
     _merge_shards(manifest, shards_dir, final_path)
     print(f"Final output: {final_path}")
     return final_path
-
-
-def _collect_job_results(
-    client: genai.Client,
-    job: dict,
-    shard_path: Path,
-    manifest: dict,
-) -> None:
-    """Collect results for one batch job into a shard file."""
-    batch_job = client.batches.get(name=job["job_name"])
-
-    # The Gemini Developer API returns results as part of the batch job
-    # Access via batch_job responses
-    source = manifest["source"]
-    book_title = manifest["book_title"]
-    model = manifest["config"]["model"]
-
-    lines: list[str] = []
-    page_ids = job["page_ids"]
-
-    # Results are available through the batch job's response list
-    if hasattr(batch_job, 'src') and batch_job.src:
-        src = batch_job.src
-        inlined_responses = getattr(src, 'inlined_responses', None) or []
-        for idx, resp in enumerate(inlined_responses):
-            page_id = page_ids[idx] if idx < len(page_ids) else f"unknown_{idx}"
-            text = ""
-            if hasattr(resp, 'response') and resp.response:
-                candidates = getattr(resp.response, 'candidates', []) or []
-                for candidate in candidates:
-                    content = getattr(candidate, 'content', None)
-                    parts = getattr(content, 'parts', []) or []
-                    for part in parts:
-                        t = getattr(part, 'text', None)
-                        if t:
-                            text += t
-
-            record = {
-                "source": source,
-                "book_title": book_title,
-                "page_id": page_id,
-                "text": text.strip(),
-                "model": model,
-                "timestamp": _utc_now(),
-            }
-            lines.append(json.dumps(record, ensure_ascii=False))
-
-    shard_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _merge_shards(manifest: dict, shards_dir: Path, final_path: Path) -> None:
