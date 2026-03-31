@@ -98,8 +98,26 @@ def _format_brief(brief: dict[str, Any]) -> str:
 
 # -- Phase 2: Lexicographer (Claude) ----------------------------------------
 
-def _run_lexicographer(brief: dict[str, Any], *, model: str) -> dict[str, Any]:
+async def _query_claude(prompt: str) -> str:
+    """Send a query to Claude via Agent SDK and return the result text."""
     import claude_agent_sdk
+    result_text = ""
+    async for message in claude_agent_sdk.query(prompt=prompt):
+        if hasattr(message, 'result'):
+            result_text = message.result
+        elif hasattr(message, 'content'):
+            # AssistantMessage
+            content = message.content
+            if isinstance(content, str):
+                result_text = content
+            elif isinstance(content, list):
+                for block in content:
+                    if hasattr(block, 'text'):
+                        result_text += block.text
+    return result_text
+
+
+async def _run_lexicographer(brief: dict[str, Any], *, model: str) -> dict[str, Any]:
     prompt = load_prompt("agent_lexicographer")
     payload = {k: brief.get(k, []) for k in
                ("glossary", "abbreviation_policy", "named_entities", "style_rules")}
@@ -108,11 +126,10 @@ def _run_lexicographer(brief: dict[str, Any], *, model: str) -> dict[str, Any]:
             payload[k] = brief[k]
 
     print(f"  Lexicographer: refining brief with {model} ...")
-    result = claude_agent_sdk.query(
-        prompt=prompt + "\n\nReview this translation brief:\n\n"
-               + json.dumps(payload, indent=2, ensure_ascii=False),
+    result_text = await _query_claude(
+        prompt + "\n\nReview this translation brief:\n\n"
+        + json.dumps(payload, indent=2, ensure_ascii=False),
     )
-    result_text = result.result.text if hasattr(result.result, 'text') else str(result.result)
     refined = json.loads(strip_json_fences(result_text))
     for key in ("glossary", "abbreviation_policy", "named_entities", "style_rules"):
         if key in refined:
@@ -206,14 +223,13 @@ async def _run_translators(
 
 # -- Phase 4: Reviewer (Claude) ---------------------------------------------
 
-def _run_reviewer(
+async def _run_reviewer(
     chunks: list[list[TranscriptionRecord]],
     translations: dict[str, tuple[str, dict]],
     brief: dict[str, Any], *, model: str,
 ) -> dict[str, str]:
     if len(chunks) <= 1:
         return {}
-    import claude_agent_sdk
     prompt = load_prompt("agent_reviewer")
     brief_ctx = _format_brief(brief)
     corrections: dict[str, str] = {}
@@ -231,10 +247,9 @@ def _run_reviewer(
                 parts.append(f"\n[{rec.page_id}] LATIN:\n{rec.text}")
                 parts.append(f"\n[{rec.page_id}] ENGLISH:\n{tr}")
         try:
-            result = claude_agent_sdk.query(
-                prompt=prompt + "\n\n" + "\n".join(parts),
+            result_text = await _query_claude(
+                prompt + "\n\n" + "\n".join(parts),
             )
-            result_text = result.result.text if hasattr(result.result, 'text') else str(result.result)
             parsed = json.loads(strip_json_fences(result_text))
             ok = parsed.get("boundary_ok", True)
             tag = "OK" if ok else f"{len(parsed.get('issues', []))} issue(s)"
@@ -278,9 +293,7 @@ async def _run_pipeline(
     print(f"Approach B: {len(records)} pages, brief from {brief_path.name}")
 
     # Phase 2 — Lexicographer
-    loop = asyncio.get_event_loop()
-    brief = await loop.run_in_executor(
-        None, lambda: _run_lexicographer(brief, model=agent_model))
+    brief = await _run_lexicographer(brief, model=agent_model)
     refined_path = output_path.parent / "translation_brief_refined.json"
     refined_path.write_text(json.dumps(brief, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"  Refined brief -> {refined_path}")
@@ -292,8 +305,7 @@ async def _run_pipeline(
         records, brief, model=translation_model, workers=workers)
 
     # Phase 4 — Reviewer
-    corrections = await loop.run_in_executor(
-        None, lambda: _run_reviewer(chunks, translations, brief, model=agent_model))
+    corrections = await _run_reviewer(chunks, translations, brief, model=agent_model)
     for pid, fix in corrections.items():
         if pid in translations:
             translations[pid] = (fix, translations[pid][1])
