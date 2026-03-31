@@ -3,34 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from palimpsest.contracts import EXPERIMENTS_DIRNAME, PACKET_FILENAME, PAGE_LIST_FILENAME
-from palimpsest.reader import build_packet_book_site
+from palimpsest.contracts import EXPERIMENTS_DIRNAME, PAGE_LIST_FILENAME
 from palimpsest.reader import build_witness_reader_site
-
-
-def cmd_site(args: argparse.Namespace) -> None:
-    packet_paths: list[Path] = []
-    if args.packets_dir:
-        packet_paths.extend(sorted(Path(args.packets_dir).resolve().rglob(PACKET_FILENAME)))
-    if args.packet:
-        packet_paths.extend(Path(item).resolve() for item in args.packet)
-    unique_paths = []
-    seen: set[Path] = set()
-    for path in packet_paths:
-        if path in seen:
-            continue
-        seen.add(path)
-        unique_paths.append(path)
-    artifact = build_packet_book_site(
-        unique_paths,
-        out_dir=Path(args.output_dir).resolve(),
-        title=args.title,
-    )
-    print(f"index: {artifact.index_path}")
-    print(f"contents: {artifact.contents_path}")
-    print(f"ending: {artifact.ending_path}")
-    print(f"folios: {len(artifact.folio_paths)}")
-    print(f"meta: {artifact.meta_path}")
 
 
 def cmd_reader(args: argparse.Namespace) -> None:
@@ -49,34 +23,10 @@ def cmd_reader(args: argparse.Namespace) -> None:
 def add_subparser(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
         "book",
-        help="Canonical reader and packet-site commands",
-        description="Canonical book commands are `site` and `reader`.",
+        help="Canonical reader commands",
+        description="Canonical book commands: `reader`.",
     )
     sub = parser.add_subparsers(dest="book_cmd", required=True)
-
-    site = sub.add_parser(
-        "site",
-        help="Build the canonical static HTML folio site from page packets",
-    )
-    site.add_argument(
-        "--packets-dir",
-        help=f"Directory to scan recursively for {PACKET_FILENAME} files",
-    )
-    site.add_argument(
-        "--packet",
-        action="append",
-        help=f"Explicit {PACKET_FILENAME} path; repeat for multiple pages",
-    )
-    site.add_argument(
-        "--output-dir",
-        required=True,
-        help="Output directory for the generated site",
-    )
-    site.add_argument(
-        "--title",
-        help="Optional title override for the generated book/site",
-    )
-    site.set_defaults(func=cmd_site)
 
     reader = sub.add_parser(
         "reader",
