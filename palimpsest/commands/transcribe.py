@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from palimpsest.config import DEFAULT_MODEL_TRANSCRIPTION
+from palimpsest.config import DEFAULT_MODEL_READING, DEFAULT_MODEL_TRANSCRIPTION
 from palimpsest.transcribe import DEFAULT_PROMPT_NAME, DEFAULT_SYSTEM_PROMPT, DEFAULT_WORKERS
 
 
@@ -98,6 +98,50 @@ def cmd_unpack(args: argparse.Namespace) -> None:
             print(f"  {page_id}: {', '.join(flags)}")
 
 
+def cmd_enrich(args: argparse.Namespace) -> None:
+    from palimpsest.enrich import run_enrichment_sync
+
+    input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "transcriptions.jsonl"
+    output_path = Path(args.output) if args.output else input_path.parent / "enriched.jsonl"
+
+    print(f"Input: {input_path}")
+    print(f"Output: {output_path}")
+
+    run_enrichment_sync(
+        input_path,
+        output_path,
+        model=args.model,
+        workers=args.workers,
+        skip_existing=args.skip_existing,
+    )
+
+
+def cmd_publish(args: argparse.Namespace) -> None:
+    from palimpsest.publish import build_book_site
+
+    input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "enriched.jsonl"
+    if not input_path.exists():
+        # Fall back to transcriptions.jsonl if no enriched version
+        fallback = input_path.parent / "transcriptions.jsonl"
+        if fallback.exists():
+            input_path = fallback
+            print(f"No enriched.jsonl found, using transcriptions.jsonl")
+
+    out_dir = Path(args.output_dir) if args.output_dir else input_path.parent / "site"
+    image_dir = Path(args.image_dir) if args.image_dir else None
+
+    print(f"Input: {input_path}")
+    print(f"Output: {out_dir}")
+
+    index_path = build_book_site(
+        input_path,
+        out_dir=out_dir,
+        title=args.title,
+        image_dir=image_dir,
+    )
+    print(f"Published: {index_path}")
+
+
 def _resolve_output_dir(output_dir: str | None) -> Path:
     """Resolve output dir from arg or cwd."""
     if output_dir:
@@ -150,3 +194,21 @@ def add_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser
     unpack_parser = sub.add_parser("unpack", help="Unpack JSONL into per-page text files and stitched full text")
     unpack_parser.add_argument("--output-dir", default=None, help="Transcription output directory (default: cwd if JSONL exists)")
     unpack_parser.set_defaults(func=cmd_unpack)
+
+    # --- Enrich ---
+    enrich_parser = sub.add_parser("enrich", help="Translate transcriptions via LLM, producing enriched.jsonl")
+    enrich_parser.add_argument("--input", default=None, help="Input transcriptions.jsonl (default: output-dir/transcriptions.jsonl)")
+    enrich_parser.add_argument("--output", default=None, help="Output enriched.jsonl (default: sibling of input)")
+    enrich_parser.add_argument("--output-dir", default=None, help="Transcription directory (for inferring input/output paths)")
+    enrich_parser.add_argument("--model", default=DEFAULT_MODEL_READING, help="LLM model for translation")
+    enrich_parser.add_argument("--workers", type=int, default=8, help="Concurrent workers")
+    enrich_parser.add_argument("--skip-existing", action="store_true", help="Skip pages already in output")
+    enrich_parser.set_defaults(func=cmd_enrich)
+
+    # --- Publish ---
+    publish_parser = sub.add_parser("publish", help="Generate a static HTML book site from JSONL")
+    publish_parser.add_argument("--input", default=None, help="Input JSONL (default: output-dir/enriched.jsonl or transcriptions.jsonl)")
+    publish_parser.add_argument("--output-dir", default=None, help="Output directory for HTML site")
+    publish_parser.add_argument("--image-dir", default=None, help="Directory containing page images")
+    publish_parser.add_argument("--title", default=None, help="Book title override")
+    publish_parser.set_defaults(func=cmd_publish)
