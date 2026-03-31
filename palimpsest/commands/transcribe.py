@@ -98,6 +98,16 @@ def cmd_unpack(args: argparse.Namespace) -> None:
             print(f"  {page_id}: {', '.join(flags)}")
 
 
+def cmd_survey(args: argparse.Namespace) -> None:
+    from palimpsest.survey import run_survey_sync
+
+    input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "transcriptions.jsonl"
+    output_path = Path(args.output) if args.output else input_path.parent / "translation_brief.json"
+
+    print(f"Input: {input_path}")
+    run_survey_sync(input_path, output_path, model=args.model)
+
+
 def cmd_enrich(args: argparse.Namespace) -> None:
     from palimpsest.enrich import run_enrichment_sync
 
@@ -111,6 +121,58 @@ def cmd_enrich(args: argparse.Namespace) -> None:
         input_path,
         output_path,
         model=args.model,
+        workers=args.workers,
+        skip_existing=args.skip_existing,
+    )
+
+
+def cmd_enrich_a(args: argparse.Namespace) -> None:
+    from palimpsest.enrich_batch import run_batch_translation_sync
+
+    input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "transcriptions.jsonl"
+    brief_path = Path(args.brief) if args.brief else input_path.parent / "translation_brief.json"
+    output_path = Path(args.output) if args.output else input_path.parent / "enriched_a.jsonl"
+
+    if not brief_path.exists():
+        print(f"No translation brief found at {brief_path}. Run 'transcribe survey' first.")
+        return
+
+    print(f"Approach A: deterministic batch with overlap")
+    print(f"Input: {input_path}")
+    print(f"Brief: {brief_path}")
+    print(f"Output: {output_path}")
+
+    run_batch_translation_sync(
+        input_path,
+        output_path,
+        brief_path,
+        model=args.model,
+        workers=args.workers,
+        skip_existing=args.skip_existing,
+    )
+
+
+def cmd_enrich_b(args: argparse.Namespace) -> None:
+    from palimpsest.enrich_agents import run_agent_translation_sync
+
+    input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "transcriptions.jsonl"
+    brief_path = Path(args.brief) if args.brief else input_path.parent / "translation_brief.json"
+    output_path = Path(args.output) if args.output else input_path.parent / "enriched_b.jsonl"
+
+    if not brief_path.exists():
+        print(f"No translation brief found at {brief_path}. Run 'transcribe survey' first.")
+        return
+
+    print(f"Approach B: multi-agent with lexicographer + reviewer")
+    print(f"Input: {input_path}")
+    print(f"Brief: {brief_path}")
+    print(f"Output: {output_path}")
+
+    run_agent_translation_sync(
+        input_path,
+        output_path,
+        brief_path,
+        translation_model=args.model,
         workers=args.workers,
         skip_existing=args.skip_existing,
     )
@@ -195,15 +257,45 @@ def add_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser
     unpack_parser.add_argument("--output-dir", default=None, help="Transcription output directory (default: cwd if JSONL exists)")
     unpack_parser.set_defaults(func=cmd_unpack)
 
-    # --- Enrich ---
-    enrich_parser = sub.add_parser("enrich", help="Translate transcriptions via LLM, producing enriched.jsonl")
-    enrich_parser.add_argument("--input", default=None, help="Input transcriptions.jsonl (default: output-dir/transcriptions.jsonl)")
-    enrich_parser.add_argument("--output", default=None, help="Output enriched.jsonl (default: sibling of input)")
-    enrich_parser.add_argument("--output-dir", default=None, help="Transcription directory (for inferring input/output paths)")
-    enrich_parser.add_argument("--model", default=DEFAULT_MODEL_READING, help="LLM model for translation")
+    # --- Survey ---
+    survey_parser = sub.add_parser("survey", help="Survey transcription to build a translation brief (glossary, outline, terms)")
+    survey_parser.add_argument("--input", default=None, help="Input transcriptions.jsonl")
+    survey_parser.add_argument("--output", default=None, help="Output translation_brief.json")
+    survey_parser.add_argument("--output-dir", default=None, help="Transcription directory (for inferring paths)")
+    survey_parser.add_argument("--model", default=DEFAULT_MODEL_READING, help="LLM model for survey")
+    survey_parser.set_defaults(func=cmd_survey)
+
+    # --- Enrich (naive baseline) ---
+    enrich_parser = sub.add_parser("enrich", help="Naive page-by-page translation (baseline)")
+    enrich_parser.add_argument("--input", default=None, help="Input transcriptions.jsonl")
+    enrich_parser.add_argument("--output", default=None, help="Output enriched.jsonl")
+    enrich_parser.add_argument("--output-dir", default=None, help="Transcription directory")
+    enrich_parser.add_argument("--model", default=DEFAULT_MODEL_READING, help="LLM model")
     enrich_parser.add_argument("--workers", type=int, default=8, help="Concurrent workers")
     enrich_parser.add_argument("--skip-existing", action="store_true", help="Skip pages already in output")
     enrich_parser.set_defaults(func=cmd_enrich)
+
+    # --- Enrich A (deterministic batch with overlap) ---
+    enrich_a = sub.add_parser("enrich-a", help="Approach A: batch translation with brief + overlap context")
+    enrich_a.add_argument("--input", default=None, help="Input transcriptions.jsonl")
+    enrich_a.add_argument("--output", default=None, help="Output enriched_a.jsonl")
+    enrich_a.add_argument("--brief", default=None, help="Translation brief JSON (default: sibling translation_brief.json)")
+    enrich_a.add_argument("--output-dir", default=None, help="Transcription directory")
+    enrich_a.add_argument("--model", default=DEFAULT_MODEL_READING, help="LLM model")
+    enrich_a.add_argument("--workers", type=int, default=8, help="Concurrent workers")
+    enrich_a.add_argument("--skip-existing", action="store_true", help="Skip pages already in output")
+    enrich_a.set_defaults(func=cmd_enrich_a)
+
+    # --- Enrich B (multi-agent with lexicographer + reviewer) ---
+    enrich_b = sub.add_parser("enrich-b", help="Approach B: multi-agent translation with glossary refinement + boundary review")
+    enrich_b.add_argument("--input", default=None, help="Input transcriptions.jsonl")
+    enrich_b.add_argument("--output", default=None, help="Output enriched_b.jsonl")
+    enrich_b.add_argument("--brief", default=None, help="Translation brief JSON (default: sibling translation_brief.json)")
+    enrich_b.add_argument("--output-dir", default=None, help="Transcription directory")
+    enrich_b.add_argument("--model", default=DEFAULT_MODEL_READING, help="Translation model (Gemini)")
+    enrich_b.add_argument("--workers", type=int, default=8, help="Concurrent workers")
+    enrich_b.add_argument("--skip-existing", action="store_true", help="Skip pages already in output")
+    enrich_b.set_defaults(func=cmd_enrich_b)
 
     # --- Publish ---
     publish_parser = sub.add_parser("publish", help="Generate a static HTML book site from JSONL")
