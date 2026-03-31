@@ -24,20 +24,8 @@ def add_library_subparser(subparsers: argparse._SubParsersAction[argparse.Argume
     add_subparser(subparsers)
 
 
-def add_scholar_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    from .scholar import add_subparser
-
-    add_subparser(subparsers)
-
-
 def add_book_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     from .book import add_subparser
-
-    add_subparser(subparsers)
-
-
-def add_page_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    from .page import add_subparser
 
     add_subparser(subparsers)
 
@@ -50,8 +38,6 @@ def add_transcribe_subparser(subparsers: argparse._SubParsersAction[argparse.Arg
 __all__ = [
     "add_discovery_subparser",
     "add_library_subparser",
-    "add_scholar_subparser",
     "add_book_subparser",
-    "add_page_subparser",
     "add_transcribe_subparser",
 ]
