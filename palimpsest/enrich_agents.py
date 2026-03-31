@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from anthropic import Anthropic
 from google import genai
 from google.genai import types
 
@@ -100,7 +99,7 @@ def _format_brief(brief: dict[str, Any]) -> str:
 # -- Phase 2: Lexicographer (Claude) ----------------------------------------
 
 def _run_lexicographer(brief: dict[str, Any], *, model: str) -> dict[str, Any]:
-    client = Anthropic()
+    import claude_agent_sdk
     prompt = load_prompt("agent_lexicographer")
     payload = {k: brief.get(k, []) for k in
                ("glossary", "abbreviation_policy", "named_entities", "style_rules")}
@@ -109,21 +108,18 @@ def _run_lexicographer(brief: dict[str, Any], *, model: str) -> dict[str, Any]:
             payload[k] = brief[k]
 
     print(f"  Lexicographer: refining brief with {model} ...")
-    resp = client.messages.create(
-        model=model, max_tokens=4096, temperature=0.2,
-        system=prompt,
-        messages=[{"role": "user",
-                   "content": "Review this translation brief:\n\n"
-                              + json.dumps(payload, indent=2, ensure_ascii=False)}],
+    result = claude_agent_sdk.query(
+        prompt=prompt + "\n\nReview this translation brief:\n\n"
+               + json.dumps(payload, indent=2, ensure_ascii=False),
     )
-    refined = json.loads(strip_json_fences(resp.content[0].text))
+    result_text = result.result.text if hasattr(result.result, 'text') else str(result.result)
+    refined = json.loads(strip_json_fences(result_text))
     for key in ("glossary", "abbreviation_policy", "named_entities", "style_rules"):
         if key in refined:
             brief[key] = refined[key]
 
-    ti, to = resp.usage.input_tokens, resp.usage.output_tokens
     ng, ne = len(brief.get("glossary", [])), len(brief.get("named_entities", []))
-    print(f"  Lexicographer done: {ng} glossary, {ne} entities, {ti}+{to} tok")
+    print(f"  Lexicographer done: {ng} glossary, {ne} entities")
     return brief
 
 
@@ -217,12 +213,12 @@ def _run_reviewer(
 ) -> dict[str, str]:
     if len(chunks) <= 1:
         return {}
-    client = Anthropic()
+    import claude_agent_sdk
     prompt = load_prompt("agent_reviewer")
     brief_ctx = _format_brief(brief)
     corrections: dict[str, str] = {}
     nb = len(chunks) - 1
-    print(f"  Reviewer: checking {nb} boundaries with {model} ...")
+    print(f"  Reviewer: checking {nb} boundaries ...")
 
     for i in range(nb):
         tail = chunks[i][-BOUNDARY_OVERLAP:]
@@ -235,17 +231,15 @@ def _run_reviewer(
                 parts.append(f"\n[{rec.page_id}] LATIN:\n{rec.text}")
                 parts.append(f"\n[{rec.page_id}] ENGLISH:\n{tr}")
         try:
-            resp = client.messages.create(
-                model=model, max_tokens=4096, temperature=0.2,
-                system=prompt,
-                messages=[{"role": "user", "content": "\n".join(parts)}],
+            result = claude_agent_sdk.query(
+                prompt=prompt + "\n\n" + "\n".join(parts),
             )
-            result = json.loads(strip_json_fences(resp.content[0].text))
-            ok = result.get("boundary_ok", True)
-            ti, to = resp.usage.input_tokens, resp.usage.output_tokens
-            tag = "OK" if ok else f"{len(result.get('issues', []))} issue(s)"
-            print(f"    boundary {i+1}/{nb}: {tag} ({ti}+{to} tok)")
-            for pid, fix in result.get("corrections", {}).items():
+            result_text = result.result.text if hasattr(result.result, 'text') else str(result.result)
+            parsed = json.loads(strip_json_fences(result_text))
+            ok = parsed.get("boundary_ok", True)
+            tag = "OK" if ok else f"{len(parsed.get('issues', []))} issue(s)"
+            print(f"    boundary {i+1}/{nb}: {tag}")
+            for pid, fix in parsed.get("corrections", {}).items():
                 if fix and isinstance(fix, str):
                     corrections[pid] = fix
         except Exception as exc:
