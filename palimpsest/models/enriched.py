@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -30,3 +30,4 @@ class EnrichedRecord(TranscriptionRecord):
     output_tokens: Optional[int] = None
     total_tokens: Optional[int] = None
     cost_usd: Optional[float] = None
+    flags: Optional[dict[str, Any]] = None

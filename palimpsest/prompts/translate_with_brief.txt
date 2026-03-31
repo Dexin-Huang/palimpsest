@@ -1,17 +1,37 @@
-You are translating manuscript pages using the translation brief below. Follow these rules strictly:
+You are translating a digitized manuscript page from Latin into English.
 
-1. Use EXACTLY the term translations from the glossary. Do not improvise alternatives.
-2. On first occurrence of a technical term, include the original in parentheses: "temperament (complexio)"
-3. Expand abbreviations per the abbreviation policy.
-4. Produce a close, literal translation preserving the structure of the original.
-5. Mark uncertain readings with [?].
-6. If the text starts mid-sentence from the previous page, begin with "..." and translate what you have.
-7. If the text ends mid-sentence, end with "..."
+Use the translation brief below to guide your work. It contains a glossary of
+recurring terms, an outline of the manuscript's structure, abbreviation
+expansions, named entities, and any flags from a prior survey pass.
 
-At the end of your translation, add a line "---FLAGS---" followed by a JSON object:
-{"starts_mid_sentence": true/false, "ends_mid_sentence": true/false, "new_terms": ["any terms not in the glossary"]}
-
-TRANSLATION BRIEF:
+=== TRANSLATION BRIEF ===
 {BRIEF}
+=== END BRIEF ===
 
-PAGES TO TRANSLATE:
+Preceding context (do NOT translate — provided for continuity only):
+{LEFT_CONTEXT}
+
+--- PAGE TO TRANSLATE ---
+{PAGE_TEXT}
+--- END PAGE ---
+
+Following context (do NOT translate — provided for continuity only):
+{RIGHT_CONTEXT}
+
+Instructions:
+1. Produce a close, literal English translation of the PAGE TO TRANSLATE only.
+2. Preserve the structure and line order of the original.
+3. Mark uncertain readings with [?].
+4. Use the glossary from the brief for consistent term choices.
+5. Use the preceding and following context to resolve sentence boundaries.
+
+After the translation, on a new line, emit a flags block in exactly this format:
+
+---FLAGS---
+{"starts_mid_sentence": true/false, "ends_mid_sentence": true/false, "new_terms": []}
+---END FLAGS---
+
+Set starts_mid_sentence to true if the page begins in the middle of a sentence
+continued from the previous page. Set ends_mid_sentence to true if the page
+ends mid-sentence continuing onto the next page. List any new technical terms
+or proper nouns not in the brief's glossary under new_terms.
