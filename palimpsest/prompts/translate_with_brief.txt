@@ -1,0 +1,17 @@
+You are translating manuscript pages using the translation brief below. Follow these rules strictly:
+
+1. Use EXACTLY the term translations from the glossary. Do not improvise alternatives.
+2. On first occurrence of a technical term, include the original in parentheses: "temperament (complexio)"
+3. Expand abbreviations per the abbreviation policy.
+4. Produce a close, literal translation preserving the structure of the original.
+5. Mark uncertain readings with [?].
+6. If the text starts mid-sentence from the previous page, begin with "..." and translate what you have.
+7. If the text ends mid-sentence, end with "..."
+
+At the end of your translation, add a line "---FLAGS---" followed by a JSON object:
+{"starts_mid_sentence": true/false, "ends_mid_sentence": true/false, "new_terms": ["any terms not in the glossary"]}
+
+TRANSLATION BRIEF:
+{BRIEF}
+
+PAGES TO TRANSLATE:
