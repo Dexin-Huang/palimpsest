@@ -52,6 +52,8 @@ library/**/reader_site/
 library/**/temp_docres_input/
 library/**/images_cleaned*/
 library/**/temp_binarization/
+library/**/transcription/
+library/**/site/
 
 # Tool test outputs
 tools/DocRes/

@@ -1,13 +1,17 @@
-"""Enrichment pipeline: translate transcribed manuscript pages via LLM.
+"""Approach A: deterministic 3-pass batch translation with brief + overlap.
 
-Reads transcriptions.jsonl, sends each page's text to a Gemini model for
-translation, and writes enriched.jsonl with the additional fields.
+Pass 1 — Translate every page with left/right source-text context.
+Pass 2 — Repair: re-translate pages flagged as starts_mid_sentence or
+          ends_mid_sentence, injecting neighboring *translations* as
+          additional context.
+Pass 3 — Write final enriched_a.jsonl.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,8 +22,8 @@ from palimpsest.config import DEFAULT_MODEL_READING
 from palimpsest.model_io import load_prompt, response_text
 from palimpsest.models.enriched import TranscriptionRecord, EnrichedRecord
 
-DEFAULT_PROMPT_NAME = "enrich_translate"
 DEFAULT_WORKERS = 8
+PROMPT_NAME = "translate_with_brief"
 
 PRICING = {
     "gemini-3.1-pro-preview": {"input": 1.25, "output": 10.00},
@@ -28,23 +32,26 @@ PRICING = {
     "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
 }
 
+_FLAGS_RE = re.compile(r"---FLAGS---\s*\n(.*?)\n\s*---END FLAGS---", re.DOTALL)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _estimate_cost(model: str, prompt_tokens: int, output_tokens: int) -> float | None:
-    prices = PRICING.get(model)
-    if prices is None:
-        return None
-    return (prompt_tokens * prices["input"] + output_tokens * prices["output"]) / 1_000_000
+def _estimate_cost(model: str, pt: int, ot: int) -> float | None:
+    p = PRICING.get(model)
+    return (pt * p["input"] + ot * p["output"]) / 1_000_000 if p else None
 
 
-def _load_transcription_records(input_path: Path) -> list[TranscriptionRecord]:
+def _load_records(path: Path) -> list[TranscriptionRecord]:
     records: list[TranscriptionRecord] = []
-    for line in input_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
             continue
         try:
             records.append(TranscriptionRecord.model_validate_json(line))
@@ -53,13 +60,12 @@ def _load_transcription_records(input_path: Path) -> list[TranscriptionRecord]:
     return records
 
 
-def _load_existing_page_ids(output_path: Path) -> set[str]:
+def _load_existing_ids(path: Path) -> set[str]:
     ids: set[str] = set()
-    if not output_path.exists():
+    if not path.exists():
         return ids
-    for line in output_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
             continue
         try:
             ids.add(json.loads(line)["page_id"])
@@ -68,174 +74,275 @@ def _load_existing_page_ids(output_path: Path) -> set[str]:
     return ids
 
 
-def enrich_page(
-    client: genai.Client,
-    record: TranscriptionRecord,
-    *,
-    prompt_text: str,
-    model: str = DEFAULT_MODEL_READING,
-) -> tuple[str, dict]:
-    """Translate a single page's text. Returns (translation, usage_info)."""
-    full_prompt = prompt_text + "\n\n" + record.text
+def _parse_flags(text: str) -> tuple[str, dict]:
+    """Split translation text from the ---FLAGS--- block."""
+    m = _FLAGS_RE.search(text)
+    if not m:
+        return text.strip(), {}
+    clean = text[: m.start()].strip()
+    try:
+        flags = json.loads(m.group(1).strip())
+    except json.JSONDecodeError:
+        flags = {}
+    return clean, flags
 
-    response = client.models.generate_content(
-        model=model,
-        contents=[full_prompt],
-        config=types.GenerateContentConfig(
-            temperature=0.1,
-        ),
+
+def _neighbor_text(
+    records: list[TranscriptionRecord],
+    idx: int,
+    overlap: int,
+    translations: dict[str, str] | None = None,
+) -> tuple[str, str]:
+    """Build left/right context strings for page at *idx*.
+
+    When *translations* is provided (repair pass), each neighbor block
+    includes both source text and its existing translation.
+    """
+    def _fmt(i: int) -> str:
+        pid, src = records[i].page_id, records[i].text
+        if translations is not None:
+            tr = translations.get(pid, "")
+            return f"[{pid}]\nSource: {src}\nTranslation: {tr}"
+        return f"[{pid}]\n{src}"
+
+    left = "\n\n".join(_fmt(i) for i in range(max(0, idx - overlap), idx))
+    right = "\n\n".join(
+        _fmt(i) for i in range(idx + 1, min(len(records), idx + 1 + overlap))
     )
-    translation, _ = response_text(response)
+    return left or "(none)", right or "(none)"
 
-    usage = getattr(response, "usage_metadata", None)
-    usage_info = {}
+
+def _fill_prompt(template: str, brief: str, page: str, left: str, right: str) -> str:
+    return (
+        template
+        .replace("{BRIEF}", brief)
+        .replace("{PAGE_TEXT}", page)
+        .replace("{LEFT_CONTEXT}", left)
+        .replace("{RIGHT_CONTEXT}", right)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Single-page API call
+# ---------------------------------------------------------------------------
+
+def _translate_page(client: genai.Client, prompt: str, model: str) -> tuple[str, dict]:
+    resp = client.models.generate_content(
+        model=model, contents=[prompt],
+        config=types.GenerateContentConfig(temperature=0.1),
+    )
+    text, _ = response_text(resp)
+    usage = getattr(resp, "usage_metadata", None)
+    info: dict = {}
     if usage:
-        prompt_tokens = getattr(usage, "prompt_token_count", 0) or 0
-        output_tokens = getattr(usage, "candidates_token_count", 0) or 0
-        usage_info = {
-            "prompt_tokens": prompt_tokens,
-            "output_tokens": output_tokens,
+        pt = getattr(usage, "prompt_token_count", 0) or 0
+        ot = getattr(usage, "candidates_token_count", 0) or 0
+        info = {
+            "prompt_tokens": pt, "output_tokens": ot,
             "total_tokens": getattr(usage, "total_token_count", 0) or 0,
-            "cost_usd": _estimate_cost(model, prompt_tokens, output_tokens),
+            "cost_usd": _estimate_cost(model, pt, ot),
         }
+    return text, info
 
-    return translation, usage_info
 
+# ---------------------------------------------------------------------------
+# Unified async worker (serves both passes)
+# ---------------------------------------------------------------------------
 
-async def _enrich_worker(
+async def _worker(
     queue: asyncio.Queue,
     client: genai.Client,
     *,
-    prompt_text: str,
+    template: str,
+    brief: str,
+    records: list[TranscriptionRecord],
     model: str,
-    output_path: Path,
+    overlap: int,
+    results: dict,
     lock: asyncio.Lock,
     stats: dict,
+    translations: dict[str, str] | None = None,
+    tag: str = "P1",
 ):
+    """Translate pages from *queue*.
+
+    If *translations* is None (pass 1) context is source-only.
+    If provided (pass 2) context includes existing translations.
+    """
     loop = asyncio.get_event_loop()
     while True:
-        record: TranscriptionRecord | None = await queue.get()
-        if record is None:
+        item = await queue.get()
+        if item is None:
             queue.task_done()
             break
-        page_id = record.page_id
+        idx: int = item
+        rec = records[idx]
+        pid = rec.page_id
         try:
-            translation, usage_info = await loop.run_in_executor(
-                None,
-                lambda r=record: enrich_page(
-                    client, r,
-                    prompt_text=prompt_text,
-                    model=model,
-                ),
+            left, right = _neighbor_text(records, idx, overlap, translations)
+            prompt = _fill_prompt(template, brief, rec.text, left, right)
+            raw, usage = await loop.run_in_executor(
+                None, lambda p=prompt: _translate_page(client, p, model),
             )
-            enriched = EnrichedRecord(
-                source=record.source,
-                book_title=record.book_title,
-                page_id=record.page_id,
-                text=record.text,
-                translation=translation,
-                translation_model=model,
-                translation_timestamp=_utc_now(),
-                prompt_tokens=usage_info.get("prompt_tokens"),
-                output_tokens=usage_info.get("output_tokens"),
-                total_tokens=usage_info.get("total_tokens"),
-                cost_usd=usage_info.get("cost_usd"),
-            )
+            tr, flags = _parse_flags(raw)
+
             async with lock:
-                with open(output_path, "a", encoding="utf-8") as f:
-                    f.write(enriched.model_dump_json(exclude_none=True) + "\n")
-                stats["total_cost"] = stats.get("total_cost", 0.0) + (usage_info.get("cost_usd") or 0.0)
+                if pid in results:
+                    # Repair pass — accumulate costs
+                    old = results[pid]["usage"]
+                    for k in ("prompt_tokens", "output_tokens", "total_tokens"):
+                        old[k] = (old.get(k) or 0) + (usage.get(k) or 0)
+                    old["cost_usd"] = (old.get("cost_usd") or 0) + (usage.get("cost_usd") or 0)
+                    results[pid]["translation"] = tr
+                    results[pid]["flags"] = flags
+                else:
+                    results[pid] = {"translation": tr, "flags": flags, "usage": usage, "idx": idx}
+                stats["total_cost"] += usage.get("cost_usd") or 0.0
+
             stats["done"] += 1
-            cost_str = f" ${usage_info['cost_usd']:.4f}" if usage_info.get("cost_usd") else ""
-            tokens_str = f" {usage_info.get('prompt_tokens', '?')}+{usage_info.get('output_tokens', '?')} tok" if usage_info else ""
-            print(f"  [{stats['done']}/{stats['total']}] {page_id} ({len(translation)} chars){tokens_str}{cost_str}")
+            cost_s = f" ${usage.get('cost_usd', 0):.4f}" if usage.get("cost_usd") else ""
+            print(f"  [{tag} {stats['done']}/{stats['total']}] {pid}{cost_s}")
         except Exception as exc:
             stats["errors"] += 1
-            print(f"  [ERROR] {page_id}: {exc}")
+            print(f"  [{tag} ERROR] {pid}: {exc}")
         finally:
             queue.task_done()
 
 
-async def run_enrichment(
-    input_path: Path,
-    output_path: Path,
-    *,
-    model: str = DEFAULT_MODEL_READING,
-    prompt_name: str = DEFAULT_PROMPT_NAME,
-    workers: int = DEFAULT_WORKERS,
-    skip_existing: bool = False,
+# ---------------------------------------------------------------------------
+# Queue launcher helper
+# ---------------------------------------------------------------------------
+
+async def _launch(indices, workers, worker_kwargs):
+    q: asyncio.Queue = asyncio.Queue()
+    for idx in indices:
+        await q.put(idx)
+    for _ in range(workers):
+        await q.put(None)
+    tasks = [asyncio.create_task(_worker(q, **worker_kwargs)) for _ in range(workers)]
+    await asyncio.gather(*tasks)
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+
+async def _run_batch(
+    input_path: Path, output_path: Path, brief_path: Path,
+    *, model: str, workers: int, skip_existing: bool, overlap: int,
 ) -> Path:
-    """Enrich all transcription records with translations."""
-    input_path = input_path.resolve()
-    output_path = output_path.resolve()
+    input_path, output_path, brief_path = (
+        input_path.resolve(), output_path.resolve(), brief_path.resolve(),
+    )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
     if not input_path.exists():
-        raise FileNotFoundError(f"Input file not found: {input_path}")
+        raise FileNotFoundError(f"Input not found: {input_path}")
+    if not brief_path.exists():
+        raise FileNotFoundError(f"Brief not found: {brief_path}")
 
-    records = _load_transcription_records(input_path)
+    records = _load_records(input_path)
     if not records:
-        raise ValueError(f"No transcription records found in {input_path}")
+        raise ValueError(f"No records in {input_path}")
+
+    brief = brief_path.read_text(encoding="utf-8")
+    template = load_prompt(PROMPT_NAME)
+    client = genai.Client()
 
     if skip_existing:
-        existing = _load_existing_page_ids(output_path)
-        records = [r for r in records if r.page_id not in existing]
-        if not records:
-            print("All pages already enriched.")
-            return output_path
+        existing = _load_existing_ids(output_path)
+        todo = [i for i, r in enumerate(records) if r.page_id not in existing]
+    else:
+        todo = list(range(len(records)))
+    if not todo:
+        print("All pages already translated.")
+        return output_path
 
-    prompt_text = load_prompt(prompt_name)
-    client = genai.Client()
-    queue: asyncio.Queue = asyncio.Queue()
+    # --- Pass 1 -----------------------------------------------------------
+    results: dict = {}
     lock = asyncio.Lock()
-    stats = {"done": 0, "errors": 0, "total": len(records)}
+    stats = {"done": 0, "errors": 0, "total": len(todo), "total_cost": 0.0}
+    print(f"Pass 1: translating {len(todo)} pages ({workers} workers, {model})")
 
-    print(f"Enriching {len(records)} pages with {workers} workers ({model})")
-    print(f"Output: {output_path}")
+    common = dict(
+        client=client, template=template, brief=brief,
+        records=records, model=model, overlap=overlap,
+        results=results, lock=lock, stats=stats,
+    )
+    await _launch(todo, workers, {**common, "translations": None, "tag": "P1"})
+    print(f"Pass 1 done: {stats['done']} ok, {stats['errors']} errors")
 
-    for record in records:
-        await queue.put(record)
-    for _ in range(workers):
-        await queue.put(None)
+    # --- Pass 2 — repair flagged pages ------------------------------------
+    flagged = sorted(
+        r["idx"] for r in results.values()
+        if r.get("flags", {}).get("starts_mid_sentence")
+        or r.get("flags", {}).get("ends_mid_sentence")
+    )
+    if flagged:
+        translations = {pid: r["translation"] for pid, r in results.items()}
+        stats.update(done=0, errors=0, total=len(flagged))
+        print(f"Pass 2: repairing {len(flagged)} flagged pages")
+        await _launch(flagged, workers, {
+            **common, "translations": translations, "tag": "P2",
+        })
+        print(f"Pass 2 done: {stats['done']} repaired, {stats['errors']} errors")
+    else:
+        print("Pass 2: no flagged pages — skipping repair.")
 
-    worker_tasks = [
-        asyncio.create_task(
-            _enrich_worker(
-                queue, client,
-                prompt_text=prompt_text,
-                model=model,
-                output_path=output_path,
-                lock=lock,
-                stats=stats,
+    # --- Pass 3 — write output --------------------------------------------
+    print(f"Pass 3: writing {output_path}")
+    written = 0
+    with open(output_path, "a", encoding="utf-8") as fh:
+        for idx in todo:
+            pid = records[idx].page_id
+            if pid not in results:
+                continue
+            r = results[pid]
+            rec = EnrichedRecord(
+                source=records[idx].source,
+                book_title=records[idx].book_title,
+                page_id=pid,
+                text=records[idx].text,
+                translation=r["translation"],
+                translation_model=model,
+                translation_timestamp=_utc_now(),
+                prompt_tokens=r["usage"].get("prompt_tokens"),
+                output_tokens=r["usage"].get("output_tokens"),
+                total_tokens=r["usage"].get("total_tokens"),
+                cost_usd=r["usage"].get("cost_usd"),
+                flags=r.get("flags") or None,
             )
-        )
-        for _ in range(workers)
-    ]
-    await asyncio.gather(*worker_tasks)
+            fh.write(rec.model_dump_json(exclude_none=True) + "\n")
+            written += 1
 
-    total_cost = stats.get("total_cost", 0.0)
-    cost_line = f", total cost: ${total_cost:.4f}" if total_cost else ""
-    print(f"Done: {stats['done']} pages, {stats['errors']} errors{cost_line}")
+    cost = stats.get("total_cost", 0.0)
+    print(f"Done: {written} pages written{f', ${cost:.4f}' if cost else ''}")
     return output_path
 
 
-def run_enrichment_sync(
+# ---------------------------------------------------------------------------
+# Public sync entry point
+# ---------------------------------------------------------------------------
+
+def run_batch_translation_sync(
     input_path: Path,
     output_path: Path,
+    brief_path: Path,
     *,
     model: str = DEFAULT_MODEL_READING,
-    prompt_name: str = "enrich_translate",
-    workers: int = 8,
+    workers: int = DEFAULT_WORKERS,
     skip_existing: bool = False,
+    overlap: int = 2,
 ) -> Path:
-    """Sync wrapper around run_enrichment."""
+    """Run the 3-pass batch translation pipeline.
+
+    Pass 1 — Translate every page with source-text overlap context.
+    Pass 2 — Repair pages flagged as mid-sentence with neighbor translations.
+    Pass 3 — Write enriched_a.jsonl.
+    """
     return asyncio.run(
-        run_enrichment(
-            input_path,
-            output_path,
-            model=model,
-            prompt_name=prompt_name,
-            workers=workers,
-            skip_existing=skip_existing,
+        _run_batch(
+            input_path, output_path, brief_path,
+            model=model, workers=workers,
+            skip_existing=skip_existing, overlap=overlap,
         )
     )

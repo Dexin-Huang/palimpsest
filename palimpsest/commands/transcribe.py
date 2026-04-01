@@ -10,10 +10,22 @@ from palimpsest.transcribe import DEFAULT_PROMPT_NAME, DEFAULT_SYSTEM_PROMPT, DE
 def _infer_output_dir(image_dir: Path) -> Path:
     """Infer transcription output dir as sibling of images/."""
     image_dir = image_dir.resolve()
-    if image_dir.name == "images":
-        return image_dir.parent / "transcription"
     return image_dir.parent / "transcription"
 
+
+def _resolve_output_dir(output_dir: str | None) -> Path:
+    """Resolve output dir from arg or cwd."""
+    if output_dir:
+        return Path(output_dir).resolve()
+    cwd = Path.cwd()
+    if (cwd / "batch_manifest.json").exists() or (cwd / "transcriptions.jsonl").exists():
+        return cwd
+    raise ValueError("No --output-dir specified and current directory has no batch_manifest.json or transcriptions.jsonl")
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
 
 def cmd_run(args: argparse.Namespace) -> None:
     from palimpsest.transcribe import run_transcription_sync
@@ -42,20 +54,15 @@ def cmd_batch_submit(args: argparse.Namespace) -> None:
     manifest_path = output_dir / "batch_manifest.json"
 
     if manifest_path.exists():
-        # Warn if user passed config flags that will be ignored
         manifest = load_manifest(output_dir)
         if args.model != DEFAULT_MODEL_TRANSCRIPTION and args.model != manifest["config"]["model"]:
             print(f"WARNING: manifest already exists with model={manifest['config']['model']}, ignoring --model={args.model}")
             print(f"  To use a different model, delete {manifest_path} and re-submit.")
     else:
         create_manifest(
-            image_dir,
-            output_dir,
-            source=args.source or "",
-            book_title=args.book_title or "",
-            model=args.model,
-            prompt_name=args.prompt_name,
-            system_prompt=args.system_prompt,
+            image_dir, output_dir,
+            source=args.source or "", book_title=args.book_title or "",
+            model=args.model, prompt_name=args.prompt_name, system_prompt=args.system_prompt,
         )
         print(f"Manifest created: {manifest_path}")
 
@@ -66,10 +73,7 @@ def cmd_batch_submit(args: argparse.Namespace) -> None:
 
 def cmd_batch_status(args: argparse.Namespace) -> None:
     from palimpsest.batch import poll_batch, print_status
-
-    output_dir = _resolve_output_dir(args.output_dir)
-    manifest = poll_batch(output_dir)
-    print_status(manifest)
+    print_status(poll_batch(_resolve_output_dir(args.output_dir)))
 
 
 def cmd_batch_collect(args: argparse.Namespace) -> None:
@@ -83,15 +87,13 @@ def cmd_batch_collect(args: argparse.Namespace) -> None:
         print(f"\nBatch not ready for collection (status: {manifest['status']})")
         return
 
-    final_path = collect_batch(output_dir)
-    print(f"\nCollected to: {final_path}")
+    print(f"\nCollected to: {collect_batch(output_dir)}")
 
 
 def cmd_unpack(args: argparse.Namespace) -> None:
     from palimpsest.batch import unpack_transcription
 
-    output_dir = _resolve_output_dir(args.output_dir)
-    summary = unpack_transcription(output_dir)
+    summary = unpack_transcription(_resolve_output_dir(args.output_dir))
     if summary["flagged_pages"]:
         print(f"\nFlagged pages:")
         for page_id, flags in summary["flags"].items():
@@ -109,72 +111,24 @@ def cmd_survey(args: argparse.Namespace) -> None:
 
 
 def cmd_enrich(args: argparse.Namespace) -> None:
-    from palimpsest.enrich import run_enrichment_sync
-
-    input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "transcriptions.jsonl"
-    output_path = Path(args.output) if args.output else input_path.parent / "enriched.jsonl"
-
-    print(f"Input: {input_path}")
-    print(f"Output: {output_path}")
-
-    run_enrichment_sync(
-        input_path,
-        output_path,
-        model=args.model,
-        workers=args.workers,
-        skip_existing=args.skip_existing,
-    )
-
-
-def cmd_enrich_a(args: argparse.Namespace) -> None:
-    from palimpsest.enrich_batch import run_batch_translation_sync
+    from palimpsest.enrich import run_batch_translation_sync
 
     input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "transcriptions.jsonl"
     brief_path = Path(args.brief) if args.brief else input_path.parent / "translation_brief.json"
-    output_path = Path(args.output) if args.output else input_path.parent / "enriched_a.jsonl"
+    output_path = Path(args.output) if args.output else input_path.parent / "enriched.jsonl"
 
     if not brief_path.exists():
-        print(f"No translation brief found at {brief_path}. Run 'transcribe survey' first.")
-        return
+        print(f"No translation brief at {brief_path}. Running survey first...")
+        from palimpsest.survey import run_survey_sync
+        run_survey_sync(input_path, brief_path, model=args.model)
 
-    print(f"Approach A: deterministic batch with overlap")
     print(f"Input: {input_path}")
     print(f"Brief: {brief_path}")
     print(f"Output: {output_path}")
 
     run_batch_translation_sync(
-        input_path,
-        output_path,
-        brief_path,
-        model=args.model,
-        workers=args.workers,
-        skip_existing=args.skip_existing,
-    )
-
-
-def cmd_enrich_b(args: argparse.Namespace) -> None:
-    from palimpsest.enrich_agents import run_agent_translation_sync
-
-    input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "transcriptions.jsonl"
-    brief_path = Path(args.brief) if args.brief else input_path.parent / "translation_brief.json"
-    output_path = Path(args.output) if args.output else input_path.parent / "enriched_b.jsonl"
-
-    if not brief_path.exists():
-        print(f"No translation brief found at {brief_path}. Run 'transcribe survey' first.")
-        return
-
-    print(f"Approach B: multi-agent with lexicographer + reviewer")
-    print(f"Input: {input_path}")
-    print(f"Brief: {brief_path}")
-    print(f"Output: {output_path}")
-
-    run_agent_translation_sync(
-        input_path,
-        output_path,
-        brief_path,
-        translation_model=args.model,
-        workers=args.workers,
-        skip_existing=args.skip_existing,
+        input_path, output_path, brief_path,
+        model=args.model, workers=args.workers, skip_existing=args.skip_existing,
     )
 
 
@@ -183,7 +137,6 @@ def cmd_publish(args: argparse.Namespace) -> None:
 
     input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "enriched.jsonl"
     if not input_path.exists():
-        # Fall back to transcriptions.jsonl if no enriched version
         fallback = input_path.parent / "transcriptions.jsonl"
         if fallback.exists():
             input_path = fallback
@@ -194,113 +147,79 @@ def cmd_publish(args: argparse.Namespace) -> None:
 
     print(f"Input: {input_path}")
     print(f"Output: {out_dir}")
-
-    index_path = build_book_site(
-        input_path,
-        out_dir=out_dir,
-        title=args.title,
-        image_dir=image_dir,
-    )
-    print(f"Published: {index_path}")
+    print(f"Published: {build_book_site(input_path, out_dir=out_dir, title=args.title, image_dir=image_dir)}")
 
 
-def _resolve_output_dir(output_dir: str | None) -> Path:
-    """Resolve output dir from arg or cwd."""
-    if output_dir:
-        return Path(output_dir).resolve()
-    cwd = Path.cwd()
-    if (cwd / "batch_manifest.json").exists() or (cwd / "transcriptions.jsonl").exists():
-        return cwd
-    raise ValueError("No --output-dir specified and current directory has no batch_manifest.json or transcriptions.jsonl")
-
+# ---------------------------------------------------------------------------
+# Parser
+# ---------------------------------------------------------------------------
 
 def add_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     parser = subparsers.add_parser("transcribe", help="Single-call VLM transcription")
     sub = parser.add_subparsers(dest="transcribe_command", required=True)
 
-    # --- Interactive run ---
-    run_parser = sub.add_parser("run", help="Transcribe page images to JSONL (interactive, real-time)")
-    run_parser.add_argument("--image-dir", required=True, help="Directory containing page images")
-    run_parser.add_argument("--output", default=None, help="Output JSONL file path (default: sibling transcription/transcriptions.jsonl)")
-    run_parser.add_argument("--source", default="", help="Source identifier (default: parent dir name)")
-    run_parser.add_argument("--book-title", default="", help="Book title (default: parent dir name)")
-    run_parser.add_argument("--model", default=DEFAULT_MODEL_TRANSCRIPTION, help="VLM model name")
-    run_parser.add_argument("--prompt-name", default=DEFAULT_PROMPT_NAME, help="Prompt template name")
-    run_parser.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT, help="System instruction")
-    run_parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Concurrent workers")
-    run_parser.add_argument("--skip-existing", action="store_true", help="Skip pages already in output file")
-    run_parser.set_defaults(func=cmd_run)
+    # Interactive run
+    run_p = sub.add_parser("run", help="Transcribe page images to JSONL (interactive, real-time)")
+    run_p.add_argument("--image-dir", required=True)
+    run_p.add_argument("--output", default=None, help="Output JSONL (default: inferred)")
+    run_p.add_argument("--source", default="")
+    run_p.add_argument("--book-title", default="")
+    run_p.add_argument("--model", default=DEFAULT_MODEL_TRANSCRIPTION)
+    run_p.add_argument("--prompt-name", default=DEFAULT_PROMPT_NAME)
+    run_p.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT)
+    run_p.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+    run_p.add_argument("--skip-existing", action="store_true")
+    run_p.set_defaults(func=cmd_run)
 
-    # --- Batch submit ---
-    submit_parser = sub.add_parser("batch-submit", help="Submit a book's images as batch jobs (half price)")
-    submit_parser.add_argument("--image-dir", required=True, help="Directory containing page images")
-    submit_parser.add_argument("--output-dir", default=None, help="Output directory (default: sibling transcription/)")
-    submit_parser.add_argument("--source", default="", help="Source identifier")
-    submit_parser.add_argument("--book-title", default="", help="Book title")
-    submit_parser.add_argument("--model", default=DEFAULT_MODEL_TRANSCRIPTION, help="VLM model name")
-    submit_parser.add_argument("--prompt-name", default=DEFAULT_PROMPT_NAME, help="Prompt template name")
-    submit_parser.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT, help="System instruction")
-    submit_parser.set_defaults(func=cmd_batch_submit)
+    # Batch submit
+    bs = sub.add_parser("batch-submit", help="Submit batch transcription jobs (half price)")
+    bs.add_argument("--image-dir", required=True)
+    bs.add_argument("--output-dir", default=None)
+    bs.add_argument("--source", default="")
+    bs.add_argument("--book-title", default="")
+    bs.add_argument("--model", default=DEFAULT_MODEL_TRANSCRIPTION)
+    bs.add_argument("--prompt-name", default=DEFAULT_PROMPT_NAME)
+    bs.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT)
+    bs.set_defaults(func=cmd_batch_submit)
 
-    # --- Batch status ---
-    status_parser = sub.add_parser("batch-status", help="Poll and display batch job status")
-    status_parser.add_argument("--output-dir", default=None, help="Output directory (default: cwd if manifest exists)")
-    status_parser.set_defaults(func=cmd_batch_status)
+    # Batch status
+    bst = sub.add_parser("batch-status", help="Poll batch job status")
+    bst.add_argument("--output-dir", default=None)
+    bst.set_defaults(func=cmd_batch_status)
 
-    # --- Batch collect ---
-    collect_parser = sub.add_parser("batch-collect", help="Collect completed batch results into final JSONL")
-    collect_parser.add_argument("--output-dir", default=None, help="Output directory (default: cwd if manifest exists)")
-    collect_parser.set_defaults(func=cmd_batch_collect)
+    # Batch collect
+    bc = sub.add_parser("batch-collect", help="Collect batch results into JSONL")
+    bc.add_argument("--output-dir", default=None)
+    bc.set_defaults(func=cmd_batch_collect)
 
-    # --- Unpack ---
-    unpack_parser = sub.add_parser("unpack", help="Unpack JSONL into per-page text files and stitched full text")
-    unpack_parser.add_argument("--output-dir", default=None, help="Transcription output directory (default: cwd if JSONL exists)")
-    unpack_parser.set_defaults(func=cmd_unpack)
+    # Unpack
+    up = sub.add_parser("unpack", help="Unpack JSONL into per-page text + full text + quality flags")
+    up.add_argument("--output-dir", default=None)
+    up.set_defaults(func=cmd_unpack)
 
-    # --- Survey ---
-    survey_parser = sub.add_parser("survey", help="Survey transcription to build a translation brief (glossary, outline, terms)")
-    survey_parser.add_argument("--input", default=None, help="Input transcriptions.jsonl")
-    survey_parser.add_argument("--output", default=None, help="Output translation_brief.json")
-    survey_parser.add_argument("--output-dir", default=None, help="Transcription directory (for inferring paths)")
-    survey_parser.add_argument("--model", default=DEFAULT_MODEL_READING, help="LLM model for survey")
-    survey_parser.set_defaults(func=cmd_survey)
+    # Survey
+    sv = sub.add_parser("survey", help="Build translation brief (glossary, outline, terms)")
+    sv.add_argument("--input", default=None)
+    sv.add_argument("--output", default=None)
+    sv.add_argument("--output-dir", default=None)
+    sv.add_argument("--model", default=DEFAULT_MODEL_READING)
+    sv.set_defaults(func=cmd_survey)
 
-    # --- Enrich (naive baseline) ---
-    enrich_parser = sub.add_parser("enrich", help="Naive page-by-page translation (baseline)")
-    enrich_parser.add_argument("--input", default=None, help="Input transcriptions.jsonl")
-    enrich_parser.add_argument("--output", default=None, help="Output enriched.jsonl")
-    enrich_parser.add_argument("--output-dir", default=None, help="Transcription directory")
-    enrich_parser.add_argument("--model", default=DEFAULT_MODEL_READING, help="LLM model")
-    enrich_parser.add_argument("--workers", type=int, default=8, help="Concurrent workers")
-    enrich_parser.add_argument("--skip-existing", action="store_true", help="Skip pages already in output")
-    enrich_parser.set_defaults(func=cmd_enrich)
+    # Enrich (translate with brief + overlap + repair)
+    en = sub.add_parser("enrich", help="Translate with glossary brief, overlap context, and boundary repair")
+    en.add_argument("--input", default=None)
+    en.add_argument("--output", default=None)
+    en.add_argument("--brief", default=None, help="Translation brief JSON (auto-runs survey if missing)")
+    en.add_argument("--output-dir", default=None)
+    en.add_argument("--model", default=DEFAULT_MODEL_READING)
+    en.add_argument("--workers", type=int, default=8)
+    en.add_argument("--skip-existing", action="store_true")
+    en.set_defaults(func=cmd_enrich)
 
-    # --- Enrich A (deterministic batch with overlap) ---
-    enrich_a = sub.add_parser("enrich-a", help="Approach A: batch translation with brief + overlap context")
-    enrich_a.add_argument("--input", default=None, help="Input transcriptions.jsonl")
-    enrich_a.add_argument("--output", default=None, help="Output enriched_a.jsonl")
-    enrich_a.add_argument("--brief", default=None, help="Translation brief JSON (default: sibling translation_brief.json)")
-    enrich_a.add_argument("--output-dir", default=None, help="Transcription directory")
-    enrich_a.add_argument("--model", default=DEFAULT_MODEL_READING, help="LLM model")
-    enrich_a.add_argument("--workers", type=int, default=8, help="Concurrent workers")
-    enrich_a.add_argument("--skip-existing", action="store_true", help="Skip pages already in output")
-    enrich_a.set_defaults(func=cmd_enrich_a)
-
-    # --- Enrich B (multi-agent with lexicographer + reviewer) ---
-    enrich_b = sub.add_parser("enrich-b", help="Approach B: multi-agent translation with glossary refinement + boundary review")
-    enrich_b.add_argument("--input", default=None, help="Input transcriptions.jsonl")
-    enrich_b.add_argument("--output", default=None, help="Output enriched_b.jsonl")
-    enrich_b.add_argument("--brief", default=None, help="Translation brief JSON (default: sibling translation_brief.json)")
-    enrich_b.add_argument("--output-dir", default=None, help="Transcription directory")
-    enrich_b.add_argument("--model", default=DEFAULT_MODEL_READING, help="Translation model (Gemini)")
-    enrich_b.add_argument("--workers", type=int, default=8, help="Concurrent workers")
-    enrich_b.add_argument("--skip-existing", action="store_true", help="Skip pages already in output")
-    enrich_b.set_defaults(func=cmd_enrich_b)
-
-    # --- Publish ---
-    publish_parser = sub.add_parser("publish", help="Generate a static HTML book site from JSONL")
-    publish_parser.add_argument("--input", default=None, help="Input JSONL (default: output-dir/enriched.jsonl or transcriptions.jsonl)")
-    publish_parser.add_argument("--output-dir", default=None, help="Output directory for HTML site")
-    publish_parser.add_argument("--image-dir", default=None, help="Directory containing page images")
-    publish_parser.add_argument("--title", default=None, help="Book title override")
-    publish_parser.set_defaults(func=cmd_publish)
+    # Publish
+    pub = sub.add_parser("publish", help="Generate static HTML book site from JSONL")
+    pub.add_argument("--input", default=None)
+    pub.add_argument("--output-dir", default=None)
+    pub.add_argument("--image-dir", default=None)
+    pub.add_argument("--title", default=None)
+    pub.set_defaults(func=cmd_publish)
