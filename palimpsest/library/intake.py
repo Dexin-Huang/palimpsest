@@ -18,6 +18,17 @@ from .registry import build_registry_entry, now_iso, update_registry
 
 DOC_ID_RE = re.compile(r"^[a-z0-9_]+$")
 
+# Run-state fields are owned by downstream stages (download, clean, etc.).
+# Re-intake must preserve these from existing metadata.json even if the
+# incoming metadata dict accidentally contains them — those values would
+# be stale and would clobber real run state.
+RUN_STATE_FIELDS = frozenset({
+    "status",
+    "downloaded_count",
+    "skipped_count",
+    "cleaning",
+})
+
 
 def validate_doc_id(doc_id: str) -> None:
     if not DOC_ID_RE.match(doc_id):
@@ -40,23 +51,26 @@ def ingest_document(
     doc_dir = library_root / doc_id
     _ensure_layout(doc_dir)
 
-    created_at = metadata.get("created_at") or now_iso()
-    updated_at = now_iso()
-    metadata = {
-        **metadata,
-        "doc_id": doc_id,
-        "created_at": created_at,
-        "updated_at": updated_at,
-    }
-    if "status" not in metadata:
-        metadata["status"] = "ingested"
+    existing: dict = {}
+    try:
+        existing = json.loads(metadata_path(doc_dir).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        existing = {}
+
+    incoming_stripped = {k: v for k, v in metadata.items() if k not in RUN_STATE_FIELDS}
+    merged = {**existing, **incoming_stripped}
+    merged["doc_id"] = doc_id
+    merged["created_at"] = existing.get("created_at") or metadata.get("created_at") or now_iso()
+    merged["updated_at"] = now_iso()
+    if "status" not in merged:
+        merged["status"] = "ingested"
 
     page_list = {**page_list, "doc_id": doc_id}
 
-    atomic_write_json(metadata_path(doc_dir), metadata)
+    atomic_write_json(metadata_path(doc_dir), merged)
     atomic_write_json(page_list_path(doc_dir), page_list)
 
     registry_path = library_registry_path(library_root)
-    update_registry(registry_path, build_registry_entry(metadata, page_list))
+    update_registry(registry_path, build_registry_entry(merged, page_list))
 
     return doc_dir
