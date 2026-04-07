@@ -16,6 +16,8 @@ class TranscriptionRecord(BaseModel):
     text: str
     model: str = ""
     timestamp: str = ""
+    page_seq: int = 0
+    canvas_id: str = ""
 
 
 class EnrichedRecord(TranscriptionRecord):

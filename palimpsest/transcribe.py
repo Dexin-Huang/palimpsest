@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,12 +42,62 @@ def _mime_type(path: Path) -> str:
     }.get(suffix, "image/jpeg")
 
 
-def _collect_images(image_dir: Path) -> list[Path]:
+@dataclass
+class PageRef:
+    """A page resolved against page_list.json (or fallback) for transcription."""
+    image_path: Path
+    page_id: str
+    page_seq: int
+    canvas_id: str = ""
+
+
+def _resolve_pages(image_dir: Path) -> list[PageRef]:
+    """Resolve images to PageRef list using page_list.json if available.
+
+    Looks for page_list.json in image_dir.parent (the doc_dir). If found,
+    iterates pages in declared order, matching each entry to its image file
+    in image_dir. If not found, falls back to alphabetical filesystem order
+    with a logged warning — page_seq is the iteration index in that case.
+    """
+    doc_dir = image_dir.parent
+    page_list_p = doc_dir / "page_list.json"
+
+    if page_list_p.exists():
+        try:
+            data = json.loads(page_list_p.read_text(encoding="utf-8"))
+            pages = data.get("pages", []) if isinstance(data, dict) else []
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"  [WARN] page_list.json unreadable ({exc}); falling back to filesystem order")
+            pages = []
+
+        if pages:
+            refs: list[PageRef] = []
+            for entry in pages:
+                filename = entry.get("filename", "")
+                if not filename:
+                    continue
+                img = image_dir / filename
+                if not img.exists():
+                    print(f"  [WARN] declared page {entry.get('page_id', '?')} missing image file {filename}")
+                    continue
+                refs.append(PageRef(
+                    image_path=img,
+                    page_id=entry.get("page_id") or img.stem,
+                    page_seq=int(entry.get("order", 0)),
+                    canvas_id="",
+                ))
+            return refs
+
+    # Fallback: filesystem order, page_id from stem, page_seq from iteration index.
+    print(f"  [WARN] no page_list.json at {page_list_p}; using filesystem order")
     paths = sorted(
         p for p in image_dir.iterdir()
         if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
     )
-    return paths
+    return [
+        PageRef(image_path=p, page_id=p.stem, page_seq=i + 1, canvas_id="")
+        for i, p in enumerate(paths)
+    ]
 
 
 def _load_existing_page_ids(output_path: Path) -> set[str]:
@@ -137,11 +188,12 @@ async def _transcribe_worker(
 ):
     loop = asyncio.get_event_loop()
     while True:
-        image_path: Path | None = await queue.get()
-        if image_path is None:
+        item: PageRef | None = await queue.get()
+        if item is None:
             queue.task_done()
             break
-        page_id = image_path.stem
+        image_path = item.image_path
+        page_id = item.page_id
         try:
             text, usage_info = await loop.run_in_executor(
                 None,
@@ -156,6 +208,8 @@ async def _transcribe_worker(
                 "source": source,
                 "book_title": book_title,
                 "page_id": page_id,
+                "page_seq": item.page_seq,
+                "canvas_id": item.canvas_id,
                 "text": text,
                 "model": model,
                 "timestamp": _utc_now(),
@@ -192,14 +246,14 @@ async def run_transcription(
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    images = _collect_images(image_dir)
-    if not images:
+    page_refs = _resolve_pages(image_dir)
+    if not page_refs:
         raise FileNotFoundError(f"No images found in {image_dir}")
 
     if skip_existing:
         existing = _load_existing_page_ids(output_path)
-        images = [p for p in images if p.stem not in existing]
-        if not images:
+        page_refs = [r for r in page_refs if r.page_id not in existing]
+        if not page_refs:
             print("All pages already transcribed.")
             return output_path
 
@@ -212,13 +266,13 @@ async def run_transcription(
     client = genai.Client()
     queue: asyncio.Queue = asyncio.Queue()
     lock = asyncio.Lock()
-    stats = {"done": 0, "errors": 0, "total": len(images)}
+    stats = {"done": 0, "errors": 0, "total": len(page_refs)}
 
-    print(f"Transcribing {len(images)} pages with {workers} workers ({model})")
+    print(f"Transcribing {len(page_refs)} pages with {workers} workers ({model})")
     print(f"Output: {output_path}")
 
-    for img in images:
-        await queue.put(img)
+    for ref in page_refs:
+        await queue.put(ref)
     for _ in range(workers):
         await queue.put(None)
 
