@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,58 +39,6 @@ class AgentProfile:
 
 
 PROFILES: dict[str, AgentProfile] = {
-    "general": AgentProfile(
-        name="general",
-        tools=tuple(EDIT_TOOLS),
-        instructions=(
-            "You are a workspace-scoped general helper. Complete local repo tasks with minimal tool use.\n"
-            "Read AGENTS.md before making changes if it exists. Only check CLAUDE.md when AGENTS.md is absent.\n"
-            "If the task does not require edits, do not modify files.\n"
-            "Do not inspect unrelated files, list directories, or explore the repo unless the task requires it.\n"
-            "Keep the final response brief and execution-focused.\n"
-        ),
-    ),
-    "edit": AgentProfile(
-        name="edit",
-        tools=tuple(EDIT_TOOLS),
-        instructions=(
-            "You are a low-overhead editing worker. Make only the requested changes.\n"
-            "Read the target file before editing it. Prefer Edit or MultiEdit over broad rewrites.\n"
-            "Do not audit the whole repo or propose extras unless explicitly asked.\n"
-            "Stop as soon as the requested patch is complete.\n"
-        ),
-    ),
-    "inspect": AgentProfile(
-        name="inspect",
-        tools=tuple(READ_ONLY_TOOLS),
-        instructions=(
-            "You are a read-only inspection worker. Never modify files.\n"
-            "Gather only the evidence needed to answer the prompt.\n"
-            "Return concrete findings, not a long essay.\n"
-        ),
-    ),
-    "summarize": AgentProfile(
-        name="summarize",
-        tools=tuple(READ_ONLY_TOOLS),
-        instructions=(
-            "You are a read-only summarization worker. Never modify files.\n"
-            "Read the minimum viable context and produce a concise summary focused on what matters.\n"
-        ),
-    ),
-    "packet_scholar": AgentProfile(
-        name="packet_scholar",
-        tools=tuple(EDIT_TOOLS),
-        instructions=(
-            "You are the dedicated scholar agent for one Palimpsest page.packet.\n"
-            "This is a packet workflow, not a general repo task.\n"
-            "Read packet.json first, then work only inside the packet files.\n"
-            "Treat witness text as evidence and never invent witness lines.\n"
-            "Use notes, translation, interpretation, terms, and questions as separate layers.\n"
-            "Always distinguish direct evidence from probable inference.\n"
-            "Update packet.json statuses and workflow.next_action before finishing.\n"
-            "Do not create unrelated files or inspect the wider repo.\n"
-        ),
-    ),
     "candidate_scout": AgentProfile(
         name="candidate_scout",
         tools=tuple(READ_ONLY_TOOLS),
@@ -107,20 +54,6 @@ PROFILES: dict[str, AgentProfile] = {
         ),
     ),
 }
-
-
-@dataclass
-class AgentJob:
-    prompt: str
-    workspace: Path
-    profile: str = "general"
-    with_web_search: bool = False
-    model: str = "claude-sonnet-4-5"
-    max_turns: int = 100
-    max_budget_usd: float | None = None
-    max_thinking_tokens: int | None = None
-    permission_mode: str = "default"
-    job_id: str | None = None
 
 
 @dataclass
@@ -329,7 +262,7 @@ async def run_agent_prompt(
     prompt: str,
     workspace: Path,
     model: str,
-    profile: str = "general",
+    profile: str = "candidate_scout",
     with_web_search: bool = False,
     max_turns: int = 100,
     max_budget_usd: float | None = None,
@@ -389,45 +322,3 @@ async def run_agent_prompt(
         messages=messages,
         job_id=job_id,
     )
-
-
-async def run_agent_jobs(jobs: list[AgentJob], concurrency: int = 4) -> list[AgentRunResult]:
-    if concurrency < 1:
-        raise ValueError("concurrency must be >= 1")
-
-    semaphore = asyncio.Semaphore(concurrency)
-    results: list[AgentRunResult | None] = [None] * len(jobs)
-
-    async def run_one(index: int, job: AgentJob) -> None:
-        async with semaphore:
-            try:
-                results[index] = await run_agent_prompt(
-                    prompt=job.prompt,
-                    workspace=job.workspace,
-                    model=job.model,
-                    profile=job.profile,
-                    with_web_search=job.with_web_search,
-                    max_turns=job.max_turns,
-                    max_budget_usd=job.max_budget_usd,
-                    max_thinking_tokens=job.max_thinking_tokens,
-                    permission_mode=job.permission_mode,
-                    job_id=job.job_id,
-                )
-            except Exception as exc:
-                results[index] = AgentRunResult(
-                    workspace=job.workspace.resolve(),
-                    profile=job.profile,
-                    response_text="",
-                    result_text=f"{type(exc).__name__}: {exc}",
-                    structured_output=None,
-                    session_id=None,
-                    total_cost_usd=None,
-                    num_turns=None,
-                    subtype="exception",
-                    is_error=True,
-                    messages=[],
-                    job_id=job.job_id,
-                )
-
-    await asyncio.gather(*(run_one(index, job) for index, job in enumerate(jobs)))
-    return [result for result in results if result is not None]
