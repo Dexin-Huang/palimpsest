@@ -11,9 +11,9 @@ Quarantined carryover schema kept only for compatibility until extraction:
 - our_work
 
 Usage:
-    from palimpsest.discovery.access import DiscoveryStore
+    from palimpsest.discovery.database import DiscoveryDB
 
-    with DiscoveryStore.open("discovery/manuscripts.db") as db:
+    with DiscoveryDB("discovery/manuscripts.db") as db:
         db.add_manuscript(Manuscript(
             id="vat_pal_lat_1267",
             shelfmark="Pal.lat.1267",
