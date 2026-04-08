@@ -4,7 +4,6 @@ This folder contains prompt templates used by the current discovery, reconstruct
 
 Current root-level prompts include:
 - `opportunity_triage.txt`
-- `opportunity_triage_thumbnail.txt`
 - `page_witness_focused.txt`
 - `section_synthesis_focused.txt`
 - `page_layout_probe.txt`
