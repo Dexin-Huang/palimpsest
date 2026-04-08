@@ -162,9 +162,7 @@ def _merge_pages_to_jsonl(pages_dir: Path, output_path: Path) -> None:
 
 PRICING = {
     "gemini-3.1-pro-preview": {"input": 1.25, "output": 10.00},
-    "gemini-3.1-flash-preview": {"input": 0.15, "output": 0.60},
     "gemini-3.1-flash-lite-preview": {"input": 0.02, "output": 0.10},
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
 }
 
 

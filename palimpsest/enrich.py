@@ -28,9 +28,7 @@ PROMPT_NAME = "translate_with_brief"
 
 PRICING = {
     "gemini-3.1-pro-preview": {"input": 1.25, "output": 10.00},
-    "gemini-3.1-flash-preview": {"input": 0.15, "output": 0.60},
     "gemini-3.1-flash-lite-preview": {"input": 0.02, "output": 0.10},
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
 }
 
 _FLAGS_RE = re.compile(r"---FLAGS---\s*\n(.*?)\n\s*---END FLAGS---", re.DOTALL)
