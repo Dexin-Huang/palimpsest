@@ -24,12 +24,6 @@ def add_library_subparser(subparsers: argparse._SubParsersAction[argparse.Argume
     add_subparser(subparsers)
 
 
-def add_book_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    from .book import add_subparser
-
-    add_subparser(subparsers)
-
-
 def add_transcribe_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     from .transcribe import add_subparser
 
@@ -38,6 +32,5 @@ def add_transcribe_subparser(subparsers: argparse._SubParsersAction[argparse.Arg
 __all__ = [
     "add_discovery_subparser",
     "add_library_subparser",
-    "add_book_subparser",
     "add_transcribe_subparser",
 ]

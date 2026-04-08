@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 
 from palimpsest.commands import (
-    add_book_subparser,
     add_discovery_subparser,
     add_library_subparser,
     add_transcribe_subparser,
@@ -15,7 +14,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_discovery_subparser(subparsers)
     add_library_subparser(subparsers)
-    add_book_subparser(subparsers)
     add_transcribe_subparser(subparsers)
     return parser
 

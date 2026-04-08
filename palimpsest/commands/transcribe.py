@@ -132,24 +132,6 @@ def cmd_enrich(args: argparse.Namespace) -> None:
     )
 
 
-def cmd_publish(args: argparse.Namespace) -> None:
-    from palimpsest.publish import build_book_site
-
-    input_path = Path(args.input) if args.input else _resolve_output_dir(args.output_dir) / "enriched.jsonl"
-    if not input_path.exists():
-        fallback = input_path.parent / "transcriptions.jsonl"
-        if fallback.exists():
-            input_path = fallback
-            print(f"No enriched.jsonl found, using transcriptions.jsonl")
-
-    out_dir = Path(args.output_dir) if args.output_dir else input_path.parent / "site"
-    image_dir = Path(args.image_dir) if args.image_dir else None
-
-    print(f"Input: {input_path}")
-    print(f"Output: {out_dir}")
-    print(f"Published: {build_book_site(input_path, out_dir=out_dir, title=args.title, image_dir=image_dir)}")
-
-
 # ---------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------
@@ -215,11 +197,3 @@ def add_subparser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser
     en.add_argument("--workers", type=int, default=8)
     en.add_argument("--skip-existing", action="store_true")
     en.set_defaults(func=cmd_enrich)
-
-    # Publish
-    pub = sub.add_parser("publish", help="Generate static HTML book site from JSONL")
-    pub.add_argument("--input", default=None)
-    pub.add_argument("--output-dir", default=None)
-    pub.add_argument("--image-dir", default=None)
-    pub.add_argument("--title", default=None)
-    pub.set_defaults(func=cmd_publish)
