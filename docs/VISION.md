@@ -41,35 +41,60 @@ Current operating priority:
 
 ## System Modules (3)
 
-### 1) Discovery -> Intake
-Purpose: find promising corpora for knowledge recovery and rank them for ROI.
+### 1) Discovery (Dual Mode)
+Purpose: run a cheap prospecting pass over many corpora, then let a human promote
+the rare things worth deep ingestion.
 
-Responsibilities:
-- Collect metadata from catalogs / APIs / lists
-- Score "interestingness" in two passes
-- Create a stable, structured intake record per doc
+Discovery is two modes under one roof:
+- Opportunity mode: cheap VLM reads hunting for labor-killed dream signals in
+  editorial prefaces, marginalia, colophons, and correspondence.
+- Source mode: heavy ingestion of a specific document that has already earned a
+  place in the standing portfolio.
+
+The two modes are connected by a manual promotion gate, not a score threshold.
+Interesting is not enough.
+
+#### Triage layer (cheap, broad)
+Runs on everything. Decides only one thing: is this source worth an
+opportunity-mode scan?
 
 Inputs:
-- Metadata, catalog pages, optional thumbnails
+- IIIF / SRU / catalog metadata
+- bibliographic extraction
+- optional low-resolution thumbnail glance
 
-Outputs:
-- Document registry entry (database)
-- Per-document page list (image URLs, order, expected filenames)
-- Triage results (scores + reasons)
+Output: a `TriageVerdict` — accept / reject / defer, with a short reason.
 
-Two-pass ranking:
-1) Pass 1 (cheap): metadata-only scoring
-2) Pass 2 (selective): Gemini Flash on top-ranked items
+Gate to opportunity mode:
+- a readable high-signal region (front matter, editorial intro, colophon,
+  marginalia) is plausibly present, and
+- the source is cheap enough to target-scan.
 
-Interestingness rubric (initial, editable):
-- Newly digitized or previously inaccessible (+)
-- Under-studied collection (+)
-- Language/domain match for current focus (+)
-- Clear marginalia/annotations indicated (+)
-- Rare iconography or uncommon text (+)
-- Very high page count with low prior coverage (+)
-- Signals of scientific, technical, cosmological, geographic, or recipe content (+)
-- Enough related material to support cross-document comparison (+)
+Not a score. Not a ranking. A yes/no on "worth opportunity-scanning."
+
+#### Opportunity scout (targeted, VLM)
+A cheap VLM read over the zones most likely to carry labor-bottleneck signals:
+prefaces, editorial apparatus, marginalia, colophons, postscripts.
+
+Purpose: extract grounded `DreamCandidate` records — quoted or closely paraphrased
+evidence that some labor-killed project lived here.
+
+Output: `dream_candidates.jsonl` per corpus run, merged into a rolling
+`portfolio/shortlist.json`.
+
+No analyst prose. No memos. Structured candidates or nothing.
+
+#### Source-mode promotion gate (manual)
+Nothing auto-promotes from opportunity to source, no matter how high the
+confidence. Promotion requires:
+- a grounded quote or close paraphrase naming an abandoned or scaled-back
+  project,
+- `modern_feasibility != no`,
+- the source is still image-bound enough that a downstream reader cannot just
+  consume it directly,
+- a human decision to spend the ingestion budget on it.
+
+Only promoted documents enter the heavy library pipeline below.
 
 ---
 
