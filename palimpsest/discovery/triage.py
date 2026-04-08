@@ -6,10 +6,10 @@ discovery workflow conventions rather than the deleted legacy lane.
 
 Usage:
     from palimpsest.discovery.triage import triage_from_db, triage_manuscript
-    from palimpsest.discovery.access import DiscoveryStore
+    from palimpsest.discovery.database import DiscoveryDB
 
-    db = DiscoveryStore.open("discovery/manuscripts.db")
-    results = triage_from_db(db=db, workers=10)
+    with DiscoveryDB("discovery/manuscripts.db") as db:
+        results = triage_from_db(db=db, workers=10)
 """
 
 from __future__ import annotations
@@ -28,7 +28,8 @@ from google.genai import types
 from palimpsest.config import DEFAULT_MODEL_TRIAGE
 from palimpsest.model_io import strip_json_fences
 
-from .access import DiscoveryWriteAccess, Enrichment, Manuscript
+from .database import DiscoveryDB
+from .records import Enrichment, Manuscript
 
 BACKOFF_BASE = 2
 PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
@@ -297,7 +298,7 @@ def resolve_triage_method(
 
 
 def save_triage_result(
-    db: DiscoveryWriteAccess,
+    db: DiscoveryDB,
     result: TriageResult,
     with_web_search: bool = True,
 ) -> None:
@@ -402,7 +403,7 @@ def build_triage_metadata(ms: Manuscript) -> dict:
 
 
 def triage_from_db(
-    db: DiscoveryWriteAccess,
+    db: DiscoveryDB,
     model: str = DEFAULT_MODEL_TRIAGE,
     workers: int = 10,
     limit: Optional[int] = None,

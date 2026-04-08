@@ -9,8 +9,9 @@ from typing import Any
 
 import requests
 
-from palimpsest.discovery.access import DiscoveryStore, Manuscript
+from palimpsest.discovery.database import DiscoveryDB
 from palimpsest.discovery.iiif import extract_metadata as discovery_extract_metadata
+from palimpsest.discovery.records import Manuscript
 
 REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Palimpsest discovery)",
@@ -171,7 +172,7 @@ def triage_manuscripts(
 ) -> None:
     from palimpsest.discovery.triage import triage_from_db
 
-    with DiscoveryStore.open(db_path) as db:
+    with DiscoveryDB(db_path) as db:
         collection_filter = set(collections or [])
         manuscript_id_filter = set(manuscript_ids or [])
 
@@ -220,7 +221,7 @@ def enrich_manuscripts(
     collections: list[str] | None,
     manuscript_ids: list[str] | None,
 ) -> None:
-    with DiscoveryStore.open(db_path) as db:
+    with DiscoveryDB(db_path) as db:
         manifest_dir.mkdir(parents=True, exist_ok=True)
         manuscripts = db.list_manuscripts(limit=100000)
         collection_filter = set(collections or [])
@@ -282,7 +283,7 @@ def enrich_manuscripts(
 
 
 def show_stats(*, db_path: str) -> None:
-    with DiscoveryStore.open(db_path) as db:
+    with DiscoveryDB(db_path) as db:
         manuscripts = db.list_manuscripts(limit=100000)
         opportunities = db.list_opportunities()
 
@@ -409,7 +410,7 @@ def ingest_sources(
         include_details=include_details,
     )
 
-    with DiscoveryStore.open(db_path) as db:
+    with DiscoveryDB(db_path) as db:
         added = 0
         updated = 0
         skipped = 0
