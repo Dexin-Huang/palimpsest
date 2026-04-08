@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,6 +18,7 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_TRANSCRIPTION
+from palimpsest.library.io import atomic_write_json
 from palimpsest.model_io import load_prompt, response_text
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp"}
@@ -100,19 +102,62 @@ def _resolve_pages(image_dir: Path) -> list[PageRef]:
     ]
 
 
-def _load_existing_page_ids(output_path: Path) -> set[str]:
+def _pages_dir(output_path: Path) -> Path:
+    """Working directory for atomic per-page JSONL records."""
+    return output_path.parent / f"_{output_path.stem}_pages"
+
+
+def _load_existing_page_ids(output_path: Path, pages_dir: Path) -> set[str]:
     ids: set[str] = set()
-    if not output_path.exists():
-        return ids
-    for line in output_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
+    # Primary: per-page files in the pages dir
+    if pages_dir.exists():
+        for p in pages_dir.iterdir():
+            if p.is_file() and p.suffix == ".json":
+                ids.add(p.stem)
+    # Secondary: existing JSONL (legacy runs)
+    if output_path.exists():
+        for line in output_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ids.add(json.loads(line)["page_id"])
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return ids
+
+
+def _merge_pages_to_jsonl(pages_dir: Path, output_path: Path) -> None:
+    """Merge per-page JSON files into a single JSONL, ordered by page_seq.
+
+    Writes atomically via a temp file + os.replace. Safe against Ctrl-C
+    during the merge itself because the temp file is abandoned on
+    interrupt and the target JSONL is only overwritten by the final
+    os.replace.
+    """
+    if not pages_dir.exists():
+        return
+    records = []
+    for p in sorted(pages_dir.iterdir()):
+        if not p.is_file() or p.suffix != ".json":
             continue
         try:
-            ids.add(json.loads(line)["page_id"])
-        except (json.JSONDecodeError, KeyError):
+            records.append(json.loads(p.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"  [WARN] corrupt page file {p.name}: {exc}")
             continue
-    return ids
+    # Sort by page_seq (added in Gate 1). Fall back to page_id for
+    # records that predate the schema addition (page_seq = 0).
+    records.sort(key=lambda r: (r.get("page_seq", 0), r.get("page_id", "")))
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as fh:
+        for rec in records:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp_path, output_path)
 
 
 PRICING = {
@@ -183,7 +228,7 @@ async def _transcribe_worker(
     source: str,
     book_title: str,
     output_path: Path,
-    lock: asyncio.Lock,
+    pages_dir: Path,
     stats: dict,
 ):
     loop = asyncio.get_event_loop()
@@ -214,10 +259,11 @@ async def _transcribe_worker(
                 "model": model,
                 "timestamp": _utc_now(),
             }
-            async with lock:
-                with open(output_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(record, ensure_ascii=False) + "\n")
-                stats["total_cost"] = stats.get("total_cost", 0.0) + (usage_info.get("cost_usd") or 0.0)
+            # Write the record atomically to its own page file.
+            # No lock needed — each worker writes a distinct file.
+            page_file = pages_dir / f"{page_id}.json"
+            atomic_write_json(page_file, record, ensure_ascii=False)
+            stats["total_cost"] = stats.get("total_cost", 0.0) + (usage_info.get("cost_usd") or 0.0)
             stats["done"] += 1
             cost_str = f" ${usage_info['cost_usd']:.4f}" if usage_info.get("cost_usd") else ""
             tokens_str = f" {usage_info.get('prompt_tokens', '?')}+{usage_info.get('output_tokens', '?')} tok" if usage_info else ""
@@ -246,15 +292,26 @@ async def run_transcription(
     output_path = output_path.resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    pages_dir = _pages_dir(output_path)
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    # Upfront merge on resume: if orphan per-page files exist from an
+    # interrupted previous run, collapse them into the canonical JSONL
+    # before queueing new work. Idempotent and cheap.
+    if any(p.is_file() and p.suffix == ".json" for p in pages_dir.iterdir()):
+        print(f"  [resume] merging existing per-page files from {pages_dir.name}")
+        _merge_pages_to_jsonl(pages_dir, output_path)
+
     page_refs = _resolve_pages(image_dir)
     if not page_refs:
         raise FileNotFoundError(f"No images found in {image_dir}")
 
     if skip_existing:
-        existing = _load_existing_page_ids(output_path)
+        existing = _load_existing_page_ids(output_path, pages_dir)
         page_refs = [r for r in page_refs if r.page_id not in existing]
         if not page_refs:
             print("All pages already transcribed.")
+            _merge_pages_to_jsonl(pages_dir, output_path)
             return output_path
 
     prompt_text = load_prompt(prompt_name)
@@ -265,7 +322,6 @@ async def run_transcription(
 
     client = genai.Client()
     queue: asyncio.Queue = asyncio.Queue()
-    lock = asyncio.Lock()
     stats = {"done": 0, "errors": 0, "total": len(page_refs)}
 
     print(f"Transcribing {len(page_refs)} pages with {workers} workers ({model})")
@@ -286,13 +342,16 @@ async def run_transcription(
                 source=source,
                 book_title=book_title,
                 output_path=output_path,
-                lock=lock,
+                pages_dir=pages_dir,
                 stats=stats,
             )
         )
         for _ in range(workers)
     ]
     await asyncio.gather(*worker_tasks)
+
+    # Merge per-page files into the final JSONL (atomic).
+    _merge_pages_to_jsonl(pages_dir, output_path)
 
     total_cost = stats.get("total_cost", 0.0)
     cost_line = f", total cost: ${total_cost:.4f}" if total_cost else ""

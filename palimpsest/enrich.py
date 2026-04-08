@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -288,31 +289,50 @@ async def _run_batch(
     else:
         print("Pass 2: no flagged pages — skipping repair.")
 
-    # --- Pass 3 — write output --------------------------------------------
+    # --- Pass 3 — write enriched.jsonl atomically -------------------------
     print(f"Pass 3: writing {output_path}")
     written = 0
-    with open(output_path, "a", encoding="utf-8") as fh:
-        for idx in todo:
-            pid = records[idx].page_id
-            if pid not in results:
-                continue
-            r = results[pid]
-            rec = EnrichedRecord(
-                source=records[idx].source,
-                book_title=records[idx].book_title,
-                page_id=pid,
-                text=records[idx].text,
-                translation=r["translation"],
-                translation_model=model,
-                translation_timestamp=_utc_now(),
-                prompt_tokens=r["usage"].get("prompt_tokens"),
-                output_tokens=r["usage"].get("output_tokens"),
-                total_tokens=r["usage"].get("total_tokens"),
-                cost_usd=r["usage"].get("cost_usd"),
-                flags=r.get("flags") or None,
-            )
-            fh.write(rec.model_dump_json(exclude_none=True) + "\n")
-            written += 1
+    lines: list[str] = []
+    for idx in todo:
+        pid = records[idx].page_id
+        if pid not in results:
+            continue
+        r = results[pid]
+        rec = EnrichedRecord(
+            source=records[idx].source,
+            book_title=records[idx].book_title,
+            page_id=pid,
+            text=records[idx].text,
+            translation=r["translation"],
+            translation_model=model,
+            translation_timestamp=_utc_now(),
+            prompt_tokens=r["usage"].get("prompt_tokens"),
+            output_tokens=r["usage"].get("output_tokens"),
+            total_tokens=r["usage"].get("total_tokens"),
+            cost_usd=r["usage"].get("cost_usd"),
+            flags=r.get("flags") or None,
+        )
+        lines.append(rec.model_dump_json(exclude_none=True))
+        written += 1
+
+    # Atomic write: append to existing content if skip_existing kept prior
+    # records, otherwise fresh file.
+    existing_content = ""
+    if skip_existing and output_path.exists():
+        existing_content = output_path.read_text(encoding="utf-8")
+        if existing_content and not existing_content.endswith("\n"):
+            existing_content += "\n"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as fh:
+        if existing_content:
+            fh.write(existing_content)
+        for line in lines:
+            fh.write(line + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp_path, output_path)
 
     cost = stats.get("total_cost", 0.0)
     print(f"Done: {written} pages written{f', ${cost:.4f}' if cost else ''}")
