@@ -18,8 +18,13 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_TRANSCRIPTION
+from palimpsest.gemini_pricing import PRICING, estimate_cost
 from palimpsest.library.io import atomic_write_json
 from palimpsest.model_io import load_prompt, response_text
+
+# Re-exports so existing call sites (e.g. batch.py) keep working.
+_estimate_cost = estimate_cost
+__all__ = ["PRICING", "estimate_cost", "_estimate_cost"]
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp"}
 DEFAULT_PROMPT_NAME = "transcribe_raw"
@@ -134,6 +139,11 @@ def _merge_pages_to_jsonl(pages_dir: Path, output_path: Path) -> None:
     during the merge itself because the temp file is abandoned on
     interrupt and the target JSONL is only overwritten by the final
     os.replace.
+
+    Corrupt per-page files are moved aside to ``<name>.json.corrupt``
+    rather than silently dropped, so (a) the bad payload is preserved
+    for forensics and (b) ``_load_existing_page_ids`` no longer treats
+    the page as done, causing the next run to re-queue it.
     """
     if not pages_dir.exists():
         return
@@ -144,7 +154,14 @@ def _merge_pages_to_jsonl(pages_dir: Path, output_path: Path) -> None:
         try:
             records.append(json.loads(p.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError) as exc:
-            print(f"  [WARN] corrupt page file {p.name}: {exc}")
+            corrupt_path = p.with_suffix(".json.corrupt")
+            try:
+                os.replace(p, corrupt_path)
+                print(f"  [CORRUPT] {p.name} -> {corrupt_path.name}: {exc}")
+            except OSError as rename_exc:
+                # If we can't rename it, leave it in place but still
+                # exclude it from the merge output.
+                print(f"  [CORRUPT] {p.name}: {exc} (rename failed: {rename_exc})")
             continue
     # Sort by page_seq (added in Gate 1). Fall back to page_id for
     # records that predate the schema addition (page_seq = 0).
@@ -158,19 +175,6 @@ def _merge_pages_to_jsonl(pages_dir: Path, output_path: Path) -> None:
         fh.flush()
         os.fsync(fh.fileno())
     os.replace(tmp_path, output_path)
-
-
-PRICING = {
-    "gemini-3.1-pro-preview": {"input": 1.25, "output": 10.00},
-    "gemini-3.1-flash-lite-preview": {"input": 0.02, "output": 0.10},
-}
-
-
-def _estimate_cost(model: str, prompt_tokens: int, output_tokens: int) -> float | None:
-    prices = PRICING.get(model)
-    if prices is None:
-        return None
-    return (prompt_tokens * prices["input"] + output_tokens * prices["output"]) / 1_000_000
 
 
 def transcribe_page(
@@ -210,7 +214,7 @@ def transcribe_page(
             "prompt_tokens": prompt_tokens,
             "output_tokens": output_tokens,
             "total_tokens": getattr(usage, "total_token_count", 0) or 0,
-            "cost_usd": _estimate_cost(model, prompt_tokens, output_tokens),
+            "cost_usd": estimate_cost(model, prompt_tokens, output_tokens),
         }
 
     return text, usage_info

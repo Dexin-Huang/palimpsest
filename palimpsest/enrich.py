@@ -20,16 +20,16 @@ from google import genai
 from google.genai import types
 
 from palimpsest.config import DEFAULT_MODEL_READING
+from palimpsest.gemini_pricing import PRICING, estimate_cost
 from palimpsest.model_io import load_prompt, response_text
 from palimpsest.models.enriched import TranscriptionRecord, EnrichedRecord
 
 DEFAULT_WORKERS = 8
 PROMPT_NAME = "translate_with_brief"
 
-PRICING = {
-    "gemini-3.1-pro-preview": {"input": 1.25, "output": 10.00},
-    "gemini-3.1-flash-lite-preview": {"input": 0.02, "output": 0.10},
-}
+# Re-export so existing callers/tests keep working under the legacy name.
+_estimate_cost = estimate_cost
+__all__ = ["PRICING", "estimate_cost", "_estimate_cost", "run_batch_translation_sync"]
 
 _FLAGS_RE = re.compile(r"---FLAGS---\s*\n(.*?)\n\s*---END FLAGS---", re.DOTALL)
 
@@ -40,11 +40,6 @@ _FLAGS_RE = re.compile(r"---FLAGS---\s*\n(.*?)\n\s*---END FLAGS---", re.DOTALL)
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def _estimate_cost(model: str, pt: int, ot: int) -> float | None:
-    p = PRICING.get(model)
-    return (pt * p["input"] + ot * p["output"]) / 1_000_000 if p else None
 
 
 def _load_records(path: Path) -> list[TranscriptionRecord]:
@@ -139,7 +134,7 @@ def _translate_page(client: genai.Client, prompt: str, model: str) -> tuple[str,
         info = {
             "prompt_tokens": pt, "output_tokens": ot,
             "total_tokens": getattr(usage, "total_token_count", 0) or 0,
-            "cost_usd": _estimate_cost(model, pt, ot),
+            "cost_usd": estimate_cost(model, pt, ot),
         }
     return text, info
 
