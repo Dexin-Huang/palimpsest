@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from palimpsest.factory.config import FACTORY_DB_PATH
+from palimpsest.factory.config import FACTORY_DB_PATH, LIBRARY_ROOT
 from palimpsest.factory.core.ledger import Ledger
 
 
@@ -28,11 +28,63 @@ def add_factory_subparser(subparsers) -> None:
     status.add_argument("--doc-id", default=None)
     status.set_defaults(func=cmd_status)
 
+    adopt = factory_subparsers.add_parser(
+        "adopt", help="Put an existing library document on the line"
+    )
+    adopt.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    adopt.add_argument("--doc-id", required=True)
+    adopt.add_argument("--recipe", required=True)
+    adopt.add_argument("--mode", choices=["source", "opportunity"], default="source")
+    adopt.set_defaults(func=cmd_adopt)
+
+    run = factory_subparsers.add_parser(
+        "run", help="Drive a work order through its recipe"
+    )
+    run.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    run.add_argument("--doc-id", required=True)
+    run.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    run.add_argument("--workers", type=int, default=None)
+    run.add_argument(
+        "--refresh", action="append", default=[], metavar="STATION",
+        help="Force re-run of a station even if fresh/outdated (repeatable)",
+    )
+    run.set_defaults(func=cmd_run)
+
 
 def cmd_init_db(args: argparse.Namespace) -> None:
     with Ledger(args.db):
         pass
     print(f"Factory ledger ready: {args.db}")
+
+
+def cmd_adopt(args: argparse.Namespace) -> None:
+    with Ledger(args.db) as ledger:
+        ledger.adopt(args.doc_id, recipe=args.recipe, mode=args.mode)
+    print(f"{args.doc_id} is on the line (recipe={args.recipe}, mode={args.mode})")
+
+
+def cmd_run(args: argparse.Namespace) -> None:
+    from palimpsest.factory.core.conductor import DEFAULT_WORKERS, Conductor
+
+    with Ledger(args.db) as ledger:
+        conductor = Conductor(
+            ledger,
+            library_root=args.library_root,
+            workers=args.workers or DEFAULT_WORKERS,
+            refresh=frozenset(args.refresh),
+        )
+        report = conductor.run(args.doc_id)
+
+    print(f"{report.doc_id} [{report.recipe}]  "
+          f"ran={report.count('ran')} fresh={report.count('fresh')} "
+          f"outdated={report.count('outdated')} failed={report.count('failed')}  "
+          f"cost=${report.cost_usd:.4f}")
+    for cell in report.cells:
+        if cell.action == "failed":
+            print(f"  FAILED {cell.station} {cell.page_id or '(manuscript)'}: {cell.error}")
+        elif cell.action == "outdated":
+            print(f"  outdated {cell.station} {cell.page_id or '(manuscript)'} "
+                  f"— re-run with --refresh {cell.station}")
 
 
 def cmd_status(args: argparse.Namespace) -> None:

@@ -117,8 +117,11 @@ def test_workspace_jsonl_roundtrip(tmp_path):
 
 
 def test_layout_contract(tmp_path):
-    assert layout.artifact_dir("doc1", "page_image", library_root=tmp_path) == (
-        tmp_path / "doc1" / "page_image"
+    assert layout.artifact_path("doc1", "page_image", "f001r", library_root=tmp_path) == (
+        tmp_path / "doc1" / "page_image" / "f001r.jpg"
+    )
+    assert layout.artifact_path("doc1", "translation_brief", None, library_root=tmp_path) == (
+        tmp_path / "doc1" / "translation_brief.json"
     )
     assert layout.metadata_path("doc1", library_root=tmp_path).name == "metadata.json"
 

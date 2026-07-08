@@ -22,6 +22,7 @@ class ModelRequest:
     temperature: float = 0.1
     max_output_tokens: int = 32768
     media_resolution: str | None = None  # "low" | "medium" | "high"
+    json_output: bool = False            # constrain the response to JSON
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,19 @@ def generate(request: ModelRequest) -> ModelResponse:
             if not error.transient or attempt == MAX_ATTEMPTS:
                 raise
             time.sleep(BACKOFF_BASE_SECONDS * 2 ** (attempt - 1))
+
+
+def strip_json_fences(text: str) -> str:
+    """Remove a Markdown ```json fence wrapper if the model added one."""
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return text
+    lines = stripped.splitlines()
+    if lines and lines[0].lstrip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].lstrip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
 
 
 def _resolve_provider(model: str):

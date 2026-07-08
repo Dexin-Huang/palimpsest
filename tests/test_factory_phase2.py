@@ -1,0 +1,211 @@
+"""Phase 2 tests: recipe validation + conductor end-to-end on a fake document.
+
+The gateway is monkeypatched (no network, no API key); acquire is fed by a
+local HTTP-free fetch stub. Everything else — stations, conductor, ledger,
+fingerprints, staleness — runs for real.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+import palimpsest.factory.stations.acquire as acquire_module
+from palimpsest.factory.core.conductor import Conductor
+from palimpsest.factory.core.ledger import Ledger
+from palimpsest.factory.core.recipe import load as load_recipe
+from palimpsest.factory.gateway.client import ModelResponse
+from palimpsest.factory.workspace.io import atomic_write_json, read_json
+from palimpsest.factory.workspace.layout import artifact_path
+
+DOC = "test_codex"
+PAGES = [
+    {"page_id": "f001r", "url": "https://archive.test/f001r.jpg", "order": 1},
+    {"page_id": "f001v", "url": "https://archive.test/f001v.jpg", "order": 2},
+]
+
+
+@pytest.fixture
+def library(tmp_path):
+    doc_dir = tmp_path / "library" / DOC
+    doc_dir.mkdir(parents=True)
+    atomic_write_json(doc_dir / "page_list.json", {"doc_id": DOC, "pages": PAGES})
+    atomic_write_json(doc_dir / "metadata.json", {"source_catalog": {"title": "Test"}})
+    return tmp_path / "library"
+
+
+@pytest.fixture
+def ledger(library):
+    with Ledger(library / "factory.db") as ledger:
+        ledger.adopt(DOC, recipe="latin_manuscript")
+        yield ledger
+
+
+class ScriptedGateway:
+    """Deterministic fake: reply depends on which prompt/station is calling."""
+
+    def __init__(self):
+        self.calls = []
+        self.read_texts = {"f001r": "Experimenta ad morbos", "f001v": "Ad febres tertianas"}
+
+    def __call__(self, request):
+        self.calls.append(request)
+        if request.images:  # read station
+            page_id = request.images[0].stem
+            text = self.read_texts[page_id]
+        elif request.json_output:  # survey station
+            text = json.dumps({
+                "terms": [{"term": "febris", "translation": "fever", "note": ""}],
+                "sections": [], "abbreviations": [], "entities": [],
+                "flags": [], "style_notes": ["Medieval Latin"],
+            })
+        else:  # translate station
+            text = ("Translated body\n---FLAGS---\n"
+                    '{"starts_mid_sentence": false, "ends_mid_sentence": false, "new_terms": []}'
+                    "\n---END FLAGS---")
+        return ModelResponse(text=text, model=request.model,
+                             prompt_tokens=100, output_tokens=50, cost_usd=0.001)
+
+
+@pytest.fixture
+def gateway(monkeypatch):
+    fake = ScriptedGateway()
+    for module in ("read", "translate", "survey"):
+        monkeypatch.setattr(f"palimpsest.factory.stations.{module}.generate", fake)
+    return fake
+
+
+@pytest.fixture
+def fetch(monkeypatch):
+    class FakeResponse:
+        def __init__(self, url):
+            self.content = f"IMAGEBYTES:{url}".encode()
+        def raise_for_status(self): pass
+        def iter_content(self, chunk_size): yield self.content
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    monkeypatch.setattr(acquire_module.requests, "get",
+                        lambda url, **kw: FakeResponse(url))
+
+
+def run_line(ledger, library, **kw):
+    return Conductor(ledger, library_root=library, workers=2, **kw).run(DOC)
+
+
+def test_recipe_loads_and_validates():
+    recipe = load_recipe("latin_manuscript")
+    assert [s.station.name for s in recipe.page_stations] == [
+        "acquire", "prepare", "read", "translate", "assemble_page"]
+    assert [s.station.name for s in recipe.manuscript_stations] == ["survey"]
+    assert recipe.page_stations[2].model  # ${VAR} interpolated
+
+
+def test_end_to_end_line(ledger, library, gateway, fetch):
+    report = run_line(ledger, library)
+
+    assert report.count("failed") == 0
+    # 5 page stations × 2 pages + survey
+    assert report.count("ran") == 11
+
+    assembled = read_json(artifact_path(DOC, "page_assembled", "f001r", library))
+    assert assembled["original"]["text"] == "Experimenta ad morbos"
+    assert assembled["translation"]["text"] == "Translated body"
+    assert assembled["translation"]["flags"]["starts_mid_sentence"] is False
+    assert assembled["provenance"]["station"] == "assemble_page"
+
+    brief = read_json(artifact_path(DOC, "translation_brief", None, library))
+    assert brief["glossary"][0]["term"] == "febris"
+    assert brief["provenance"]["prompt_sha256"]
+
+    # binary artifacts got provenance sidecars
+    image = artifact_path(DOC, "page_image", "f001r", library)
+    assert image.exists()
+    assert (image.parent / (image.name + ".provenance.json")).exists()
+
+    # translate saw the brief and neighbor context in its prompt
+    translate_calls = [c for c in gateway.calls if "TRANSLATION BRIEF" in c.prompt]
+    assert len(translate_calls) == 2
+    # thread order is nondeterministic — find f001r's call by its page text
+    f001r_call = next(
+        c for c in translate_calls
+        if "Experimenta ad morbos" in c.prompt.split("--- PAGE TO TRANSLATE ---")[1]
+    )
+    assert "febris" in f001r_call.prompt
+    assert "[f001v]" in f001r_call.prompt  # neighbor context present
+
+
+def test_second_run_is_all_fresh(ledger, library, gateway, fetch):
+    run_line(ledger, library)
+    calls_before = len(gateway.calls)
+    report = run_line(ledger, library)
+    assert report.count("ran") == 0
+    assert report.count("fresh") == 11
+    assert len(gateway.calls) == calls_before  # not a single paid call
+
+
+def test_refresh_read_cascades_staleness(ledger, library, gateway, fetch):
+    run_line(ledger, library)
+    gateway.read_texts["f001r"] = "Experimenta CORRECTED"
+
+    report = run_line(ledger, library, refresh=frozenset({"read"}))
+    ran = {(c.station, c.page_id) for c in report.cells if c.action == "ran"}
+    # both reads re-ran; f001r read changed → survey (consumes all reads),
+    # BOTH translations (neighbor context!), both assemblies go stale
+    assert ("read", "f001r") in ran and ("read", "f001v") in ran
+    assert ("survey", None) in ran
+    assert ("translate", "f001r") in ran and ("translate", "f001v") in ran
+
+    assembled = read_json(artifact_path(DOC, "page_assembled", "f001r", library))
+    assert assembled["original"]["text"] == "Experimenta CORRECTED"
+
+
+def test_byte_identical_refresh_does_not_cascade(ledger, library, gateway, fetch):
+    run_line(ledger, library)
+    report = run_line(ledger, library, refresh=frozenset({"read"}))
+    ran = {(c.station, c.page_id) for c in report.cells if c.action == "ran"}
+    # reads re-ran but produced identical bytes → nothing downstream moved
+    assert ran == {("read", "f001r"), ("read", "f001v")}
+
+
+def test_config_drift_is_outdated_not_rerun(ledger, library, gateway, fetch, tmp_path, monkeypatch):
+    run_line(ledger, library)
+    # simulate a prompt change: point the read slot at a different prompt text
+    from palimpsest.factory import config as factory_config
+    prompts = tmp_path / "prompts"
+    (prompts / "read" / "la").mkdir(parents=True)
+    (prompts / "read" / "la" / "diplomatic.txt").write_text("NEW PROMPT", encoding="utf-8")
+    for name in ("survey/la/brief", "translate/la/with_brief"):
+        src = factory_config.PROMPTS_DIR / f"{name}.txt"
+        dest = prompts / f"{name}.txt"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr("palimpsest.factory.prompt_store.PROMPTS_DIR", prompts)
+
+    report = run_line(ledger, library)
+    outdated = {(c.station, c.page_id) for c in report.cells if c.action == "outdated"}
+    assert outdated == {("read", "f001r"), ("read", "f001v")}
+    assert report.count("ran") == 0  # paid work not silently redone
+
+    report = run_line(ledger, library, refresh=frozenset({"read"}))
+    assert ("read", "f001r") in {
+        (c.station, c.page_id) for c in report.cells if c.action == "ran"}
+
+
+def test_failed_page_does_not_stop_line(ledger, library, gateway, fetch, monkeypatch):
+    def flaky(request):
+        if request.images and request.images[0].stem == "f001r":
+            raise RuntimeError("boom")
+        return ScriptedGateway()(request)
+
+    monkeypatch.setattr("palimpsest.factory.stations.read.generate", flaky)
+    report = run_line(ledger, library)
+
+    failed = [(c.station, c.page_id) for c in report.cells if c.action == "failed"]
+    # f001r's read failed → its chain stops (translate needs the brief which
+    # needs ALL reads, so survey fails on missing input too) — but f001v's
+    # read still ran
+    assert ("read", "f001r") in failed
+    ran = {(c.station, c.page_id) for c in report.cells if c.action == "ran"}
+    assert ("read", "f001v") in ran

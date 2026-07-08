@@ -8,7 +8,7 @@ the only one.
 
 from __future__ import annotations
 
-from functools import lru_cache
+import threading
 from pathlib import Path
 
 from google import genai
@@ -35,9 +35,26 @@ _MEDIA_RESOLUTIONS = {
 _TRANSIENT_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
 
-@lru_cache(maxsize=1)
+# One client, created under an explicit lock: concurrent first calls through
+# functools.lru_cache would construct duplicate clients, and the discarded
+# duplicate's cleanup closes transport state shared with the survivor —
+# observed live as "Cannot send a request, as the client has been closed".
+_client_lock = threading.Lock()
+_client_instance: genai.Client | None = None
+
+
 def _client() -> genai.Client:
-    return genai.Client()
+    global _client_instance
+    with _client_lock:
+        if _client_instance is None:
+            _client_instance = genai.Client()
+        return _client_instance
+
+
+def _reset_client() -> None:
+    global _client_instance
+    with _client_lock:
+        _client_instance = None
 
 
 def _mime_type(path: Path) -> str:
@@ -60,6 +77,8 @@ def generate(request: ModelRequest) -> ModelResponse:
     }
     if request.system is not None:
         config_kwargs["system_instruction"] = request.system
+    if request.json_output:
+        config_kwargs["response_mime_type"] = "application/json"
     if request.media_resolution is not None:
         try:
             config_kwargs["media_resolution"] = _MEDIA_RESOLUTIONS[request.media_resolution]
@@ -75,6 +94,11 @@ def generate(request: ModelRequest) -> ModelResponse:
     except errors.APIError as error:
         transient = getattr(error, "code", None) in _TRANSIENT_STATUS_CODES
         raise GatewayError(f"Gemini call failed: {error}", transient=transient) from error
+    except RuntimeError as error:
+        if "client has been closed" in str(error):
+            _reset_client()  # next attempt builds a fresh client
+            raise GatewayError(f"Gemini client closed: {error}", transient=True) from error
+        raise
 
     text, finish_reason = _response_text(response)
     prompt_tokens, output_tokens, total_tokens = _usage(response)

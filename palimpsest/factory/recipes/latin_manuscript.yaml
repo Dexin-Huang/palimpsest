@@ -1,0 +1,20 @@
+name: latin_manuscript
+language: la
+line:
+  page:
+    - station: acquire
+    - station: prepare
+      profile: passthrough
+    - station: read
+      model: ${PALIMPSEST_MODEL_VISION}
+      prompt: read/la/diplomatic
+      params: { temperature: 0.1, media_resolution: high, max_output_tokens: 32768 }
+    - station: translate
+      model: ${PALIMPSEST_MODEL_READING}
+      prompt: translate/la/with_brief
+      overlap: 1
+    - station: assemble_page
+  manuscript:
+    - station: survey
+      model: ${PALIMPSEST_MODEL_READING}
+      prompt: survey/la/brief

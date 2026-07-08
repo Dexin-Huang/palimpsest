@@ -99,7 +99,9 @@ def fingerprint(*parts: str | None) -> str:
 class Ledger:
     def __init__(self, db_path: Path = FACTORY_DB_PATH) -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(db_path)
+        # The conductor shares one connection across its worker threads,
+        # serialized by its own lock; WAL mode keeps readers unblocked.
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode = WAL")
         self._conn.execute("PRAGMA foreign_keys = ON")
@@ -171,6 +173,18 @@ class Ledger:
             self._conn.execute(
                 "UPDATE prospects SET status = 'promoted' WHERE prospect_id = ?",
                 (prospect_id,),
+            )
+
+    def adopt(self, doc_id: str, *, recipe: str, mode: str = "source") -> None:
+        """Put an existing library document on the line without a prospect —
+        the seam for documents that predate the scouts."""
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO items (doc_id, prospect_id, recipe, mode, promoted_at)
+                VALUES (?, NULL, ?, ?, ?)
+                """,
+                (doc_id, recipe, mode, utc_now()),
             )
 
     def list_items(self, *, status: str | None = None) -> list[sqlite3.Row]:
