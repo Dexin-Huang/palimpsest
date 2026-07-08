@@ -11,15 +11,13 @@ Shape source of truth: [`docs/BLUEPRINT.html`](BLUEPRINT.html) — every
 artifact schema, station I/O, and the recipe format, each marked
 confirmed/proposed/corrected. Shapes are contracts only once confirmed there.
 
-> **Correction (2026-07-08).** The addendum's "Phase A honeycomb sidecar
-> bypass" premise is invalid: Ariadne has no sidecar ingestion path, its v0.3
-> spec explicitly forbids sidecar metadata files, and the manifest-tree format
-> the three-file bundle targeted is the superseded v0.2 design. The handoff is
-> **one clean markdown file** consumed by `ariadne v3 ingest manifestation`;
-> the manifest/anchors sidecars remain Palimpsest-internal provenance. Details
-> and the corrected `emit` contract: BLUEPRINT.html §7. Mentions of the
-> "three-file bundle consumed by Ariadne's honeycomb" elsewhere in this
-> document should be read through that correction.
+> **Refocus (2026-07-08).** The factory's terminal product is a **readable
+> book**: an EPUB plus a page in a hosted static library, both rendered from
+> one book model (BLUEPRINT.html §7). Ariadne integration is deferred
+> entirely — a ground-truth check found its assumed "sidecar bypass" does not
+> exist (Ariadne v0.3 forbids sidecar files; it ingests one clean markdown
+> file), and when integration returns, `manuscript/translation.md` is already
+> the right input shape. Nothing in the line targets Ariadne.
 
 Build strategy: **greenfield in a new subpackage** (`palimpsest/factory/`).
 The old pipeline modules stay untouched and runnable while the factory is
@@ -36,8 +34,8 @@ Palimpsest is a factory. Scout heads roam the archives and feed interesting
 items onto the line. The line runs two nested loops: a **page line** (the small
 loop) that turns one page image into an assembled bilingual page record, and a
 **manuscript line** (the big loop) that turns a tray of assembled pages into a
-reconstructed manuscript — original text plus English translation — packaged
-as the Ariadne handoff bundle.
+reconstructed manuscript — original text plus English translation — published
+as a readable book: an EPUB and a page in the hosted library.
 
 ```
    SCOUT HEADS                    THE LINE
@@ -59,10 +57,10 @@ as the Ariadne handoff bundle.
   │   survey ───────┘ (builds the "jig": glossary/brief the page       │
   │   (ms-level)       line's translate station clamps into)           │
   │                                                                    │
-  │  reconstruct ─▶ emit                                               │
-  │  (boundary      (Ariadne bundle: <doc_id>.md + .manifest.json      │
-  │   repair,        + .anchors.json)                                  │
-  │   collation)                                                       │
+  │  reconstruct ─▶ publish                                            │
+  │  (boundary      (book model + <doc_id>.epub;                       │
+  │   repair,        site build renders the hosted library             │
+  │   collation)     from all published book models)                   │
   └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,19 +101,27 @@ class Station(Protocol):
 
 Rules:
 
-- **Stateless.** A station reads artifacts from the workspace, writes
-  artifacts to the workspace, and reports what it did. All memory lives in
-  the ledger (§2.5), never inside the station.
+- **Hermetic.** One station execution touches exactly: its declared input
+  artifacts (read-only), its own output artifact (one atomic write), and the
+  ledger (its own rows). No shared mutable state, no scratch files outside
+  its output slot, no reading siblings' work-in-progress. This is what makes
+  fan-out safe: a thousand workers — threads, processes, or spawned agents —
+  can run (page × station) cells of the same document concurrently and cannot
+  corrupt each other, because no two executions ever write the same file and
+  the ledger (SQLite WAL) is the only rendezvous point.
+- **Stateless.** A station keeps no memory between executions. Everything it
+  knows arrives in the work order, the workspace, and its config; everything
+  it learned leaves in the artifact and the ledger row.
 - **Declared I/O.** `consumes`/`produces` are artifact *kinds* (e.g.
   `page_image`, `page_image_clean`, `page_transcription`, `translation_brief`,
-  `page_assembled`, `bundle`). The conductor uses these to order stations and
+  `page_assembled`, `book`). The conductor uses these to order stations and
   to validate recipes at load time — a recipe that wires `translate` before
   anything produces `page_transcription` fails before a single API call.
 - **Provenance-stamped.** Every artifact a station writes carries a
   provenance record: station name + version, model id, prompt name + content
   hash, generation params, token usage, cost, timestamp. This is
-  non-negotiable — it is what makes the library trustworthy and what Ariadne's
-  source-grounding requires.
+  non-negotiable — it is what makes the library trustworthy and lets every
+  published book carry an honest colophon.
 - **Registered by name.** A station registry maps `name → implementation`, so
   recipes reference stations by string and new stations plug in without
   touching the conductor.
@@ -156,8 +162,8 @@ line:
       prompt: survey/la/brief
     - station: reconstruct
       prompt: reconstruct/boundary_repair
-    - station: emit
-      target: ariadne_bundle
+    - station: publish
+      formats: [epub]        # book.json is always written; site build reads it
 ```
 
 Hot-swapping is now a one-line diff: a Greek papyri corpus is
@@ -191,7 +197,10 @@ order) does:
 
 The conductor is the *only* component that knows about ordering and
 concurrency. Stations never call each other and never import each other's
-internals.
+internals. Because station executions are hermetic (§2.2), the worker pool's
+size is a dial, not a design constraint — the same conductor can drive one
+local thread or a fleet of spawned agents, and the unit of work is always one
+(page × station) cell with one output file.
 
 ### 2.5 The ledger: inventory + production log
 
@@ -368,8 +377,12 @@ provenance. (Today's `enriched.jsonl` records are the proto-form of this.)
 | Station | Consumes | Produces | Notes |
 |---|---|---|---|
 | `survey` | all `page_transcription` | `translation_brief` | The **jig**: glossary, outline, named entities, style guide that the page line's `translate` clamps into. Runs after reads, before translations. |
-| `reconstruct` | all `page_assembled` | `manuscript_original`, `manuscript_translation` | Cross-page boundary repair, collation into continuous original text + continuous English, section structure recovered. |
-| `emit` | reconstruction outputs | `bundle` | The Ariadne handoff: `<doc_id>.md` + `<doc_id>.manifest.json` + `<doc_id>.anchors.json`. This is Phase B from the restructuring addendum, landing as a station. |
+| `reconstruct` | all `page_assembled` | `manuscript_original`, `manuscript_translation`, `joins` | Cross-page boundary repair, collation into continuous original text + continuous English, section structure recovered. |
+| `publish` | reconstruction outputs + metadata | `book` | The book model (`book/book.json`) + `<doc_id>.epub`. Chapters carry both languages; the colophon states what transcribed and translated the book, from which shelfmark, at what cost. |
+
+The hosted library (`site/`) is a library-level derivation, not a station: a
+static site rebuilt any time from every published `book/book.json` — the
+shelf page plus a reader per book, deployable to any static host.
 
 The big loop is deliberately thin right now — `reconstruct` is the station
 with the most unbuilt substance (it absorbs today's enrich-time overlap/
@@ -395,7 +408,8 @@ palimpsest/
       ledger.py               # factory.db access: prospects / items / stage_runs
     stations/
       acquire.py  prepare.py  read.py  translate.py  assemble_page.py
-      survey.py   reconstruct.py  emit.py
+      survey.py   reconstruct.py  publish.py
+    site.py                   # hosted-library builder (aggregates book models)
     scouts/
       heads/                  # vatican.py, idp.py, gallica.py (adapter contract)
       triage.py
@@ -438,7 +452,8 @@ verified against.
    `assemble_page`) — logic lifted from `download.py`, `clean.py`,
    `transcribe.py`, `enrich.py`, re-homed onto the gateway and ledger.
 3. **Manuscript line.** `survey` (lifted), then the new substance:
-   `reconstruct` and `emit` (addendum Phase B — the Ariadne bundle).
+   `reconstruct`, `publish` (book model + EPUB), and the site builder — the
+   factory's terminal product: readable books.
 4. **Parity gate.** Run old pipeline and factory on the same reference
    document (Pal.lat.1267); diff transcription/translation outputs. The
    factory must reproduce the golden path before anything is deleted.
@@ -475,3 +490,6 @@ licenses deletion, and scouts can land while cutover is being prepared.
    editing the conductor, the design has failed — file it as such.
 7. `stage_runs` is append-only. History of what was produced by which
    process version is never overwritten — it is the inventory's audit trail.
+8. One execution, one output file. A station run may read only its declared
+   inputs and write only its own artifact slot; the ledger is the sole shared
+   mutable state. Any station that needs more than that is two stations.

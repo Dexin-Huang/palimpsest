@@ -58,7 +58,7 @@
 <nav class="toc">
   <strong>Diagrams</strong>
   <ol>
-    <li><a href="#overview">Factory overview — scouts to Ariadne</a></li>
+    <li><a href="#overview">Factory overview — scouts to bookshelf</a></li>
     <li><a href="#pageline">The page line (small loop) — artifact data flow</a></li>
     <li><a href="#msline">The manuscript line (big loop) — collation &amp; the jig</a></li>
     <li><a href="#ledger">The ledger — inventory ⋈ production log</a></li>
@@ -73,7 +73,7 @@
 Scout heads roam the archives and write <code>prospects</code>. Triage scores
 them; <code>promote</code> turns approved prospects into work orders on the
 line — carrying scout provenance with them, never re-typed. The line runs the
-two nested loops and emits the three-file Ariadne bundle. Opportunity-mode
+two nested loops and publishes readable books. Opportunity-mode
 prospects ride the same factory on a cheaper recipe.
 </p>
 <div class="card">
@@ -103,7 +103,7 @@ flowchart TB
   subgraph LINE["The line (conductor-driven, per recipe)"]
     direction TB
     PL["PAGE LINE ×N pages<br/>acquire → prepare → read → translate → assemble_page"]
-    ML["MANUSCRIPT LINE<br/>survey → reconstruct → emit"]
+    ML["MANUSCRIPT LINE<br/>survey → reconstruct → publish"]
     PL --> ML
     ML -- "jig: translation_brief" --> PL
   end
@@ -111,9 +111,9 @@ flowchart TB
   ITEMS -- "source mode:<br/>latin_manuscript recipe" --> LINE
   ITEMS -- "opportunity mode:<br/>dream_hunt recipe" --> LINE
 
-  BUNDLE["Ariadne bundle<br/>doc.md + doc.manifest.json + doc.anchors.json"]
+  BUNDLE["readable book<br/>book model + doc_id.epub"]
   DREAM["DreamCandidate records<br/>rolling portfolio shortlist"]
-  ARIADNE["Ariadne honeycomb<br/><i>sidecar pickup, no re-transcription</i>"]
+  ARIADNE["hosted library site/<br/><i>static shelf + a reader per book</i>"]
 
   LINE --> BUNDLE --> ARIADNE
   LINE --> DREAM
@@ -187,7 +187,7 @@ Item-level stations. <code>survey</code> runs once all reads land and builds
 the jig the page line's <code>translate</code> needs — so the conductor
 interleaves the loops: reads stream in, survey fires, translations resume.
 <code>reconstruct</code> repairs page-boundary breaks and collates continuous
-original + English; <code>emit</code> packages the Ariadne handoff.
+original + English; <code>publish</code> renders the book model and EPUB.
 </p>
 <div class="card">
 <pre class="mermaid">
@@ -199,8 +199,8 @@ flowchart TB
   RC(["reconstruct<br/><i>boundary repair · collation ·<br/>section structure</i>"])
   MO["manuscript_original<br/><i>continuous source text</i>"]
   MT["manuscript_translation<br/><i>continuous English</i>"]
-  EM(["emit"])
-  BUNDLE["bundle<br/>doc.md · doc.manifest.json · doc.anchors.json"]
+  EM(["publish"])
+  BUNDLE["book<br/>book.json · doc_id.epub"]
 
   TRALL --> SV --> JIG
   JIG -. "to page line translate" .-> PAGES
@@ -364,7 +364,7 @@ sequenceDiagram
     A-->>C: page_assembled v2
     C->>L: append runs (v1 history preserved)
   end
-  Note over C,L: manuscript line (reconstruct, emit)<br/>rebuilds last, once pages settle
+  Note over C,L: manuscript line (reconstruct, publish)<br/>rebuilds last, once pages settle
   C-->>Op: line consistent — all fresh
 </pre>
 </div>

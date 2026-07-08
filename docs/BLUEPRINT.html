@@ -113,7 +113,7 @@ Confirm here first; build second. Companion to <code>docs/FACTORY.md</code>.</p>
     <li><a href="#intake">Intake shapes — metadata · page_list</a></li>
     <li><a href="#pageline">Page-line artifacts — image · transcription · brief · translation · assembled</a></li>
     <li><a href="#msline">Manuscript-line artifacts — reconstruction · joins</a></li>
-    <li><a href="#ariadne">The Ariadne handoff — CORRECTED</a></li>
+    <li><a href="#book">The book handoff — EPUB &amp; hosted library</a></li>
     <li><a href="#stations">Station I/O matrix</a></li>
     <li><a href="#recipe">Recipe schema</a></li>
     <li><a href="#open">Open questions</a></li>
@@ -150,11 +150,13 @@ flowchart TB
   REC --> MT["manuscript/translation.md"]
   REC --> JOINS["manuscript/joins.json"]
 
-  MO --> EMIT(["emit"])
-  MT --> EMIT
-  EMIT --> BMD["bundle/&lt;doc_id&gt;.md → ariadne v3 ingest"]
-  EMIT --> BMAN["bundle/&lt;doc_id&gt;.manifest.json (internal)"]
-  EMIT --> BANC["bundle/&lt;doc_id&gt;.anchors.json (internal)"]
+  MO --> PUB(["publish"])
+  MT --> PUB
+  JOINS --> PUB
+  PUB --> BJ["book/book.json — the book model"]
+  PUB --> EPUB["book/&lt;doc_id&gt;.epub"]
+  BJ --> SITEB(["site build — all published docs"])
+  SITEB --> SITE["site/ — the hosted library"]
 
   RUNS[("stage_runs — every station execution logs here")]
 
@@ -168,11 +170,13 @@ flowchart TB
   style TL fill:#eef2ec,stroke:#9ab08f
   style ASM fill:#eef2ec,stroke:#9ab08f
   style REC fill:#eef2ec,stroke:#9ab08f
-  style EMIT fill:#eef2ec,stroke:#9ab08f
+  style PUB fill:#eef2ec,stroke:#9ab08f
+  style SITEB fill:#eef2ec,stroke:#9ab08f
   style PROS fill:#fdf6e3,stroke:#c9b99a
   style ITEMS fill:#fdf6e3,stroke:#c9b99a
   style RUNS fill:#fdf6e3,stroke:#c9b99a
-  style BMD fill:#e8eef4,stroke:#8fa3b8,stroke-width:2px
+  style EPUB fill:#e8eef4,stroke:#8fa3b8,stroke-width:2px
+  style SITE fill:#e8eef4,stroke:#8fa3b8,stroke-width:2px
   style BRIEF fill:#fdf6e3,stroke:#c9b99a
 </pre>
 </div>
@@ -386,9 +390,9 @@ every cross-page decision it made.</p>
 
 <h3>6.1 <code>manuscript/original.md</code> · <code>manuscript/translation.md</code></h3>
 <p class="meta">Continuous texts with recovered section structure as ATX
-headings. Page boundaries are <em>not</em> marked inline — the anchors file
-(§7) owns the text↔page mapping, keeping the text clean for reading and for
-Ariadne.</p>
+headings. Page boundaries are <em>not</em> marked inline — chapters carry
+folio spans in the book model (§7.1), and the precise text↔page mapping lives
+in the per-page artifacts, keeping the reading text clean.</p>
 
 <h3>6.2 <code>manuscript/joins.json</code> — boundary-repair audit</h3>
 <div class="card">
@@ -406,86 +410,67 @@ Ariadne.</p>
 </div>
 
 <!-- ================================================================ -->
-<h2 id="ariadne"><span class="num">7</span>The Ariadne handoff
-  <span class="chip corr">CORRECTED</span></h2>
+<h2 id="book"><span class="num">7</span>The book handoff
+  <span class="chip new">PROPOSED</span></h2>
 
-<div class="callout">
-<strong>Ground-truth check (2026-07-08) invalidated the old plan.</strong>
-The restructuring addendum's "Phase A honeycomb sidecar bypass" assumed
-Ariadne would read <code>&lt;stem&gt;.manifest.json</code> beside
-<code>&lt;stem&gt;.md</code>. Verified against the Ariadne repo:
-<ul style="margin:.5rem 0 0">
-  <li>There is no <code>honeycomb.py</code> and no sidecar ingestion path anywhere in the tree.</li>
-  <li>Ariadne v0.3's build spec <em>explicitly forbids</em> sidecar metadata files
-      ("the database is the metadata authority", <code>docs/v03-m1-build-spec.md:222</code>).</li>
-  <li>The manifest-tree format the bundle targeted is the <em>superseded v0.2</em> design;
-      v0.3 replaced it with flat assertion cards.</li>
-  <li>What exists: <code>ariadne v3 ingest manifestation --file &lt;path&gt;</code> —
-      one file, md/html/txt/pdf, re-segmented on ingest by a markdown line scanner.</li>
-</ul>
-</div>
+<p class="lede">The factory's terminal product: a <strong>readable book</strong> —
+an EPUB you can put on a device, and a page in a hosted static library you can
+share. Both render from one intermediate, the <em>book model</em>, so a theme
+or format change never touches the pipeline. (Ariadne integration is
+deferred entirely — see <a href="#open">open questions</a>; nothing in the
+line targets it.)</p>
 
-<p class="lede">Corrected contract — the handoff is <strong>one clean markdown
-file</strong> that Ariadne ingests natively. The manifest and anchors sidecars
-still exist but are <strong>Palimpsest-internal provenance</strong>, not an
-Ariadne interface. If Ariadne ever grows an importer, the target would be its
-<code>manifestation_segments</code> + assertion-card shapes — a future,
-separate contract.</p>
-
-<h3>7.1 <code>bundle/&lt;doc_id&gt;.md</code> — what Ariadne actually eats</h3>
-<p class="meta">Constraints from Ariadne's segmenter (<code>segment.py</code>):
-ATX headings (<code>#</code>…<code>######</code>) drive section classification;
-blank-line-delimited paragraphs; no inline anchor markup (Ariadne anchors by
-verbatim-quote matching, so the text must be stable and clean); code fences are
-dropped — never use them for content.</p>
-<div class="card">
-<pre class="code"># Codice miscellaneo (medicina) — Pal.lat.1199
-
-## Introduction
-Experiments for various diseases of the body, problems of Angelo …
-
-## De febribus
-For fevers of the tertian kind, take …
-
-## Bibliography
-Biblioteca Apostolica Vaticana, Pal.lat.1199, ff. 1r–110v.</pre>
-</div>
-<p class="legend">Decision encoded here: the bundle markdown is the
-<strong>English translation</strong> (continuous, sectioned); the original-language
-text stays in <code>manuscript/original.md</code> and the per-page artifacts.
-Rationale: Ariadne's cartographer extracts assertions from what it reads —
-interleaving Latin would pollute quote-anchoring.</p>
-
-<h3>7.2 <code>bundle/&lt;doc_id&gt;.manifest.json</code> — internal</h3>
+<h3>7.1 <code>book/book.json</code> — the book model</h3>
+<p class="meta">Written by <code>publish</code> from the reconstruction
+artifacts + metadata. Pure content, zero presentation — the single source
+both renderers consume.</p>
 <div class="card">
 <pre class="code">{ "doc_id": "vat_pal_lat_1199",
   "title": "Codice miscellaneo (medicina)",
+  "author": "Cancellarius Montispessulani",
   "source": { "archive": "vatican", "shelfmark": "Pal.lat.1199",
               "manifest_url": "https://digi.vatlib.it/iiif/…" },
   "language": { "original": "la", "translation": "en" },
-  "pages": 110,
-  "pipeline": [ <span class="c">// the full production chain, from stage_runs</span>
-    { "station": "read", "station_version": "read/v1",
-      "model": "gemini-3.1-pro-preview", "prompt_sha256": "…", "pages": 110 },
-    { "station": "translate", … } ],
-  "fingerprints": { "bundle_md": "…", "manuscript_translation": "…" },
-  "emitted_at": "…" }</pre>
+  "date_range": "1350-1400",
+  "readers_note": "A fourteenth-century medical compendium of therapeutic
+                   recipes, collected from various authorities…",
+  "chapters": [
+    { "id": "ch03",
+      "heading": "De febribus",
+      "translation": "For fevers of the tertian kind, take …",
+      "original": "Ad febres tertianas, accipe …",
+      "pages": { "from": "f012r", "to": "f019v" } } ],
+  "colophon": {                                  <span class="c">// provenance as a feature</span>
+    "transcribed_by": "gemini-3.1-pro-preview",
+    "translated_by": "gemini-3.1-flash-lite-preview",
+    "pipeline": [ { "station": "read", "station_version": "read/v1",
+                    "prompt_sha256": "…", "pages": 110 }, … ],
+    "cost_usd_total": 3.42,
+    "produced_at": "2026-07-08T…" },
+  "provenance": { …stamp§2… } }</pre>
 </div>
+<p class="legend">Chapters carry <em>both</em> languages; presentation is the
+renderer's job. Default layouts: EPUB = translation chapters with the original
+as a per-chapter facing section; site reader = original/translation toggle.</p>
 
-<h3>7.3 <code>bundle/&lt;doc_id&gt;.anchors.json</code> — internal, forward-compatible</h3>
-<p class="meta">Maps every span of the bundle markdown back to its page and
-original-language text. Shaped to be mappable onto Ariadne's
-<code>anchor_spans</code> (<code>quote_text</code> + char offsets) if an
-importer ever lands.</p>
+<h3>7.2 <code>book/&lt;doc_id&gt;.epub</code></h3>
+<p class="meta">EPUB 3. Spine: title page → reader's note → translation
+chapters (original text per chapter after the translation) → colophon. The
+colophon is deliberate: every book states what transcribed it, what translated
+it, from which shelfmark, at what cost — provenance is part of the product.</p>
+
+<h3>7.3 <code>site/</code> — the hosted library</h3>
+<p class="meta">A static site built from every published book model — no
+backend, deployable to any static host (GitHub Pages works). Site build is a
+library-level derivation, not a per-item station: rebuild it any time from
+whatever <code>book/book.json</code> files exist.</p>
 <div class="card">
-<pre class="code">{ "doc_id": "vat_pal_lat_1199",
-  "target": "bundle/vat_pal_lat_1199.md",
-  "anchors": [
-    { "char_start": 812, "char_end": 1064,      <span class="c">// span in the bundle .md</span>
-      "quote_text": "For fevers of the tertian kind, take …",
-      "page_id": "f012r", "page_seq": 24,
-      "original_quote": "Ad febres tertianas, accipe …",
-      "canvas_id": "https://digi.vatlib.it/iiif/…/canvas/p0024" } ] }</pre>
+<pre class="code">site/
+  index.html                  <span class="c">← the shelf: every published book, by archive/date/language</span>
+  assets/…                    <span class="c">← one theme (css), no frameworks</span>
+  vat_pal_lat_1199/
+    index.html                <span class="c">← the reader: chapters, original/translation toggle, colophon</span>
+    vat_pal_lat_1199.epub     <span class="c">← download link (copied from book/)</span></pre>
 </div>
 
 <!-- ================================================================ -->
@@ -501,7 +486,8 @@ importer ever lands.</p>
   <tr><td>translate</td><td>page</td><td>page_transcription + translation_brief (jig)</td><td>page_translation</td><td>yes</td><td>model · prompt · target language</td></tr>
   <tr><td>assemble_page</td><td>page</td><td>page_transcription + page_translation</td><td>page_assembled</td><td>no</td><td>—</td></tr>
   <tr><td>reconstruct</td><td>manuscript</td><td>all page_assembled</td><td>manuscript/original.md · translation.md · joins.json</td><td>yes</td><td>model · prompt</td></tr>
-  <tr><td>emit</td><td>manuscript</td><td>manuscript/* + metadata</td><td>bundle/*.md · manifest.json · anchors.json</td><td>no</td><td>bundle target</td></tr>
+  <tr><td>publish</td><td>manuscript</td><td>manuscript/* + metadata</td><td>book/book.json · book/&lt;doc_id&gt;.epub</td><td>no (reader's note may use one)</td><td>formats · theme</td></tr>
+  <tr><td>site build</td><td>library-wide</td><td>all book/book.json</td><td>site/ (static)</td><td>no</td><td>theme</td></tr>
 </table>
 </div>
 
@@ -532,29 +518,41 @@ line:
     - station: reconstruct
       model: ${PALIMPSEST_MODEL_READING}
       prompt: reconstruct/boundary_repair
-    - station: emit
-      target: ariadne_markdown              <span class="c"># corrected from ariadne_bundle (§7)</span></pre>
+    - station: publish
+      formats: [epub]                       <span class="c"># book.json is always written; site build reads it</span></pre>
 </div>
 
 <!-- ================================================================ -->
 <h2 id="open"><span class="num">10</span>Open questions</h2>
 <div class="card">
 <ol style="margin:.3rem 0; padding-left:1.4rem">
-  <li><strong>Ariadne section taxonomy is paper-shaped.</strong> Its segmenter
-    classifies headings via keywords (abstract, methods, results…); manuscript
-    sections will mostly classify as <code>other</code>. Fine for ingestion —
-    but worth a future Ariadne-side taxonomy extension. Not a Palimpsest blocker.</li>
+  <li><strong>Page images in the book?</strong> Vatican scans carry
+    "© Biblioteca Apostolica Vaticana ALL RIGHTS RESERVED" — our transcription
+    + translation is our work, but redistributing the images is a rights
+    question per archive. Default: books ship <em>text only</em>, with IIIF
+    links back to the source images. Revisit per-archive.</li>
+  <li><strong>EPUB tooling.</strong> Default plan: <code>ebooklib</code>
+    (pure Python, no external binary). Decide at Phase-3 build time.</li>
+  <li><strong>Hosting target.</strong> <code>site/</code> is host-agnostic
+    static HTML; GitHub Pages is the assumed first target. Confirm when the
+    first book publishes.</li>
   <li><strong>Alignment granularity.</strong> <code>page_assembled.alignment</code>
     is reserved but empty in v1. Sentence-level original↔translation alignment
-    is valuable (it would let anchors carry original quotes precisely) but is
-    its own workstream.</li>
+    would enable side-by-side reading at finer grain than chapters — its own
+    workstream.</li>
   <li><strong>Opportunity-mode shapes.</strong> <code>Prospect</code> is committed;
     <code>DreamCandidate</code> and the <code>dream_hunt</code> recipe's stations
     are deliberately absent here — they get their own blueprint section when
-    Phase 5 approaches (addendum Phase D).</li>
+    that phase approaches.</li>
   <li><strong>Batch lane.</strong> The Gemini Batch API becomes an execution
     mode of the gateway, not a separate pipeline — per-page artifacts and
     stage_runs are unchanged. Deferred until read/translate volumes demand it.</li>
+  <li><strong>Ariadne integration — deferred entirely.</strong> Nothing in the
+    line targets Ariadne. Ground truth (verified 2026-07-08): Ariadne v0.3 has
+    no sidecar ingestion and forbids sidecar files; it ingests one clean
+    markdown file via <code>ariadne v3 ingest manifestation</code>. When
+    integration returns, <code>manuscript/translation.md</code> is already the
+    right input shape — no factory change needed.</li>
 </ol>
 </div>
 
@@ -578,16 +576,14 @@ build against it.</p>
   <li><label><input type="checkbox" class="confirm" data-shape="page_translation"> <a href="#pageline">§5.4 page_translation (split out of EnrichedRecord)</a></label></li>
   <li><label><input type="checkbox" class="confirm" data-shape="page_assembled"> <a href="#pageline">§5.5 page_assembled</a></label></li>
   <li><label><input type="checkbox" class="confirm" data-shape="reconstruct"> <a href="#msline">§6 manuscript/original.md · translation.md · joins.json</a></label></li>
-  <li><label><input type="checkbox" class="confirm" data-shape="ariadne"> <a href="#ariadne">§7 Corrected Ariadne handoff (single clean .md; sidecars internal)</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="book"> <a href="#book">§7 Book handoff — book.json · EPUB · hosted library site</a></label></li>
   <li><label><input type="checkbox" class="confirm" data-shape="recipe"> <a href="#recipe">§9 Recipe schema</a></label></li>
 </ul>
 
 <p class="legend" style="margin-top:3rem">
 Ground truth sources: shapes marked CONFIRMED were sampled from
-<code>library/vat_pal_lat_1199/</code> and the committed ledger schema; the
-Ariadne correction was verified against
-<code>D:/Projects/meridian/ariadne/</code> (v0.3 pipeline, cartographer
-contract, no-sidecar rule). Design narrative: <code>docs/FACTORY.md</code>.
+<code>library/vat_pal_lat_1199/</code> and the committed ledger schema.
+Design narrative: <code>docs/FACTORY.md</code>.
 Diagrams: <code>docs/factory_diagrams.html</code>.
 </p>
 
