@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Palimpsest Blueprint — Shapes &amp; Data Flows</title>
+<style>
+  :root {
+    --ink: #1a1712;
+    --muted: #6b6357;
+    --paper: #faf7f2;
+    --card: #ffffff;
+    --rule: #e4ddd2;
+    --accent: #8a4b2d;
+    --ok: #3d7a44;
+    --warn: #a07617;
+    --bad: #a3352b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: Georgia, 'Times New Roman', serif;
+    background: var(--paper); color: var(--ink); line-height: 1.6;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+  h1 { font-size: 2.2rem; margin: 0 0 .25rem; }
+  .subtitle { color: var(--muted); margin: 0 0 2rem; font-style: italic; }
+  h2 {
+    font-size: 1.4rem; margin: 3.5rem 0 .5rem;
+    border-bottom: 2px solid var(--rule); padding-bottom: .35rem;
+  }
+  h2 .num { color: var(--accent); margin-right: .5rem; }
+  h3 { font-size: 1.05rem; margin: 2.2rem 0 .4rem; }
+  p.lede { color: var(--muted); max-width: 72ch; margin-top: 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 1.25rem; margin: 1rem 0; overflow-x: auto;
+  }
+  .mermaid { display: flex; justify-content: center; }
+  code {
+    font-family: Consolas, 'Cascadia Code', monospace; font-size: .88em;
+    background: #f0ebe2; padding: .08em .35em; border-radius: 4px;
+  }
+  pre.code {
+    background: #24211c; color: #e8e2d6; border-radius: 8px;
+    padding: 1rem 1.25rem; overflow-x: auto; font-size: .82rem;
+    font-family: Consolas, 'Cascadia Code', monospace; line-height: 1.5;
+  }
+  pre.code .c { color: #8f8778; }
+  table.fields { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  table.fields th, table.fields td {
+    border: 1px solid var(--rule); padding: .35rem .6rem; text-align: left;
+    vertical-align: top;
+  }
+  table.fields th { background: #f0ebe2; font-family: Georgia, serif; }
+  table.fields td:first-child { font-family: Consolas, monospace; font-size: .82rem; white-space: nowrap; }
+  .chip {
+    display: inline-block; font-family: Consolas, monospace; font-size: .72rem;
+    padding: .1rem .55rem; border-radius: 99px; vertical-align: middle;
+    margin-left: .6rem; letter-spacing: .03em;
+  }
+  .chip.ok   { background: #e5efe6; color: var(--ok); border: 1px solid #b9d2bc; }
+  .chip.new  { background: #f7efdb; color: var(--warn); border: 1px solid #ddc689; }
+  .chip.corr { background: #f6e3e1; color: var(--bad); border: 1px solid #ddaaa4; }
+  .callout {
+    border-left: 4px solid var(--bad); background: #f9efee;
+    padding: .9rem 1.2rem; border-radius: 0 8px 8px 0; margin: 1.2rem 0;
+  }
+  .callout.gold { border-color: var(--warn); background: #f9f4e6; }
+  .meta { font-size: .88rem; color: var(--muted); margin: .2rem 0 .8rem; }
+  .meta code { font-size: .8rem; }
+  nav.toc {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 1rem 1.5rem; font-size: .95rem;
+  }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  nav.toc ol { margin: .25rem 0; padding-left: 1.4rem; }
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding: .3rem 0; border-bottom: 1px dashed var(--rule); }
+  .checklist input { transform: scale(1.25); margin-right: .7rem; accent-color: var(--accent); }
+  .checklist a { color: var(--ink); text-decoration: none; }
+  .checklist a:hover { color: var(--accent); }
+  #progress {
+    font-size: 1.05rem; font-weight: bold; color: var(--accent);
+    background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+    padding: .6rem 1.2rem; display: inline-block; margin-bottom: .5rem;
+  }
+  .legend { font-size: .9rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>The Blueprint</h1>
+<p class="subtitle">Source of truth for every shape and data flow in the factory.
+Confirm here first; build second. Companion to <code>docs/FACTORY.md</code>.</p>
+
+<div class="card">
+<p style="margin:0 0 .6rem"><strong>Every shape carries a status:</strong></p>
+<p style="margin:0">
+  <span class="chip ok">CONFIRMED</span> exists today, sampled from real data in <code>library/</code> or the committed ledger schema &nbsp;·&nbsp;
+  <span class="chip new">PROPOSED</span> new factory shape — needs your sign-off &nbsp;·&nbsp;
+  <span class="chip corr">CORRECTED</span> the design changed after checking ground truth
+</p>
+</div>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#flow">The flow of shapes — one diagram</a></li>
+    <li><a href="#provenance">The provenance stamp (embedded in everything)</a></li>
+    <li><a href="#ledger">Ledger rows — prospect · item · stage_run</a></li>
+    <li><a href="#intake">Intake shapes — metadata · page_list</a></li>
+    <li><a href="#pageline">Page-line artifacts — image · transcription · brief · translation · assembled</a></li>
+    <li><a href="#msline">Manuscript-line artifacts — reconstruction · joins</a></li>
+    <li><a href="#ariadne">The Ariadne handoff — CORRECTED</a></li>
+    <li><a href="#stations">Station I/O matrix</a></li>
+    <li><a href="#recipe">Recipe schema</a></li>
+    <li><a href="#open">Open questions</a></li>
+    <li><a href="#confirm">Confirmation checklist</a></li>
+  </ol>
+</nav>
+
+<!-- ================================================================ -->
+<h2 id="flow"><span class="num">1</span>The flow of shapes</h2>
+<p class="lede">Every edge is an artifact with a defined shape below. Rounded
+nodes are stations; rectangles are artifacts on disk at
+<code>library/&lt;doc_id&gt;/&lt;kind&gt;/</code>; cylinders are ledger tables.</p>
+<div class="card">
+<pre class="mermaid">
+flowchart TB
+  HEADS(["scout heads"]) --> PROS[("prospects")]
+  PROS --> TRIAGE(["triage"]) --> PROS
+  PROS --> PROM(["promote"]) --> ITEMS[("items")]
+  PROM --> META["metadata.json + page_list.json"]
+
+  META --> ACQ(["acquire"]) --> IMG["page_image/*.jpg"]
+  IMG --> PREP(["prepare"]) --> IMGC["page_image_clean/*.jpg"]
+  IMGC --> READ(["read"]) --> TRANS["page_transcription/*.json"]
+  TRANS --> SURV(["survey"]) --> BRIEF["translation_brief.json"]
+  TRANS --> TL(["translate"])
+  BRIEF -. jig .-> TL
+  TL --> PT["page_translation/*.json"]
+  TRANS --> ASM(["assemble_page"])
+  PT --> ASM
+  ASM --> PA["page_assembled/*.json"]
+
+  PA --> REC(["reconstruct"])
+  REC --> MO["manuscript/original.md"]
+  REC --> MT["manuscript/translation.md"]
+  REC --> JOINS["manuscript/joins.json"]
+
+  MO --> EMIT(["emit"])
+  MT --> EMIT
+  EMIT --> BMD["bundle/&lt;doc_id&gt;.md → ariadne v3 ingest"]
+  EMIT --> BMAN["bundle/&lt;doc_id&gt;.manifest.json (internal)"]
+  EMIT --> BANC["bundle/&lt;doc_id&gt;.anchors.json (internal)"]
+
+  RUNS[("stage_runs — every station execution logs here")]
+
+  style HEADS fill:#eef2ec,stroke:#9ab08f
+  style TRIAGE fill:#eef2ec,stroke:#9ab08f
+  style PROM fill:#eef2ec,stroke:#9ab08f
+  style ACQ fill:#eef2ec,stroke:#9ab08f
+  style PREP fill:#eef2ec,stroke:#9ab08f
+  style READ fill:#eef2ec,stroke:#9ab08f
+  style SURV fill:#eef2ec,stroke:#9ab08f
+  style TL fill:#eef2ec,stroke:#9ab08f
+  style ASM fill:#eef2ec,stroke:#9ab08f
+  style REC fill:#eef2ec,stroke:#9ab08f
+  style EMIT fill:#eef2ec,stroke:#9ab08f
+  style PROS fill:#fdf6e3,stroke:#c9b99a
+  style ITEMS fill:#fdf6e3,stroke:#c9b99a
+  style RUNS fill:#fdf6e3,stroke:#c9b99a
+  style BMD fill:#e8eef4,stroke:#8fa3b8,stroke-width:2px
+  style BRIEF fill:#fdf6e3,stroke:#c9b99a
+</pre>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="provenance"><span class="num">2</span>The provenance stamp
+  <span class="chip new">PROPOSED</span></h2>
+<p class="lede">Every JSON artifact the factory writes embeds this block under
+a <code>provenance</code> key. It is the same information logged to
+<code>stage_runs</code> — which is what makes <code>factory.db</code>
+rebuildable from the workspace alone (design rule §6.4), and what makes
+every page answer "who made you, with what, at what cost."</p>
+<div class="card">
+<pre class="code">"provenance": {
+  "station": "read",
+  "station_version": "read/v1",
+  "model": "gemini-3.1-pro-preview",
+  "prompt_name": "read/la/diplomatic_json",
+  "prompt_sha256": "e3b0c44298fc1c14…",
+  "params": { "temperature": 0.1, "max_output_tokens": 32768, "media_resolution": "high" },
+  "tokens_in": 1543,
+  "tokens_out": 812,
+  "cost_usd": 0.0101,
+  "config_fingerprint": "9f2a4c1e8b3d5a70",   <span class="c">// hash(station_version+model+prompt+params)</span>
+  "input_fingerprint": "4b8e2f9a1c6d3e05",    <span class="c">// hash of upstream artifacts consumed</span>
+  "created_at": "2026-07-08T14:02:11+00:00"
+}</pre>
+</div>
+<p class="legend">Non-model stations (acquire, prepare, assemble_page) omit
+<code>model</code>/<code>prompt_*</code>/<code>tokens</code>/<code>cost_usd</code>;
+the fingerprints and station identity are always present.</p>
+
+<!-- ================================================================ -->
+<h2 id="ledger"><span class="num">3</span>Ledger rows
+  <span class="chip ok">CONFIRMED</span></h2>
+<p class="lede">Committed in <code>palimpsest/factory/core/ledger.py</code> and
+covered by <code>tests/test_factory_phase1.py</code>. Shown here as the row a
+query returns.</p>
+
+<h3>3.1 <code>prospects</code> — one row per thing a scout head finds</h3>
+<div class="card">
+<pre class="code">{ "prospect_id": "vatican:pal.lat.1199",       <span class="c">// "&lt;head&gt;:&lt;archive-native id&gt;"</span>
+  "head": "vatican",
+  "archive_ref": "Pal.lat.1199",
+  "manifest_url": "https://digi.vatlib.it/iiif/MSS_Pal.lat.1199/manifest.json",
+  "title": "Codice miscellaneo (medicina)",
+  "language": "la",
+  "date_range": "1350-1400",
+  "triage_score": 87,
+  "triage_json": "{…full reasoning, kept verbatim…}",
+  "found_at": "2026-07-08T12:00:00+00:00",
+  "status": "promoted" }                        <span class="c">// found | triaged | promoted | rejected</span></pre>
+</div>
+
+<h3>3.2 <code>items</code> — one row per work order on the line</h3>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "prospect_id": "vatican:pal.lat.1199",       <span class="c">// scout provenance is a JOIN, never re-typed</span>
+  "recipe": "latin_manuscript",
+  "mode": "source",                             <span class="c">// source | opportunity</span>
+  "promoted_at": "2026-07-08T12:05:00+00:00",
+  "status": "active" }                          <span class="c">// active | complete | parked | failed</span></pre>
+</div>
+
+<h3>3.3 <code>stage_runs</code> — append-only, one row per station execution</h3>
+<div class="card">
+<pre class="code">{ "run_id": 4211,
+  "doc_id": "vat_pal_lat_1199",
+  "page_id": "f001r",                           <span class="c">// NULL for manuscript-line stations</span>
+  "station": "read",
+  "status": "done",                             <span class="c">// running | done | failed:&lt;kind&gt;</span>
+  "station_version": "read/v1",
+  "model": "gemini-3.1-pro-preview",
+  "prompt_name": "read/la/diplomatic_json",
+  "prompt_hash": "e3b0c442…", "params_hash": "1a2b3c4d…",
+  "config_fingerprint": "9f2a4c1e8b3d5a70",
+  "input_fingerprint": "4b8e2f9a1c6d3e05",
+  "output_fingerprint": "7c1d9e3f5a2b8c40",     <span class="c">// downstream staleness is judged against this</span>
+  "output_path": "library/vat_pal_lat_1199/page_transcription/f001r.json",
+  "tokens_in": 1543, "tokens_out": 812, "cost_usd": 0.0101,
+  "started_at": "…", "finished_at": "…", "error": null }</pre>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="intake"><span class="num">4</span>Intake shapes
+  <span class="chip ok">CONFIRMED</span></h2>
+<p class="lede">Sampled verbatim from <code>library/vat_pal_lat_1199/</code>.
+These carry over into the factory unchanged, except <code>metadata.status</code>
+retires — line position lives in the ledger, not in metadata (FACTORY.md §2.5).</p>
+
+<h3>4.1 <code>metadata.json</code> — what the item <em>is</em></h3>
+<div class="card">
+<pre class="code">{ "source_url": "https://digi.vatlib.it/iiif/MSS_Pal.lat.1199/manifest.json",
+  "source_catalog": {
+    "label": "Pal.lat.1199", "shelfmark": "Pal.lat.1199",
+    "title": "Codice miscellaneo (medicina)", "title_is_shelfmark": false,
+    "author": "Cancellarius Montispessulani",
+    "date": "1350-1400", "language": "Latino", "place": null,
+    "description": null, "metadata_entries": [ {"label": "…", "value": "…"} ] },
+  <span class="c">// RETIRED in factory: "status" — the ledger owns line position now</span>
+  … }</pre>
+</div>
+
+<h3>4.2 <code>page_list.json</code> — the acquisition manifest</h3>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "manifest_url": "https://digi.vatlib.it/iiif/MSS_Pal.lat.1199/manifest.json",
+  "manifest_label": "Pal.lat.1199",
+  "manifest_summary": { …same catalog block as metadata… },
+  "image_size": "max",
+  "pages": [
+    { "page_id": "page_0000",
+      "url": "https://digi.vatlib.it/iiifimage/…/full/max/0/default.jpg",
+      "filename": "page_0000.jpg",
+      "order": 1, "width": 2631, "height": 4054,
+      "label": "piatto.anteriore" } ] }</pre>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="pageline"><span class="num">5</span>Page-line artifacts</h2>
+
+<div class="callout gold">
+<strong>Layout decision to confirm:</strong> the factory writes
+<em>one file per page per kind</em> — e.g.
+<code>page_transcription/f001r.json</code> — instead of today's single
+<code>transcriptions.jsonl</code>. Rationale: per-page atomic writes, per-page
+fingerprints, and per-page refresh are the whole point of the ledger; a shared
+JSONL makes every page write contend for one file and every fingerprint
+ambiguous. Anything downstream that wants a JSONL view can collate one cheaply.
+</div>
+
+<h3>5.1 <code>page_image/</code> · <code>page_image_clean/</code>
+  <span class="chip new">PROPOSED</span></h3>
+<p class="meta">Files named <code>&lt;page_id&gt;.jpg</code> (e.g.
+<code>page_0000.jpg</code> — same as today). <code>prepare</code> writes a
+sibling <code>&lt;page_id&gt;.json</code> stamp per cleaned image recording the
+cleaning profile + provenance, so image artifacts are fingerprintable like
+everything else.</p>
+
+<h3>5.2 <code>page_transcription/&lt;page_id&gt;.json</code>
+  <span class="chip new">PROPOSED</span> <span class="legend">(evolves today's confirmed
+  <code>TranscriptionRecord</code>)</span></h3>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "page_id": "f001r",
+  "page_seq": 1,
+  "canvas_id": "https://digi.vatlib.it/iiif/…/canvas/p0001",
+  "text": "Experimenta ad uarios morbos corporis\nAngeli Plamiens: …",
+  "regions": [],        <span class="c">// reserved: layout regions {kind, bbox, text} — empty in v1</span>
+  "provenance": { …stamp§2… } }</pre>
+</div>
+<p class="legend">Changes vs today's shape: <code>source</code>/<code>book_title</code>
+drop (join through the ledger instead — one concept, one place);
+flat <code>model</code>/<code>timestamp</code> fields become the full provenance
+stamp; <code>regions</code> reserved for layout-aware reading.</p>
+
+<h3>5.3 <code>translation_brief.json</code> — the jig
+  <span class="chip ok">CONFIRMED</span></h3>
+<p class="meta">Sampled from the real brief for Pal.lat.1199. Carries over
+with one addition: a provenance stamp.</p>
+<div class="card">
+<pre class="code">{ "version": 1,
+  "document": { "doc_id": "vat_pal_lat_1199", "total_pages": 110 },
+  "glossary":      [ { "term": "fleboto", "translation": "phlebotomy", "note": "bloodletting" } ],
+  "outline":       [ { "start_page": "f001r", "description": "Title and introductory definitions" } ],
+  "abbreviations": [ { "abbrev": "Rx", "expansion": "recipe" } ],
+  "entities":      [ { "name": "Galiens", "translation": "Galen" } ],
+  "difficulty_flags": [ { "page_id": "f001v", "issue": "Text highly fragmented" } ],
+  "style_notes":   [ "Medieval Latin, highly technical medical register." ],
+  "provenance": { …stamp§2… } }</pre>
+</div>
+
+<h3>5.4 <code>page_translation/&lt;page_id&gt;.json</code>
+  <span class="chip new">PROPOSED</span></h3>
+<p class="meta">Today translation is fused into <code>EnrichedRecord</code>;
+the factory splits it into its own artifact so translate can refresh without
+touching transcriptions. The brief it used is captured by
+<code>input_fingerprint</code>.</p>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "page_id": "f001r",
+  "translation": "Experiments for various diseases of the body\nProblems of Angelo …",
+  "notes": "Marginal numerals appear to be shelfmark annotations.",
+  "flags": { "uncertain": ["Plamiens"], "damaged_source": false },
+  "provenance": { …stamp§2… } }</pre>
+</div>
+
+<h3>5.5 <code>page_assembled/&lt;page_id&gt;.json</code> — the small loop's finished part
+  <span class="chip new">PROPOSED</span></h3>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "page_id": "f001r",
+  "page_seq": 1,
+  "canvas_id": "https://digi.vatlib.it/iiif/…/canvas/p0001",
+  "original":    { "text": "Experimenta ad uarios morbos…", "regions": [] },
+  "translation": { "text": "Experiments for various diseases…", "notes": "…", "flags": {…} },
+  "alignment": [],      <span class="c">// reserved: [{original_span:[s,e], translation_span:[s,e]}] — empty in v1</span>
+  "inputs": {           <span class="c">// exact upstream artifacts this page derives from</span>
+    "page_transcription": "7c1d9e3f5a2b8c40",
+    "page_translation":   "2e6a8b4c9d1f3e57" },
+  "provenance": { …stamp§2… } }</pre>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="msline"><span class="num">6</span>Manuscript-line artifacts
+  <span class="chip new">PROPOSED</span></h2>
+<p class="lede"><code>reconstruct</code> consumes all
+<code>page_assembled</code> and writes three artifacts under
+<code>manuscript/</code>: two continuous texts and an auditable record of
+every cross-page decision it made.</p>
+
+<h3>6.1 <code>manuscript/original.md</code> · <code>manuscript/translation.md</code></h3>
+<p class="meta">Continuous texts with recovered section structure as ATX
+headings. Page boundaries are <em>not</em> marked inline — the anchors file
+(§7) owns the text↔page mapping, keeping the text clean for reading and for
+Ariadne.</p>
+
+<h3>6.2 <code>manuscript/joins.json</code> — boundary-repair audit</h3>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "joins": [
+    { "from_page": "f014v", "to_page": "f015r",
+      "kind": "hyphenation_repair",        <span class="c">// hyphenation_repair | sentence_continuation |</span>
+                                           <span class="c">//   section_break | catchword_match | gap</span>
+      "original_tail": "…medica-", "original_head": "menta contra…",
+      "repaired": "…medicamenta contra…",
+      "rationale": "Hyphen at line end; catchword confirms continuation." } ],
+  "sections": [
+    { "heading": "De febribus", "start_page": "f012r", "end_page": "f019v" } ],
+  "provenance": { …stamp§2… } }</pre>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="ariadne"><span class="num">7</span>The Ariadne handoff
+  <span class="chip corr">CORRECTED</span></h2>
+
+<div class="callout">
+<strong>Ground-truth check (2026-07-08) invalidated the old plan.</strong>
+The restructuring addendum's "Phase A honeycomb sidecar bypass" assumed
+Ariadne would read <code>&lt;stem&gt;.manifest.json</code> beside
+<code>&lt;stem&gt;.md</code>. Verified against the Ariadne repo:
+<ul style="margin:.5rem 0 0">
+  <li>There is no <code>honeycomb.py</code> and no sidecar ingestion path anywhere in the tree.</li>
+  <li>Ariadne v0.3's build spec <em>explicitly forbids</em> sidecar metadata files
+      ("the database is the metadata authority", <code>docs/v03-m1-build-spec.md:222</code>).</li>
+  <li>The manifest-tree format the bundle targeted is the <em>superseded v0.2</em> design;
+      v0.3 replaced it with flat assertion cards.</li>
+  <li>What exists: <code>ariadne v3 ingest manifestation --file &lt;path&gt;</code> —
+      one file, md/html/txt/pdf, re-segmented on ingest by a markdown line scanner.</li>
+</ul>
+</div>
+
+<p class="lede">Corrected contract — the handoff is <strong>one clean markdown
+file</strong> that Ariadne ingests natively. The manifest and anchors sidecars
+still exist but are <strong>Palimpsest-internal provenance</strong>, not an
+Ariadne interface. If Ariadne ever grows an importer, the target would be its
+<code>manifestation_segments</code> + assertion-card shapes — a future,
+separate contract.</p>
+
+<h3>7.1 <code>bundle/&lt;doc_id&gt;.md</code> — what Ariadne actually eats</h3>
+<p class="meta">Constraints from Ariadne's segmenter (<code>segment.py</code>):
+ATX headings (<code>#</code>…<code>######</code>) drive section classification;
+blank-line-delimited paragraphs; no inline anchor markup (Ariadne anchors by
+verbatim-quote matching, so the text must be stable and clean); code fences are
+dropped — never use them for content.</p>
+<div class="card">
+<pre class="code"># Codice miscellaneo (medicina) — Pal.lat.1199
+
+## Introduction
+Experiments for various diseases of the body, problems of Angelo …
+
+## De febribus
+For fevers of the tertian kind, take …
+
+## Bibliography
+Biblioteca Apostolica Vaticana, Pal.lat.1199, ff. 1r–110v.</pre>
+</div>
+<p class="legend">Decision encoded here: the bundle markdown is the
+<strong>English translation</strong> (continuous, sectioned); the original-language
+text stays in <code>manuscript/original.md</code> and the per-page artifacts.
+Rationale: Ariadne's cartographer extracts assertions from what it reads —
+interleaving Latin would pollute quote-anchoring.</p>
+
+<h3>7.2 <code>bundle/&lt;doc_id&gt;.manifest.json</code> — internal</h3>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "title": "Codice miscellaneo (medicina)",
+  "source": { "archive": "vatican", "shelfmark": "Pal.lat.1199",
+              "manifest_url": "https://digi.vatlib.it/iiif/…" },
+  "language": { "original": "la", "translation": "en" },
+  "pages": 110,
+  "pipeline": [ <span class="c">// the full production chain, from stage_runs</span>
+    { "station": "read", "station_version": "read/v1",
+      "model": "gemini-3.1-pro-preview", "prompt_sha256": "…", "pages": 110 },
+    { "station": "translate", … } ],
+  "fingerprints": { "bundle_md": "…", "manuscript_translation": "…" },
+  "emitted_at": "…" }</pre>
+</div>
+
+<h3>7.3 <code>bundle/&lt;doc_id&gt;.anchors.json</code> — internal, forward-compatible</h3>
+<p class="meta">Maps every span of the bundle markdown back to its page and
+original-language text. Shaped to be mappable onto Ariadne's
+<code>anchor_spans</code> (<code>quote_text</code> + char offsets) if an
+importer ever lands.</p>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "target": "bundle/vat_pal_lat_1199.md",
+  "anchors": [
+    { "char_start": 812, "char_end": 1064,      <span class="c">// span in the bundle .md</span>
+      "quote_text": "For fevers of the tertian kind, take …",
+      "page_id": "f012r", "page_seq": 24,
+      "original_quote": "Ad febres tertianas, accipe …",
+      "canvas_id": "https://digi.vatlib.it/iiif/…/canvas/p0024" } ] }</pre>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="stations"><span class="num">8</span>Station I/O matrix
+  <span class="chip new">PROPOSED</span></h2>
+<div class="card">
+<table class="fields">
+  <tr><th>Station</th><th>Grain</th><th>Consumes</th><th>Produces</th><th>Model call</th><th>Swappable via recipe</th></tr>
+  <tr><td>acquire</td><td>page</td><td>page_list entry</td><td>page_image</td><td>no</td><td>IIIF size/quality</td></tr>
+  <tr><td>prepare</td><td>page</td><td>page_image</td><td>page_image_clean (+stamp)</td><td>no</td><td>cleaning profile</td></tr>
+  <tr><td>read</td><td>page</td><td>page_image_clean</td><td>page_transcription</td><td>yes</td><td>model · prompt · params</td></tr>
+  <tr><td>survey</td><td>manuscript</td><td>all page_transcription</td><td>translation_brief</td><td>yes</td><td>model · prompt</td></tr>
+  <tr><td>translate</td><td>page</td><td>page_transcription + translation_brief (jig)</td><td>page_translation</td><td>yes</td><td>model · prompt · target language</td></tr>
+  <tr><td>assemble_page</td><td>page</td><td>page_transcription + page_translation</td><td>page_assembled</td><td>no</td><td>—</td></tr>
+  <tr><td>reconstruct</td><td>manuscript</td><td>all page_assembled</td><td>manuscript/original.md · translation.md · joins.json</td><td>yes</td><td>model · prompt</td></tr>
+  <tr><td>emit</td><td>manuscript</td><td>manuscript/* + metadata</td><td>bundle/*.md · manifest.json · anchors.json</td><td>no</td><td>bundle target</td></tr>
+</table>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="recipe"><span class="num">9</span>Recipe schema
+  <span class="chip new">PROPOSED</span></h2>
+<div class="card">
+<pre class="code">name: latin_manuscript          <span class="c"># unique; items reference recipes by this name</span>
+language: la                    <span class="c"># source language; prompts resolve under it</span>
+line:
+  page:                         <span class="c"># ordered; conductor validates consumes/produces chain</span>
+    - station: acquire
+    - station: prepare
+      profile: parchment_default
+    - station: read
+      model: ${PALIMPSEST_MODEL_VISION}     <span class="c"># ${VAR} pulls from factory config/env</span>
+      prompt: read/la/diplomatic_json
+      params: { temperature: 0.1, media_resolution: high }
+    - station: translate
+      model: ${PALIMPSEST_MODEL_READING}
+      prompt: translate/la/with_brief
+      requires_jig: translation_brief       <span class="c"># conductor holds this station until the jig exists</span>
+    - station: assemble_page
+  manuscript:
+    - station: survey
+      model: ${PALIMPSEST_MODEL_READING}
+      prompt: survey/la/brief
+    - station: reconstruct
+      model: ${PALIMPSEST_MODEL_READING}
+      prompt: reconstruct/boundary_repair
+    - station: emit
+      target: ariadne_markdown              <span class="c"># corrected from ariadne_bundle (§7)</span></pre>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="open"><span class="num">10</span>Open questions</h2>
+<div class="card">
+<ol style="margin:.3rem 0; padding-left:1.4rem">
+  <li><strong>Ariadne section taxonomy is paper-shaped.</strong> Its segmenter
+    classifies headings via keywords (abstract, methods, results…); manuscript
+    sections will mostly classify as <code>other</code>. Fine for ingestion —
+    but worth a future Ariadne-side taxonomy extension. Not a Palimpsest blocker.</li>
+  <li><strong>Alignment granularity.</strong> <code>page_assembled.alignment</code>
+    is reserved but empty in v1. Sentence-level original↔translation alignment
+    is valuable (it would let anchors carry original quotes precisely) but is
+    its own workstream.</li>
+  <li><strong>Opportunity-mode shapes.</strong> <code>Prospect</code> is committed;
+    <code>DreamCandidate</code> and the <code>dream_hunt</code> recipe's stations
+    are deliberately absent here — they get their own blueprint section when
+    Phase 5 approaches (addendum Phase D).</li>
+  <li><strong>Batch lane.</strong> The Gemini Batch API becomes an execution
+    mode of the gateway, not a separate pipeline — per-page artifacts and
+    stage_runs are unchanged. Deferred until read/translate volumes demand it.</li>
+</ol>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="confirm"><span class="num">11</span>Confirmation checklist</h2>
+<p class="lede">Tick what you approve — state persists in this browser
+(localStorage). Anything unticked is not yet a contract, and Phase 2 will not
+build against it.</p>
+<div id="progress">0 / 15 confirmed</div>
+<ul class="checklist">
+  <li><label><input type="checkbox" class="confirm" data-shape="provenance"> <a href="#provenance">§2 Provenance stamp</a> — embedded in every artifact</label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="prospect"> <a href="#ledger">§3.1 prospects row</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="item"> <a href="#ledger">§3.2 items row</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="stage_run"> <a href="#ledger">§3.3 stage_runs row + fingerprint trio</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="metadata"> <a href="#intake">§4.1 metadata.json carryover (status field retired)</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="page_list"> <a href="#intake">§4.2 page_list.json carryover</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="per_page_files"> <a href="#pageline">§5 One file per page per kind (vs single JSONL)</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="page_image"> <a href="#pageline">§5.1 image artifacts + prepare stamps</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="page_transcription"> <a href="#pageline">§5.2 page_transcription</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="brief"> <a href="#pageline">§5.3 translation_brief carryover + provenance</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="page_translation"> <a href="#pageline">§5.4 page_translation (split out of EnrichedRecord)</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="page_assembled"> <a href="#pageline">§5.5 page_assembled</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="reconstruct"> <a href="#msline">§6 manuscript/original.md · translation.md · joins.json</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="ariadne"> <a href="#ariadne">§7 Corrected Ariadne handoff (single clean .md; sidecars internal)</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="recipe"> <a href="#recipe">§9 Recipe schema</a></label></li>
+</ul>
+
+<p class="legend" style="margin-top:3rem">
+Ground truth sources: shapes marked CONFIRMED were sampled from
+<code>library/vat_pal_lat_1199/</code> and the committed ledger schema; the
+Ariadne correction was verified against
+<code>D:/Projects/meridian/ariadne/</code> (v0.3 pipeline, cartographer
+contract, no-sidecar rule). Design narrative: <code>docs/FACTORY.md</code>.
+Diagrams: <code>docs/factory_diagrams.html</code>.
+</p>
+
+</main>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "neutral",
+    themeVariables: { fontFamily: "Georgia, serif" } });
+</script>
+<script>
+  const boxes = document.querySelectorAll("input.confirm");
+  const progress = document.getElementById("progress");
+  const update = () => {
+    const done = [...boxes].filter(b => b.checked).length;
+    progress.textContent = done + " / " + boxes.length + " confirmed";
+  };
+  boxes.forEach(box => {
+    const key = "blueprint:" + box.dataset.shape;
+    box.checked = localStorage.getItem(key) === "1";
+    box.addEventListener("change", () => {
+      localStorage.setItem(key, box.checked ? "1" : "0");
+      update();
+    });
+  });
+  update();
+</script>
+</body>
+</html>

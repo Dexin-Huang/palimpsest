@@ -7,6 +7,20 @@ target shape everything migrates toward.
 Status: **accepted** (2026-07-08). Grounded in a full coupling audit of the
 current package; the specific defects each element fixes are cited inline.
 
+Shape source of truth: [`docs/BLUEPRINT.html`](BLUEPRINT.html) — every
+artifact schema, station I/O, and the recipe format, each marked
+confirmed/proposed/corrected. Shapes are contracts only once confirmed there.
+
+> **Correction (2026-07-08).** The addendum's "Phase A honeycomb sidecar
+> bypass" premise is invalid: Ariadne has no sidecar ingestion path, its v0.3
+> spec explicitly forbids sidecar metadata files, and the manifest-tree format
+> the three-file bundle targeted is the superseded v0.2 design. The handoff is
+> **one clean markdown file** consumed by `ariadne v3 ingest manifestation`;
+> the manifest/anchors sidecars remain Palimpsest-internal provenance. Details
+> and the corrected `emit` contract: BLUEPRINT.html §7. Mentions of the
+> "three-file bundle consumed by Ariadne's honeycomb" elsewhere in this
+> document should be read through that correction.
+
 Build strategy: **greenfield in a new subpackage** (`palimpsest/factory/`).
 The old pipeline modules stay untouched and runnable while the factory is
 built beside them. Once the factory reproduces the golden path (verified by
