@@ -7,6 +7,7 @@ from palimpsest.commands import (
     add_library_subparser,
     add_transcribe_subparser,
 )
+from palimpsest.factory.cli import add_factory_subparser
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -15,6 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_discovery_subparser(subparsers)
     add_library_subparser(subparsers)
     add_transcribe_subparser(subparsers)
+    add_factory_subparser(subparsers)
     return parser
 
 
