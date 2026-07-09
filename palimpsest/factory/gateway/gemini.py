@@ -14,7 +14,12 @@ from pathlib import Path
 from google import genai
 from google.genai import errors, types
 
-from palimpsest.factory.gateway.client import GatewayError, ModelRequest, ModelResponse
+from palimpsest.factory.gateway.client import (
+    GatewayError,
+    ImageContent,
+    ModelRequest,
+    ModelResponse,
+)
 from palimpsest.factory.gateway.pricing import estimate_cost
 
 _MIME_TYPES = {
@@ -67,9 +72,12 @@ def _mime_type(path: Path) -> str:
 def generate(request: ModelRequest) -> ModelResponse:
     contents: list = [request.prompt]
     for image in request.images:
-        contents.append(
-            types.Part.from_bytes(data=image.read_bytes(), mime_type=_mime_type(image))
-        )
+        if isinstance(image, ImageContent):
+            contents.append(types.Part.from_bytes(data=image.data, mime_type=image.mime))
+        else:
+            contents.append(
+                types.Part.from_bytes(data=image.read_bytes(), mime_type=_mime_type(image))
+            )
 
     config_kwargs: dict = {
         "temperature": request.temperature,
@@ -100,7 +108,7 @@ def generate(request: ModelRequest) -> ModelResponse:
             raise GatewayError(f"Gemini client closed: {error}", transient=True) from error
         raise
 
-    text, finish_reason = _response_text(response)
+    text, finish_reason = _response_text(response, allow_empty=request.allow_empty)
     prompt_tokens, output_tokens, total_tokens = _usage(response)
     return ModelResponse(
         text=text,
@@ -113,7 +121,7 @@ def generate(request: ModelRequest) -> ModelResponse:
     )
 
 
-def _response_text(response: object) -> tuple[str, str | None]:
+def _response_text(response: object, *, allow_empty: bool = False) -> tuple[str, str | None]:
     finish_reason = None
     text_parts: list[str] = []
     for index, candidate in enumerate(getattr(response, "candidates", None) or []):
@@ -126,7 +134,7 @@ def _response_text(response: object) -> tuple[str, str | None]:
             if isinstance(value, str) and value:
                 text_parts.append(value)
     text = "\n".join(text_parts).strip()
-    if not text:
+    if not text and not allow_empty:
         raise GatewayError(f"Model returned no text (finish_reason={finish_reason})")
     return text, finish_reason
 

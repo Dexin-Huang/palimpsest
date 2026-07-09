@@ -90,18 +90,32 @@ def gateway(monkeypatch):
     return fake
 
 
+def _synthetic_page_jpeg() -> bytes:
+    """A light page: white 800×600 with one dark text-bar cluster, so segment
+    finds a region or two and routes full_page."""
+    import cv2
+    import numpy as np
+
+    page = np.full((800, 600, 3), 235, np.uint8)
+    for row in range(3):
+        cv2.rectangle(page, (150, 200 + row * 40), (450, 220 + row * 40), (30, 30, 30), -1)
+    ok, buffer = cv2.imencode(".jpg", page)
+    assert ok
+    return buffer.tobytes()
+
+
 @pytest.fixture
 def fetch(monkeypatch):
+    jpeg = _synthetic_page_jpeg()
+
     class FakeResponse:
-        def __init__(self, url):
-            self.content = f"IMAGEBYTES:{url}".encode()
         def raise_for_status(self): pass
-        def iter_content(self, chunk_size): yield self.content
+        def iter_content(self, chunk_size): yield jpeg
         def __enter__(self): return self
         def __exit__(self, *a): pass
 
     monkeypatch.setattr(acquire_module.requests, "get",
-                        lambda url, **kw: FakeResponse(url))
+                        lambda url, **kw: FakeResponse())
 
 
 def run_line(ledger, library, **kw):
@@ -111,18 +125,18 @@ def run_line(ledger, library, **kw):
 def test_recipe_loads_and_validates():
     recipe = load_recipe("latin_manuscript")
     assert [s.station.name for s in recipe.page_stations] == [
-        "acquire", "prepare", "read", "translate", "assemble_page"]
+        "acquire", "prepare", "segment", "read", "translate", "assemble_page"]
     assert [s.station.name for s in recipe.manuscript_stations] == [
         "survey", "reconstruct", "publish", "render_epub"]
-    assert recipe.page_stations[2].model  # ${VAR} interpolated
+    assert recipe.page_stations[3].model  # ${VAR} interpolated
 
 
 def test_end_to_end_line(ledger, library, gateway, fetch):
     report = run_line(ledger, library)
 
     assert report.count("failed") == 0
-    # 5 page stations × 2 pages + 4 manuscript stations
-    assert report.count("ran") == 14
+    # 6 page stations × 2 pages + 4 manuscript stations
+    assert report.count("ran") == 16
 
     assembled = read_json(artifact_path(DOC, "page_assembled", "f001r", library))
     assert assembled["original"]["text"] == "Experimenta ad morbos"
@@ -156,7 +170,7 @@ def test_second_run_is_all_fresh(ledger, library, gateway, fetch):
     calls_before = len(gateway.calls)
     report = run_line(ledger, library)
     assert report.count("ran") == 0
-    assert report.count("fresh") == 14
+    assert report.count("fresh") == 16
     assert len(gateway.calls) == calls_before  # not a single paid call
 
 

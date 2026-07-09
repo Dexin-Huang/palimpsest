@@ -14,15 +14,24 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
+class ImageContent:
+    """An in-memory image (e.g. a lifted region tile that never touches disk)."""
+
+    data: bytes
+    mime: str = "image/png"
+
+
+@dataclass(frozen=True)
 class ModelRequest:
     model: str
     prompt: str
     system: str | None = None
-    images: tuple[Path, ...] = ()
+    images: tuple[Path | ImageContent, ...] = ()
     temperature: float = 0.1
     max_output_tokens: int = 32768
     media_resolution: str | None = None  # "low" | "medium" | "high"
     json_output: bool = False            # constrain the response to JSON
+    allow_empty: bool = False            # empty text is a valid answer, not an error
 
 
 @dataclass(frozen=True)

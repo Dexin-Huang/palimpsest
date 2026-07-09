@@ -20,6 +20,7 @@ PAGE_LIST_FILENAME = "page_list.json"
 PAGE_KIND_SUFFIX: dict[str, str] = {
     "page_image": ".jpg",
     "page_image_clean": ".jpg",
+    "page_regions": ".json",
     "page_transcription": ".json",
     "page_translation": ".json",
     "page_assembled": ".json",

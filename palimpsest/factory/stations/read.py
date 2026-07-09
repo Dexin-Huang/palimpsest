@@ -1,48 +1,150 @@
-"""read: VLM transcription of one page image (lifted from transcribe.py)."""
+"""read: VLM transcription, routed by the segment station's decision.
+
+- ``blank``      → empty transcription, zero tokens spent
+- ``full_page``  → one call on the whole cleaned image (the light-page path);
+                   if the model hits its output-token ceiling, the page
+                   escalates to the segmented path automatically
+- ``segmented``  → each region is lifted onto a white square tile (in memory,
+                   padded, high effective resolution) and read in its own
+                   bounded call; the page text is composed in reading order
+
+Either way the output is ONE page_transcription artifact carrying the
+per-region texts and geometry, so nothing downstream changes shape.
+"""
 
 from __future__ import annotations
 
+import cv2
+import numpy as np
+
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.gateway.client import ModelRequest, generate
+from palimpsest.factory.gateway.client import ImageContent, ModelRequest, generate
+from palimpsest.factory.imaging import encode_png
+from palimpsest.factory.workspace.io import read_json
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are an expert paleographer transcribing digitized manuscript pages."
 )
+TILE_PAD_GLYPHS = 1.5
+_TRUNCATION_REASONS = ("MAX_TOKENS", "LENGTH")
 
 
 class Read(Station):
     name = "read"
-    version = "read/v1"
+    version = "read/v2"
     grain = "page"
-    consumes = ("page_image_clean",)
+    consumes = ("page_image_clean", "page_regions")
     produces = "page_transcription"
     uses_model = True
 
     def run(self, job: Job) -> StationResult:
-        params = job.config.params
-        response = generate(ModelRequest(
-            model=job.config.model,
-            prompt=job.config.prompt.text,
-            system=params.get("system", DEFAULT_SYSTEM_PROMPT),
-            images=(job.path_of("page_image_clean"),),
-            temperature=params.get("temperature", 0.1),
-            max_output_tokens=params.get("max_output_tokens", 32768),
-            media_resolution=params.get("media_resolution"),
-        ))
+        plan = read_json(job.path_of("page_regions"))
+        usage = _Usage()
+
+        route = plan["route"]
+        if route == "blank":
+            regions, text = [], ""
+        elif route == "full_page":
+            regions, text, escalated = self._full_page(job, plan, usage)
+            if escalated:
+                route = "segmented(escalated)"
+        else:
+            regions, text = self._segmented(job, plan, usage)
+
         return StationResult(
             payload={
                 "doc_id": job.doc_id,
                 "page_id": job.page_id,
                 "page_seq": job.page.get("order", 0),
                 "canvas_id": job.page.get("canvas_id", ""),
-                "text": response.text,
-                "regions": [],
+                "text": text,
+                "route": route,
+                "regions": regions,
             },
-            tokens_in=response.prompt_tokens,
-            tokens_out=response.output_tokens,
-            cost_usd=response.cost_usd,
+            tokens_in=usage.tokens_in,
+            tokens_out=usage.tokens_out,
+            cost_usd=usage.cost or None,
         )
+
+    def _full_page(self, job: Job, plan: dict, usage: "_Usage"):
+        response = self._call(job, (job.path_of("page_image_clean"),), usage)
+        truncated = response.finish_reason and any(
+            reason in response.finish_reason.upper() for reason in _TRUNCATION_REASONS
+        )
+        if truncated:
+            # dense page mis-routed: escalate rather than keep a truncation
+            regions, text = self._segmented(job, plan, usage)
+            return regions, text, True
+        return [], response.text, False
+
+    def _segmented(self, job: Job, plan: dict, usage: "_Usage"):
+        image = cv2.imread(str(job.path_of("page_image_clean")))
+        if image is None:
+            raise ValueError(f"Unreadable image: {job.path_of('page_image_clean')}")
+        glyph = max(4, int(plan.get("glyph_height_px", 12)))
+        pad = int(glyph * TILE_PAD_GLYPHS)
+
+        regions_out = []
+        texts = []
+        ordered = sorted(plan["regions"], key=lambda r: r["reading_order"])
+        for region in ordered:
+            tile = _tile(image, region["bbox"], pad)
+            response = self._call(job, (ImageContent(encode_png(tile)),), usage)
+            entry = {
+                "region_id": region["region_id"],
+                "kind": region["kind"],
+                "bbox": region["bbox"],
+                "text": response.text,
+            }
+            regions_out.append(entry)
+            texts.append(
+                f"[margin] {response.text}" if region["kind"] == "marginalia"
+                else response.text
+            )
+        return regions_out, "\n\n".join(texts)
+
+    def _call(self, job: Job, images: tuple, usage: "_Usage"):
+        params = job.config.params
+        response = generate(ModelRequest(
+            model=job.config.model,
+            prompt=job.config.prompt.text,
+            system=params.get("system", DEFAULT_SYSTEM_PROMPT),
+            images=images,
+            temperature=params.get("temperature", 0.1),
+            max_output_tokens=params.get("max_output_tokens", 32768),
+            media_resolution=params.get("media_resolution"),
+            allow_empty=True,  # a blank page or empty tile is a valid reading
+        ))
+        usage.add(response)
+        return response
+
+
+class _Usage:
+    def __init__(self) -> None:
+        self.tokens_in = 0
+        self.tokens_out = 0
+        self.cost = 0.0
+
+    def add(self, response) -> None:
+        self.tokens_in += response.prompt_tokens
+        self.tokens_out += response.output_tokens
+        self.cost += response.cost_usd or 0.0
+
+
+def _tile(image: np.ndarray, bbox: list[int], pad: int) -> np.ndarray:
+    """Lift a region onto a white square canvas — the polygon lasso payoff."""
+    h, w = image.shape[:2]
+    x, y, bw, bh = bbox
+    x0, y0 = max(0, x - pad), max(0, y - pad)
+    x1, y1 = min(w, x + bw + pad), min(h, y + bh + pad)
+    crop = image[y0:y1, x0:x1]
+    ch, cw = crop.shape[:2]
+    side = max(ch, cw)
+    tile = np.full((side, side, 3), 255, np.uint8)
+    oy, ox = (side - ch) // 2, (side - cw) // 2
+    tile[oy:oy + ch, ox:ox + cw] = crop
+    return tile
 
 
 register(Read())

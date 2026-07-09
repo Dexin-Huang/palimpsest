@@ -4,7 +4,8 @@ line:
   page:
     - station: acquire
     - station: prepare
-      profile: passthrough
+      profile: vatican_scan
+    - station: segment
     - station: read
       model: ${PALIMPSEST_MODEL_VISION}
       prompt: read/la/diplomatic

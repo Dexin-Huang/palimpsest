@@ -8,6 +8,7 @@ from palimpsest.factory.stations import (  # noqa: F401
     read,
     reconstruct,
     render_epub,
+    segment,
     survey,
     translate,
 )

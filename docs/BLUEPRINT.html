@@ -136,7 +136,10 @@ flowchart TB
 
   META --> ACQ(["acquire"]) --> IMG["page_image/*.jpg"]
   IMG --> PREP(["prepare"]) --> IMGC["page_image_clean/*.jpg"]
-  IMGC --> READ(["read"]) --> TRANS["page_transcription/*.json"]
+  IMGC --> SEG(["segment"]) --> REGS["page_regions/*.json — lassos + route"]
+  REGS --> READ(["read"])
+  IMGC --> READ
+  READ --> TRANS["page_transcription/*.json"]
   TRANS --> SURV(["survey"]) --> BRIEF["translation_brief.json"]
   TRANS --> TL(["translate"])
   BRIEF -. jig .-> TL
@@ -146,13 +149,9 @@ flowchart TB
   ASM --> PA["page_assembled/*.json"]
 
   PA --> REC(["reconstruct"])
-  REC --> MO["manuscript/original.md"]
-  REC --> MT["manuscript/translation.md"]
-  REC --> JOINS["manuscript/joins.json"]
+  REC --> MS["manuscript.json — sections in both languages,<br/>joins audit, reader's note"]
 
-  MO --> PUB(["publish"])
-  MT --> PUB
-  JOINS --> PUB
+  MS --> PUB(["publish"])
   PUB --> BJ["book/book.json — the book model"]
   PUB --> EPUB["book/&lt;doc_id&gt;.epub"]
   BJ --> SITEB(["site build — all published docs"])
@@ -165,6 +164,7 @@ flowchart TB
   style PROM fill:#eef2ec,stroke:#9ab08f
   style ACQ fill:#eef2ec,stroke:#9ab08f
   style PREP fill:#eef2ec,stroke:#9ab08f
+  style SEG fill:#eef2ec,stroke:#9ab08f
   style READ fill:#eef2ec,stroke:#9ab08f
   style SURV fill:#eef2ec,stroke:#9ab08f
   style TL fill:#eef2ec,stroke:#9ab08f
@@ -316,6 +316,26 @@ sibling <code>&lt;page_id&gt;.json</code> stamp per cleaned image recording the
 cleaning profile + provenance, so image artifacts are fingerprintable like
 everything else.</p>
 
+<h3>5.1b <code>page_regions/&lt;page_id&gt;.json</code> — polygon lassos + route
+  <span class="chip ok">CONFIRMED</span> <span class="legend">(as built)</span></h3>
+<p class="meta">Deterministic ink-density segmentation (dark-ink core test
+defeats show-through; watermark letterforms suppressed by height; blob
+density floor defeats dirt/foxing). Decides how the page is read:
+<code>blank</code> costs zero tokens; <code>full_page</code> is one call;
+<code>segmented</code> lifts each region onto a white square tile for its own
+bounded call.</p>
+<div class="card">
+<pre class="code">{ "doc_id": "vat_pal_lat_1199", "page_id": "f001r",
+  "route": "full_page",          <span class="c">// blank | full_page | segmented</span>
+  "image": { "width": 2430, "height": 3567 },
+  "glyph_height_px": 42.4,
+  "regions": [
+    { "region_id": "r00", "kind": "main_text",   <span class="c">// main_text | block | marginalia</span>
+      "bbox": [260, 75, 2035, 579], "est_lines": 8, "ink_px": 19879,
+      "reading_order": 0 } ],
+  "provenance": { …stamp§2… } }</pre>
+</div>
+
 <h3>5.2 <code>page_transcription/&lt;page_id&gt;.json</code>
   <span class="chip new">PROPOSED</span> <span class="legend">(evolves today's confirmed
   <code>TranscriptionRecord</code>)</span></h3>
@@ -382,30 +402,29 @@ touching transcriptions. The brief it used is captured by
 
 <!-- ================================================================ -->
 <h2 id="msline"><span class="num">6</span>Manuscript-line artifacts
-  <span class="chip new">PROPOSED</span></h2>
+  <span class="chip ok">CONFIRMED</span> <span class="legend">(as built, rule 8:
+  one output file)</span></h2>
 <p class="lede"><code>reconstruct</code> consumes all
-<code>page_assembled</code> and writes three artifacts under
-<code>manuscript/</code>: two continuous texts and an auditable record of
-every cross-page decision it made.</p>
+<code>page_assembled</code> and writes <strong>one</strong> artifact,
+<code>manuscript.json</code>. The model only <em>plans</em> — sections, page
+joins, a reader's note; the continuous texts are assembled deterministically
+in code from the page artifacts, so the reconstruction is verbatim what the
+line produced and every cross-page decision is auditable.</p>
 
-<h3>6.1 <code>manuscript/original.md</code> · <code>manuscript/translation.md</code></h3>
-<p class="meta">Continuous texts with recovered section structure as ATX
-headings. Page boundaries are <em>not</em> marked inline — chapters carry
-folio spans in the book model (§7.1), and the precise text↔page mapping lives
-in the per-page artifacts, keeping the reading text clean.</p>
-
-<h3>6.2 <code>manuscript/joins.json</code> — boundary-repair audit</h3>
+<h3>6.1 <code>manuscript.json</code></h3>
 <div class="card">
 <pre class="code">{ "doc_id": "vat_pal_lat_1199",
+  "readers_note": "A fourteenth-century medical compendium…",
+  "sections": [
+    { "heading": "De febribus",
+      "pages": { "from": "f012r", "to": "f019v" },
+      "original": "…continuous Latin, joins applied…",
+      "translation": "…continuous English, joins applied…" } ],
   "joins": [
     { "from_page": "f014v", "to_page": "f015r",
       "kind": "hyphenation_repair",        <span class="c">// hyphenation_repair | sentence_continuation |</span>
-                                           <span class="c">//   section_break | catchword_match | gap</span>
-      "original_tail": "…medica-", "original_head": "menta contra…",
-      "repaired": "…medicamenta contra…",
+                                           <span class="c">//   paragraph_break | section_break</span>
       "rationale": "Hyphen at line end; catchword confirms continuation." } ],
-  "sections": [
-    { "heading": "De febribus", "start_page": "f012r", "end_page": "f019v" } ],
   "provenance": { …stamp§2… } }</pre>
 </div>
 
@@ -480,12 +499,13 @@ whatever <code>book/book.json</code> files exist.</p>
 <table class="fields">
   <tr><th>Station</th><th>Grain</th><th>Consumes</th><th>Produces</th><th>Model call</th><th>Swappable via recipe</th></tr>
   <tr><td>acquire</td><td>page</td><td>page_list entry</td><td>page_image</td><td>no</td><td>IIIF size/quality</td></tr>
-  <tr><td>prepare</td><td>page</td><td>page_image</td><td>page_image_clean (+stamp)</td><td>no</td><td>cleaning profile</td></tr>
-  <tr><td>read</td><td>page</td><td>page_image_clean</td><td>page_transcription</td><td>yes</td><td>model · prompt · params</td></tr>
+  <tr><td>prepare</td><td>page</td><td>page_image</td><td>page_image_clean (+stamp)</td><td>no</td><td>profile (passthrough · vatican_scan: frame detection + watermark removal)</td></tr>
+  <tr><td>segment</td><td>page</td><td>page_image_clean</td><td>page_regions</td><td>no (deterministic CV)</td><td>lasso profile · routing thresholds · include_faint</td></tr>
+  <tr><td>read</td><td>page</td><td>page_image_clean + page_regions</td><td>page_transcription</td><td>yes</td><td>model · prompt · params; routes blank / full_page / segmented, escalates on truncation</td></tr>
   <tr><td>survey</td><td>manuscript</td><td>all page_transcription</td><td>translation_brief</td><td>yes</td><td>model · prompt</td></tr>
   <tr><td>translate</td><td>page</td><td>page_transcription + translation_brief (jig)</td><td>page_translation</td><td>yes</td><td>model · prompt · target language</td></tr>
   <tr><td>assemble_page</td><td>page</td><td>page_transcription + page_translation</td><td>page_assembled</td><td>no</td><td>—</td></tr>
-  <tr><td>reconstruct</td><td>manuscript</td><td>all page_assembled</td><td>manuscript/original.md · translation.md · joins.json</td><td>yes</td><td>model · prompt</td></tr>
+  <tr><td>reconstruct</td><td>manuscript</td><td>all page_assembled</td><td>manuscript.json</td><td>yes (plans only — never rewrites text)</td><td>model · prompt</td></tr>
   <tr><td>publish</td><td>manuscript</td><td>manuscript/* + metadata</td><td>book/book.json · book/&lt;doc_id&gt;.epub</td><td>no (reader's note may use one)</td><td>formats · theme</td></tr>
   <tr><td>site build</td><td>library-wide</td><td>all book/book.json</td><td>site/ (static)</td><td>no</td><td>theme</td></tr>
 </table>
@@ -575,7 +595,7 @@ build against it.</p>
   <li><label><input type="checkbox" class="confirm" data-shape="brief"> <a href="#pageline">§5.3 translation_brief carryover + provenance</a></label></li>
   <li><label><input type="checkbox" class="confirm" data-shape="page_translation"> <a href="#pageline">§5.4 page_translation (split out of EnrichedRecord)</a></label></li>
   <li><label><input type="checkbox" class="confirm" data-shape="page_assembled"> <a href="#pageline">§5.5 page_assembled</a></label></li>
-  <li><label><input type="checkbox" class="confirm" data-shape="reconstruct"> <a href="#msline">§6 manuscript/original.md · translation.md · joins.json</a></label></li>
+  <li><label><input type="checkbox" class="confirm" data-shape="reconstruct"> <a href="#msline">§6 manuscript.json (plan-only model, deterministic assembly)</a></label></li>
   <li><label><input type="checkbox" class="confirm" data-shape="book"> <a href="#book">§7 Book handoff — book.json · EPUB · hosted library site</a></label></li>
   <li><label><input type="checkbox" class="confirm" data-shape="recipe"> <a href="#recipe">§9 Recipe schema</a></label></li>
 </ul>
