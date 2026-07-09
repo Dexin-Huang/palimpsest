@@ -48,6 +48,10 @@ def add_factory_subparser(subparsers) -> None:
         "--refresh", action="append", default=[], metavar="STATION",
         help="Force re-run of a station even if fresh/outdated (repeatable)",
     )
+    run.add_argument(
+        "--executor", choices=["inline", "subprocess"], default="inline",
+        help="How cells execute: in-thread, or one isolated process per cell",
+    )
     run.set_defaults(func=cmd_run)
 
     graph = factory_subparsers.add_parser(
@@ -96,6 +100,7 @@ def cmd_run(args: argparse.Namespace) -> None:
             library_root=args.library_root,
             workers=args.workers or DEFAULT_WORKERS,
             refresh=frozenset(args.refresh),
+            executor=args.executor,
         )
         report = conductor.run(args.doc_id)
 

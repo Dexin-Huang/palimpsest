@@ -26,11 +26,12 @@ from pathlib import Path
 
 from palimpsest.factory import prompt_store
 from palimpsest.factory.config import LIBRARY_ROOT
-from palimpsest.factory.core.contracts import validate_payload
+from palimpsest.factory.core.cell import CellSpec
+from palimpsest.factory.core.executors import make as make_executor
 from palimpsest.factory.core.ledger import Ledger, fingerprint
 from palimpsest.factory.core.recipe import Recipe, StationSpec, load as load_recipe
 from palimpsest.factory.core.station import Job, StationConfig
-from palimpsest.factory.workspace.io import atomic_write_json, read_json, utc_now
+from palimpsest.factory.workspace.io import read_json
 from palimpsest.factory.workspace.layout import page_list_path
 
 DEFAULT_WORKERS = 6
@@ -88,12 +89,14 @@ class Conductor:
         library_root: Path = LIBRARY_ROOT,
         workers: int = DEFAULT_WORKERS,
         refresh: frozenset[str] = frozenset(),
+        executor: str = "inline",
     ) -> None:
         self._ledger = ledger
         self._ledger_lock = threading.Lock()
         self._library_root = library_root
         self._workers = workers
         self._refresh = refresh
+        self._executor = make_executor(executor)
         self._prompts: dict[str, prompt_store.Prompt] = {}
 
     # -- public ---------------------------------------------------------------
@@ -186,36 +189,33 @@ class Conductor:
                 prompt_hash=job.config.prompt.sha256 if job.config.prompt else None,
                 params_hash=self._params_hash(spec),
             )
+        cell = CellSpec(
+            doc_id=doc_id, station=station.name, page_id=page_id,
+            library_root=str(self._library_root),
+            config_fingerprint=config_fp, input_fingerprint=input_fp,
+            model=spec.model, prompt_name=spec.prompt_name,
+            prompt_sha256=job.config.prompt.sha256 if job.config.prompt else None,
+            params=dict(spec.params), options=dict(spec.options),
+        )
         try:
-            result = station.run(job)
-            output_path = station.output_path(job)
-            if result.payload is not None:
-                validate_payload(station.produces, result.payload)
-                payload = dict(result.payload)
-                payload["provenance"] = self._provenance(
-                    spec, job, config_fp, input_fp, result)
-                atomic_write_json(output_path, payload)
-            else:
-                atomic_write_json(
-                    output_path.with_suffix(output_path.suffix + ".provenance.json"),
-                    self._provenance(spec, job, config_fp, input_fp, result),
-                )
+            outcome = self._executor.execute(cell)
+            output_path = Path(outcome.output_path)
             output_fp = _content_hash(output_path)
             with self._ledger_lock:
                 self._ledger.complete_run(
                     run_id,
-                    output_path=str(output_path),
+                    output_path=outcome.output_path,
                     output_fingerprint=output_fp,
-                    tokens_in=result.tokens_in, tokens_out=result.tokens_out,
-                    cost_usd=result.cost_usd,
+                    tokens_in=outcome.tokens_in, tokens_out=outcome.tokens_out,
+                    cost_usd=outcome.cost_usd,
                 )
             self._report(report, CellReport(
-                station.name, page_id, "ran", cost_usd=result.cost_usd))
+                station.name, page_id, "ran", cost_usd=outcome.cost_usd))
             return True
         except Exception as error:  # one cell's failure never takes down the line
+            kind = getattr(error, "kind", type(error).__name__.lower())
             with self._ledger_lock:
-                self._ledger.fail_run(
-                    run_id, kind=type(error).__name__.lower(), detail=str(error))
+                self._ledger.fail_run(run_id, kind=kind, detail=str(error))
             self._report(report, CellReport(
                 station.name, page_id, "failed", error=str(error)))
             return False
@@ -251,31 +251,6 @@ class Conductor:
         ]
         input_fp = fingerprint(*file_hashes, *spec.station.signature_extras(job))
         return config_fp, input_fp
-
-    def _provenance(
-        self, spec: StationSpec, job: Job,
-        config_fp: str, input_fp: str, result,
-    ) -> dict:
-        stamp = {
-            "station": spec.station.name,
-            "station_version": spec.station.version,
-            "config_fingerprint": config_fp,
-            "input_fingerprint": input_fp,
-            "created_at": utc_now(),
-        }
-        if spec.model:
-            stamp["model"] = spec.model
-        if job.config.prompt:
-            stamp["prompt_name"] = job.config.prompt.name
-            stamp["prompt_sha256"] = job.config.prompt.sha256
-        if spec.params or spec.options:
-            stamp["params"] = {**dict(spec.params), **dict(spec.options)}
-        if result.tokens_in is not None:
-            stamp["tokens_in"] = result.tokens_in
-            stamp["tokens_out"] = result.tokens_out
-        if result.cost_usd is not None:
-            stamp["cost_usd"] = result.cost_usd
-        return stamp
 
     def _latest(self, doc_id: str, station: str, page_id: str | None):
         with self._ledger_lock:

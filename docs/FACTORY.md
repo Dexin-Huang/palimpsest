@@ -204,9 +204,15 @@ order) does:
 The conductor is the *only* component that knows about ordering and
 concurrency. Stations never call each other and never import each other's
 internals. Because station executions are hermetic (§2.2), the worker pool's
-size is a dial, not a design constraint — the same conductor can drive one
-local thread or a fleet of spawned agents, and the unit of work is always one
-(page × station) cell with one output file.
+size is a dial, not a design constraint — and so is the worker itself: the
+**executor seam** (`run --executor inline|subprocess`) dispatches each cell
+as a self-contained JSON `CellSpec` (declared inputs, config, fingerprints,
+prompt hash — the worker's whole world) to whichever executor is configured.
+`inline` runs in the conductor's thread; `subprocess` spawns one isolated
+process per cell; an agent executor is the same shape with a smarter worker.
+Workers verify their prompt hash against the spec, never touch the ledger,
+and report a structured outcome — fleet workers with zero shared context by
+construction.
 
 ### 2.5 The ledger: inventory + production log
 
