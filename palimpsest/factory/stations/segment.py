@@ -29,10 +29,11 @@ MIN_REGION_INK_PX = 60
 # Real writing fills ≥ ~4% of its fused bbox; blobs fused out of scattered
 # dirt/foxing specks measure ≤ ~1.6% (measured on Pal.lat.1199).
 MIN_REGION_DENSITY = 0.03
-# A full-page read needs substantial ink to anchor the model; near-empty
-# pages go as region tiles instead — a stain tile reads as empty, but a
-# near-blank full page invites page-scale hallucination.
-FULL_PAGE_MIN_INK_PX = 1500
+# A full-page read needs substantial ink to anchor the model; pages below
+# this go as region tiles instead — a stain tile reads as empty, but a
+# near-blank full page invites page-scale hallucination. Measured on
+# Pal.lat.1199: real-but-light content ≈ 22k ink px, stain/bleed bands ≈ 10k.
+FULL_PAGE_MIN_INK_PX = 15000
 MAX_LINES_PER_REGION = 14     # split blobs taller than this many text lines
 FULL_PAGE_MAX_REGIONS = 3     # routing: few blobs and few lines → one call
 FULL_PAGE_MAX_LINES = 30
@@ -49,56 +50,75 @@ class Segment(Station):
         image = cv2.imread(str(job.path_of("page_image_clean")))
         if image is None:
             raise ValueError(f"Unreadable image: {job.path_of('page_image_clean')}")
-        gray_full = to_gray(image)
-        h, w = gray_full.shape
-        scale = min(1.0, ANALYSIS_MAX_SIDE / max(h, w))
-        gray = cv2.resize(gray_full, None, fx=scale, fy=scale,
-                          interpolation=cv2.INTER_AREA) if scale < 1.0 else gray_full
-
-        dark, faint = ink_masks(gray)
-        # The faint channel (pencil notes, faded ink) is opt-in: on textured
-        # or show-through-heavy scans it is dominated by noise. When enabled,
-        # a density guard still drops it if it lights up broadly relative to
-        # real ink — sparse annotations, not surface texture.
-        if job.config.options.get("include_faint", False):
-            dark_px = cv2.countNonZero(dark)
-            if cv2.countNonZero(faint) > max(3 * dark_px, gray.size * 0.005):
-                faint = np.zeros_like(faint)
-        else:
-            faint = np.zeros_like(faint)
-        ink = cv2.bitwise_or(dark, faint)
-        ink = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
-        glyph = glyph_height(dark)
-
-        blobs = _drop_edge_artifacts(_blobs(ink, glyph), gray.shape)
-        blobs = _merge_overlaps(blobs)
-        blobs = [split for blob in blobs for split in _split_tall(ink, blob, glyph)]
-        regions = _classify(blobs, ink, gray.shape, glyph, scale)
-        regions.sort(key=lambda r: (r["kind"] == "marginalia", r["bbox"][1], r["bbox"][0]))
-        for order, region in enumerate(regions):
-            region["region_id"] = f"r{order:02d}"
-            region["reading_order"] = order
-
-        total_lines = sum(r["est_lines"] for r in regions)
-        total_ink = sum(r["ink_px"] for r in regions)
-        options = job.config.options
-        if not regions:
-            route = "blank"
-        elif (total_ink >= int(options.get("full_page_min_ink", FULL_PAGE_MIN_INK_PX))
-              and len(regions) <= int(options.get("full_page_max_regions", FULL_PAGE_MAX_REGIONS))
-              and total_lines <= int(options.get("full_page_max_lines", FULL_PAGE_MAX_LINES))):
-            route = "full_page"
-        else:
-            route = "segmented"
-
+        payload = analyze(image, dict(job.config.options))
         return StationResult(payload={
             "doc_id": job.doc_id,
             "page_id": job.page_id,
-            "route": route,
-            "image": {"width": w, "height": h},
-            "glyph_height_px": round(glyph / scale, 1),
-            "regions": regions,
+            **payload,
         })
+
+
+def analyze(image: np.ndarray, options: dict) -> dict:
+    """The pure analysis: image in, route + regions out. Also the entry
+    point for the offline tuning harness (``factory tune``)."""
+    gray_full = to_gray(image)
+    h, w = gray_full.shape
+
+    # Physical-object shots (spine, fore-edge, ruler cards) have pathological
+    # aspect ratios; a folio is roughly 3:4. Nothing on them is readable text.
+    aspect = w / h
+    if aspect < 0.35 or aspect > 3.0:
+        return {
+            "route": "blank",
+            "image": {"width": w, "height": h},
+            "glyph_height_px": 0.0,
+            "regions": [],
+        }
+    scale = min(1.0, ANALYSIS_MAX_SIDE / max(h, w))
+    gray = cv2.resize(gray_full, None, fx=scale, fy=scale,
+                      interpolation=cv2.INTER_AREA) if scale < 1.0 else gray_full
+
+    dark, faint = ink_masks(gray)
+    # The faint channel (pencil notes, faded ink) is opt-in: on textured
+    # or show-through-heavy scans it is dominated by noise. When enabled,
+    # a density guard still drops it if it lights up broadly relative to
+    # real ink — sparse annotations, not surface texture.
+    if options.get("include_faint", False):
+        dark_px = cv2.countNonZero(dark)
+        if cv2.countNonZero(faint) > max(3 * dark_px, gray.size * 0.005):
+            faint = np.zeros_like(faint)
+    else:
+        faint = np.zeros_like(faint)
+    ink = cv2.bitwise_or(dark, faint)
+    ink = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+    glyph = glyph_height(dark)
+
+    blobs = _drop_edge_artifacts(_blobs(ink, glyph), gray.shape)
+    blobs = _merge_overlaps(blobs)
+    blobs = [split for blob in blobs for split in _split_tall(ink, blob, glyph)]
+    regions = _classify(blobs, ink, gray.shape, glyph, scale)
+    regions.sort(key=lambda r: (r["kind"] == "marginalia", r["bbox"][1], r["bbox"][0]))
+    for order, region in enumerate(regions):
+        region["region_id"] = f"r{order:02d}"
+        region["reading_order"] = order
+
+    total_lines = sum(r["est_lines"] for r in regions)
+    total_ink = sum(r["ink_px"] for r in regions)
+    if not regions:
+        route = "blank"
+    elif (total_ink >= int(options.get("full_page_min_ink", FULL_PAGE_MIN_INK_PX))
+          and len(regions) <= int(options.get("full_page_max_regions", FULL_PAGE_MAX_REGIONS))
+          and total_lines <= int(options.get("full_page_max_lines", FULL_PAGE_MAX_LINES))):
+        route = "full_page"
+    else:
+        route = "segmented"
+
+    return {
+        "route": route,
+        "image": {"width": w, "height": h},
+        "glyph_height_px": round(glyph / scale, 1),
+        "regions": regions,
+    }
 
 
 def _blobs(ink: np.ndarray, glyph: int) -> list[tuple[int, int, int, int]]:
@@ -122,13 +142,22 @@ def _drop_edge_artifacts(
     Real marginal content — catchwords, folio marks — is neither.
     """
     hs, ws = shape
+    tol_x, tol_y = max(3, int(ws * 0.005)), max(3, int(hs * 0.005))
     kept = []
     for x, y, bw, bh in blobs:
-        flush_x = x <= 2 or x + bw >= ws - 2
-        flush_y = y <= 2 or y + bh >= hs - 2
-        if flush_x and (bw < ws * 0.07 or bh > hs * 0.8):
+        flush_x = x <= tol_x or x + bw >= ws - tol_x
+        flush_y = y <= tol_y or y + bh >= hs - tol_y
+        # Residue is always THIN in one dimension: a binding line or gutter
+        # sliver (flush to a side, narrow), a curl-shadow band (flush to
+        # top/bottom, short). A blob big in BOTH dimensions is page content —
+        # a dense text block legitimately spans edge to edge.
+        if flush_x and bw < ws * 0.07:
             continue
-        if flush_y and (bh < hs * 0.03 or bw > ws * 0.8):
+        if flush_y and bh < hs * 0.03:
+            continue
+        if flush_x and bh > hs * 0.8 and bw < ws * 0.25:
+            continue
+        if flush_y and bw > ws * 0.8 and bh < hs * 0.25:
             continue
         kept.append((x, y, bw, bh))
     return kept

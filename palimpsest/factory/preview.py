@@ -1,20 +1,34 @@
-"""Preview harness: render the preprocessing line + lassos for fast eyeballing.
+"""Preview + tune: look at the CV line without spending a token.
 
-``palimpsest factory preview --doc-id X --pages f001r,f002v`` writes one PNG
-per page: a strip of every preprocessing stage side by side, ending with the
-segment overlay (polygon lassos color-coded by kind, route stamped in the
-corner). Thirty seconds of looking beats an hour of threshold archaeology —
-run it on a few pages of any new corpus before spending tokens.
+``factory preview`` renders EXISTING artifacts (one strip per page: every
+preprocessing stage side by side, ending with the lasso overlay + route).
+
+``factory tune`` computes the whole chain IN MEMORY — deframe, dewatermark,
+flatten, segment — from whatever images exist (factory ``page_image/`` or
+the legacy ``images/`` dir), renders the same strips, and prints a routing
+table, optionally sanity-scored against a reference transcription JSONL
+(text length is weak ground truth for ink). No ledger writes, no network,
+no model calls: the offline optimization loop for the lasso system.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 from palimpsest.factory.config import LIBRARY_ROOT, PROJECT_ROOT
+from palimpsest.factory.imaging import (
+    attenuate_light_marks,
+    flatten_illumination,
+    parchment_frame,
+    remove_overlay_marks,
+    to_gray,
+    trim_gutter,
+)
+from palimpsest.factory.stations.segment import analyze
 from palimpsest.factory.workspace.io import read_json
 from palimpsest.factory.workspace.layout import artifact_path
 
@@ -56,6 +70,105 @@ def build(
         cv2.imwrite(str(out_path), np.hstack(panels))
         written.append(out_path)
     return written
+
+
+def tune(
+    doc_id: str,
+    page_ids: list[str],
+    *,
+    library_root: Path = LIBRARY_ROOT,
+    out_dir: Path = DEFAULT_OUT_DIR,
+    reference: Path | None = None,
+) -> list[dict]:
+    """Compute the CV chain in memory for each page and render strips + stats."""
+    out_dir = out_dir / doc_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    reference_lengths = _reference_lengths(reference) if reference else {}
+
+    rows = []
+    for page_id in page_ids:
+        source = _find_source_image(doc_id, page_id, library_root)
+        original = cv2.imread(str(source))
+        if original is None:
+            raise ValueError(f"Unreadable image: {source}")
+
+        x0, y0, x1, y1 = parchment_frame(to_gray(original))
+        framed = original[y0:y1, x0:x1]
+        gx0, gx1 = trim_gutter(to_gray(framed))
+        framed = framed[:, gx0:gx1]
+        unmarked = remove_overlay_marks(framed)
+        clean = attenuate_light_marks(flatten_illumination(unmarked))
+        plan = analyze(clean, {})
+
+        strip = np.hstack([
+            _labeled_panel(original, "original"),
+            _labeled_panel(framed, "deframe"),
+            _labeled_panel(unmarked, "dewatermark"),
+            _labeled_panel(_draw_plan(clean, plan), "flatten + lassos"),
+        ])
+        cv2.imwrite(str(out_dir / f"{page_id}.png"), strip)
+
+        kinds = [r["kind"] for r in plan["regions"]]
+        row = {
+            "page_id": page_id,
+            "route": plan["route"],
+            "regions": len(plan["regions"]),
+            "main": kinds.count("main_text"),
+            "margin": kinds.count("marginalia"),
+            "glyph": plan["glyph_height_px"],
+            "lines": sum(r["est_lines"] for r in plan["regions"]),
+        }
+        if page_id in reference_lengths:
+            row["ref_chars"] = reference_lengths[page_id]
+            row["verdict"] = _verdict(plan, reference_lengths[page_id])
+        rows.append(row)
+    return rows
+
+
+def _reference_lengths(path: Path) -> dict[str, int]:
+    lengths = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            record = json.loads(line)
+            lengths[record["page_id"]] = len(record.get("text", ""))
+    return lengths
+
+
+def _verdict(plan: dict, ref_chars: int) -> str:
+    """Weak sanity check: legacy text length vs what the lassos found.
+    (Legacy text includes watermark garbage, so thresholds are loose.)"""
+    if ref_chars > 800 and plan["route"] == "blank":
+        return "MISSING-INK?"
+    if ref_chars < 120 and plan["route"] != "blank" and plan["regions"]:
+        return "over-detect?"
+    return "ok"
+
+
+def _find_source_image(doc_id: str, page_id: str, library_root: Path) -> Path:
+    factory_image = artifact_path(doc_id, "page_image", page_id, library_root)
+    if factory_image.exists():
+        return factory_image
+    legacy_image = library_root / doc_id / "images" / f"{page_id}.jpg"
+    if legacy_image.exists():
+        return legacy_image
+    raise FileNotFoundError(
+        f"No image for {doc_id}/{page_id} in page_image/ or images/")
+
+
+def _draw_plan(image: np.ndarray, plan: dict) -> np.ndarray:
+    viz = image.copy()
+    thickness = max(2, image.shape[0] // 900)
+    for region in plan.get("regions", []):
+        x, y, bw, bh = region["bbox"]
+        color = KIND_COLORS.get(region["kind"], (128, 128, 128))
+        cv2.rectangle(viz, (x, y), (x + bw, y + bh), color, thickness)
+        cv2.putText(viz, f"{region['region_id']} {region['kind']} {region['est_lines']}L",
+                    (x, max(18, y - 8)), cv2.FONT_HERSHEY_SIMPLEX,
+                    image.shape[0] / 2200, color, thickness)
+    cv2.putText(viz, f"route: {plan.get('route', '?')}",
+                (20, image.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX,
+                image.shape[0] / 1400, (30, 30, 200), thickness + 1)
+    return viz
 
 
 def _overlay(image: np.ndarray, doc_id: str, page_id: str, library_root: Path) -> np.ndarray:

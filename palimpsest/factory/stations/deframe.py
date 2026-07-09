@@ -11,7 +11,12 @@ import cv2
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.imaging import encode_jpeg, parchment_frame, to_gray
+from palimpsest.factory.imaging import (
+    encode_jpeg,
+    parchment_frame,
+    to_gray,
+    trim_gutter,
+)
 from palimpsest.factory.workspace.io import atomic_write_bytes
 
 
@@ -30,7 +35,9 @@ class Deframe(Station):
             to_gray(image),
             margin_fraction=float(job.config.options.get("frame_margin", 0.02)),
         )
-        atomic_write_bytes(self.output_path(job), encode_jpeg(image[y0:y1, x0:x1]))
+        framed = image[y0:y1, x0:x1]
+        gx0, gx1 = trim_gutter(to_gray(framed))
+        atomic_write_bytes(self.output_path(job), encode_jpeg(framed[:, gx0:gx1]))
         return StationResult()
 
 

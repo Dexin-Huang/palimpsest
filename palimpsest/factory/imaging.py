@@ -196,6 +196,34 @@ def parchment_frame(gray: np.ndarray, *, margin_fraction: float = 0.02) -> tuple
     return x + mx, y + my, x + bw - mx, y + bh - my
 
 
+def trim_gutter(gray: np.ndarray, *, search_fraction: float = 0.3,
+                min_depth: int = 35) -> tuple[int, int]:
+    """Find the binding crease inside a framed page and return (x0, x1) crop.
+
+    When the parchment frame connects across the gutter, a strip of the
+    NEIGHBORING page rides along. The crease between them is a vertical
+    shadow: a column whose MEDIAN intensity is far below the page's — text
+    columns never drag the median down that far, a fold shadow does. Cut at
+    the deepest such column in each outer zone.
+    """
+    h, w = gray.shape
+    column_median = np.median(gray, axis=0)
+    bg = background_level(gray)
+    zone = max(1, int(w * search_fraction))
+
+    x0 = 0
+    left = column_median[:zone]
+    if left.min() < bg - min_depth:
+        x0 = int(np.argmin(left)) + max(2, w // 200)
+    x1 = w
+    right = column_median[w - zone:]
+    if right.min() < bg - min_depth:
+        x1 = w - zone + int(np.argmin(right)) - max(2, w // 200)
+    if x1 - x0 < w * 0.4:  # refuse absurd cuts; keep the frame as-is
+        return 0, w
+    return x0, x1
+
+
 def glyph_height(ink: np.ndarray) -> int:
     """Median height of small connected components ≈ letter height.
 

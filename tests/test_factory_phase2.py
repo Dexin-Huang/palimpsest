@@ -91,14 +91,15 @@ def gateway(monkeypatch):
 
 
 def _synthetic_page_jpeg() -> bytes:
-    """A light page: white 800×600 with one dark text-bar cluster, so segment
-    finds a region or two and routes full_page."""
+    """A light page: white 800×600 with thin text-like strokes — thin, because
+    the adaptive ink mask only marks stroke-scale features (solid bars read
+    as outlines) — with enough ink to clear the full-page routing floor."""
     import cv2
     import numpy as np
 
     page = np.full((800, 600, 3), 235, np.uint8)
-    for row in range(3):
-        cv2.rectangle(page, (150, 200 + row * 40), (450, 220 + row * 40), (30, 30, 30), -1)
+    for row in range(10):
+        cv2.rectangle(page, (120, 180 + row * 20), (480, 188 + row * 20), (30, 30, 30), -1)
     ok, buffer = cv2.imencode(".jpg", page)
     assert ok
     return buffer.tobytes()

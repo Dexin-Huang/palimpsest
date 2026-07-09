@@ -19,7 +19,7 @@ def _page(height=800, width=600, bg=235):
     return np.full((height, width, 3), bg, np.uint8)
 
 
-def _text_block(page, x, y, lines, line_w=250, glyph_h=14, gap=10, shade=30):
+def _text_block(page, x, y, lines, line_w=250, glyph_h=8, gap=12, shade=30):
     for row in range(lines):
         y0 = y + row * (glyph_h + gap)
         cv2.rectangle(page, (x, y0), (x + line_w, y0 + glyph_h), (shade,) * 3, -1)
@@ -88,7 +88,8 @@ def test_segment_blank_page(tmp_path):
 
 def test_segment_light_page_routes_full_page(tmp_path):
     job = _job(tmp_path)
-    _write_clean_image(job, _text_block(_page(), 150, 200, lines=4))
+    # enough ink to clear the full-page floor (hallucination guard)
+    _write_clean_image(job, _text_block(_page(), 150, 200, lines=8, line_w=350))
     payload = Segment().run(job).payload
     assert payload["route"] == "full_page"
     assert 1 <= len(payload["regions"]) <= 3

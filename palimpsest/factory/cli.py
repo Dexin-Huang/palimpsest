@@ -71,6 +71,17 @@ def add_factory_subparser(subparsers) -> None:
     preview.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     preview.set_defaults(func=cmd_preview)
 
+    tune = factory_subparsers.add_parser(
+        "tune", help="Offline lasso tuning: compute the CV chain in memory, "
+                     "render strips, score routing (no ledger, no network)"
+    )
+    tune.add_argument("--doc-id", required=True)
+    tune.add_argument("--pages", required=True)
+    tune.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    tune.add_argument("--reference", type=Path, default=None,
+                      help="transcriptions.jsonl for routing sanity checks")
+    tune.set_defaults(func=cmd_tune)
+
     site = factory_subparsers.add_parser(
         "site", help="Rebuild the hosted library from all published books"
     )
@@ -134,6 +145,20 @@ def cmd_preview(args: argparse.Namespace) -> None:
         print(path)
     if not written:
         print("No artifacts found — run the line (or at least deframe) first.")
+
+
+def cmd_tune(args: argparse.Namespace) -> None:
+    from palimpsest.factory.preview import DEFAULT_OUT_DIR, tune
+
+    rows = tune(args.doc_id, args.pages.split(","),
+                library_root=args.library_root, reference=args.reference)
+    header = ["page_id", "route", "regions", "main", "margin", "glyph", "lines"]
+    if args.reference:
+        header += ["ref_chars", "verdict"]
+    print("  ".join(f"{h:>10}" for h in header))
+    for row in rows:
+        print("  ".join(f"{str(row.get(h, '')):>10}" for h in header))
+    print(f"strips: {DEFAULT_OUT_DIR / args.doc_id}")
 
 
 def cmd_site(args: argparse.Namespace) -> None:
