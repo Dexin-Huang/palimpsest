@@ -51,7 +51,8 @@ RECONSTRUCT_PLAN = {
     "readers_note": "A small test codex of remedies.",
 }
 
-MODEL_STATIONS = ("read", "translate", "survey", "reconstruct")
+TEXT_STATIONS = ("read", "translate")        # call generate() directly
+JSON_STATIONS = ("survey", "reconstruct")    # call generate_json()
 
 
 class ScriptedGateway:
@@ -84,9 +85,18 @@ class ScriptedGateway:
 
 @pytest.fixture
 def gateway(monkeypatch):
+    from palimpsest.factory.gateway.client import parse_json_response
+
     fake = ScriptedGateway()
-    for module in MODEL_STATIONS:
+
+    def fake_json(request, **kwargs):
+        response = fake(request)
+        return parse_json_response(response.text), response
+
+    for module in TEXT_STATIONS:
         monkeypatch.setattr(f"palimpsest.factory.stations.{module}.generate", fake)
+    for module in JSON_STATIONS:
+        monkeypatch.setattr(f"palimpsest.factory.stations.{module}.generate_json", fake_json)
     return fake
 
 

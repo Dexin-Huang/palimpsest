@@ -4,12 +4,11 @@ translation brief — the jig the page line's translate station clamps into
 
 from __future__ import annotations
 
-import json
 import math
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.gateway.client import ModelRequest, generate, strip_json_fences
+from palimpsest.factory.gateway.client import ModelRequest, generate_json
 from palimpsest.factory.workspace.io import read_json
 
 TOKENS_PER_CHAR = 0.35  # rough estimate for mixed Latin/abbreviations
@@ -37,14 +36,14 @@ class Survey(Station):
             chunk_text = "\n\n".join(
                 f"[{r['page_id']}]\n{r['text']}" for r in chunk if r["text"].strip()
             )
-            response = generate(ModelRequest(
+            partial, response = generate_json(ModelRequest(
                 model=job.config.model,
                 prompt=job.config.prompt.text + "\n\n" + chunk_text,
                 temperature=job.config.params.get("temperature", 0.1),
                 max_output_tokens=job.config.params.get("max_output_tokens", 32768),
                 json_output=True,
             ))
-            partials.append(json.loads(strip_json_fences(response.text)))
+            partials.append(partial)
             tokens_in += response.prompt_tokens
             tokens_out += response.output_tokens
             cost += response.cost_usd or 0.0

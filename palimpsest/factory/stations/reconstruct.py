@@ -13,7 +13,7 @@ import json
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.gateway.client import ModelRequest, generate, strip_json_fences
+from palimpsest.factory.gateway.client import ModelRequest, generate_json
 from palimpsest.factory.workspace.io import read_json
 
 _FLOW_JOINS = {"hyphenation_repair", "sentence_continuation"}
@@ -33,14 +33,13 @@ class Reconstruct(Station):
             for page in job.pages
         ]
         plan_text = "\n\n".join(_page_block(page) for page in pages)
-        response = generate(ModelRequest(
+        plan, response = generate_json(ModelRequest(
             model=job.config.model,
             prompt=job.config.prompt.text + "\n\n" + plan_text,
             temperature=job.config.params.get("temperature", 0.1),
             max_output_tokens=job.config.params.get("max_output_tokens", 32768),
             json_output=True,
         ))
-        plan = json.loads(strip_json_fences(response.text))
 
         by_id = {page["page_id"]: page for page in pages}
         order = [page["page_id"] for page in pages]

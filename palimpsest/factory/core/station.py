@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Literal, Mapping
 
 from palimpsest.factory.prompt_store import Prompt
-from palimpsest.factory.workspace.layout import artifact_path
+from palimpsest.factory.workspace.layout import PAGE_KIND_SUFFIX, artifact_path
 
 
 @dataclass(frozen=True)
@@ -82,11 +82,14 @@ class Station:
     def input_paths(self, job: Job) -> list[Path]:
         if self.grain == "page":
             return [job.path_of(kind) for kind in self.consumes]
-        return [
-            job.path_of(kind, page["page_id"])
-            for kind in self.consumes
-            for page in job.pages
-        ]
+        paths = []
+        for kind in self.consumes:
+            if kind in PAGE_KIND_SUFFIX:  # one file per page
+                paths.extend(
+                    job.path_of(kind, page["page_id"]) for page in job.pages)
+            else:  # manuscript-grain kinds are single files
+                paths.append(job.path_of(kind))
+        return paths
 
     def output_path(self, job: Job) -> Path:
         return job.path_of(self.produces)

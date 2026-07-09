@@ -8,6 +8,7 @@ provider. No station ever instantiates a provider client.
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -79,6 +80,45 @@ def strip_json_fences(text: str) -> str:
     if lines and lines[-1].lstrip().startswith("```"):
         lines = lines[:-1]
     return "\n".join(lines).strip()
+
+
+def parse_json_response(text: str):
+    """Parse a model's JSON reply robustly: strip fences, then take the
+    FIRST complete JSON value and ignore trailing data — some models append
+    commentary or a second object even in JSON mode."""
+    cleaned = strip_json_fences(text).lstrip()
+    value, _ = json.JSONDecoder().raw_decode(cleaned)
+    return value
+
+
+def generate_json(request: ModelRequest, *, attempts: int = 3):
+    """Call the model until it produces parseable JSON (some models emit
+    intermittently malformed JSON even in JSON mode). Returns
+    (parsed_value, response) with usage summed across all attempts."""
+    tokens_in = tokens_out = total = 0
+    cost = 0.0
+    last_error: json.JSONDecodeError | None = None
+    for _ in range(attempts):
+        response = generate(request)
+        tokens_in += response.prompt_tokens
+        tokens_out += response.output_tokens
+        total += response.total_tokens
+        cost += response.cost_usd or 0.0
+        try:
+            value = parse_json_response(response.text)
+        except json.JSONDecodeError as error:
+            last_error = error
+            continue
+        summed = ModelResponse(
+            text=response.text, model=response.model,
+            finish_reason=response.finish_reason,
+            prompt_tokens=tokens_in, output_tokens=tokens_out,
+            total_tokens=total, cost_usd=cost or None,
+        )
+        return value, summed
+    raise GatewayError(
+        f"Model returned unparseable JSON after {attempts} attempts: {last_error}"
+    )
 
 
 def _resolve_provider(model: str):
