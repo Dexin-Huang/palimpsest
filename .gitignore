@@ -68,3 +68,5 @@ _inbox/
 # Local tooling state
 .playwright-cli/
 .labyrinth/
+.venv/
+site/

@@ -18,6 +18,8 @@ dependencies = [
   "lxml>=5.0.0",
   "reportlab>=4.0.0",
   "Pillow>=10.0.0",
+  "PyYAML>=6.0",
+  "EbookLib>=0.18",
 ]
 
 [project.scripts]

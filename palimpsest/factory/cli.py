@@ -50,6 +50,13 @@ def add_factory_subparser(subparsers) -> None:
     )
     run.set_defaults(func=cmd_run)
 
+    site = factory_subparsers.add_parser(
+        "site", help="Rebuild the hosted library from all published books"
+    )
+    site.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    site.add_argument("--site-root", type=Path, default=None)
+    site.set_defaults(func=cmd_site)
+
 
 def cmd_init_db(args: argparse.Namespace) -> None:
     with Ledger(args.db):
@@ -85,6 +92,15 @@ def cmd_run(args: argparse.Namespace) -> None:
         elif cell.action == "outdated":
             print(f"  outdated {cell.station} {cell.page_id or '(manuscript)'} "
                   f"— re-run with --refresh {cell.station}")
+
+
+def cmd_site(args: argparse.Namespace) -> None:
+    from palimpsest.factory.site import DEFAULT_SITE_ROOT, build
+
+    site_root = args.site_root or DEFAULT_SITE_ROOT
+    shelved = build(args.library_root, site_root)
+    print(f"site/ rebuilt with {len(shelved)} book(s): {', '.join(shelved) or '—'}")
+    print(f"open {site_root / 'index.html'}")
 
 
 def cmd_status(args: argparse.Namespace) -> None:

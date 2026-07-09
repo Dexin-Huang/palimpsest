@@ -18,3 +18,9 @@ line:
     - station: survey
       model: ${PALIMPSEST_MODEL_READING}
       prompt: survey/la/brief
+    - station: reconstruct
+      model: ${PALIMPSEST_MODEL_READING}
+      prompt: reconstruct/la/structure
+    - station: publish
+      original_language: la
+    - station: render_epub

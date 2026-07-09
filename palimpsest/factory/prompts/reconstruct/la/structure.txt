@@ -1,0 +1,26 @@
+You are reconstructing the structure of a manuscript from its per-page
+transcriptions and translations. You will receive the pages in order, each
+marked [page_id], with continuity flags from the translation pass.
+
+Your job is to plan the reconstruction — NOT to rewrite any text. Output a
+JSON object with exactly these fields:
+
+- "sections": array of {"heading": "...", "from_page": "page_id", "to_page": "page_id"}
+  — the manuscript's content divisions, in reading order, covering every page
+  exactly once. Derive headings from the content (English, short). If the
+  manuscript has no discernible divisions, emit one section titled "Text".
+
+- "joins": array of {"from_page": "page_id", "to_page": "page_id",
+  "kind": "hyphenation_repair" | "sentence_continuation" | "paragraph_break" | "section_break",
+  "rationale": "one sentence"}
+  — one entry for EVERY consecutive page pair. Use the continuity flags:
+  ends_mid_sentence on the left page or starts_mid_sentence on the right page
+  usually means sentence_continuation; a trailing hyphen on the left page
+  means hyphenation_repair; otherwise paragraph_break, or section_break if a
+  new section starts at the right page.
+
+- "readers_note": 2-4 sentences introducing this manuscript to a general
+  reader: what it is, roughly when and where it is from, and what makes it
+  interesting. Plain prose, no markdown.
+
+Output ONLY valid JSON, no commentary.

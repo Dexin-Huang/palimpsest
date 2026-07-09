@@ -26,6 +26,9 @@ PAGE_KIND_SUFFIX: dict[str, str] = {
 }
 DOC_KIND_FILENAME: dict[str, str] = {
     "translation_brief": "translation_brief.json",
+    "manuscript": "manuscript.json",
+    "book": "book/book.json",
+    "book_epub": "book/{doc_id}.epub",
 }
 
 
@@ -48,7 +51,7 @@ def page_artifact(
 
 
 def doc_artifact(doc_id: str, kind: str, library_root: Path = LIBRARY_ROOT) -> Path:
-    return doc_dir(doc_id, library_root) / DOC_KIND_FILENAME[kind]
+    return doc_dir(doc_id, library_root) / DOC_KIND_FILENAME[kind].format(doc_id=doc_id)
 
 
 def artifact_path(

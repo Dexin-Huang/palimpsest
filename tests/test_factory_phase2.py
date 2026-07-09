@@ -42,6 +42,18 @@ def ledger(library):
         yield ledger
 
 
+RECONSTRUCT_PLAN = {
+    "sections": [{"heading": "Remedies", "from_page": "f001r", "to_page": "f001v"}],
+    "joins": [{
+        "from_page": "f001r", "to_page": "f001v",
+        "kind": "sentence_continuation", "rationale": "flags say so",
+    }],
+    "readers_note": "A small test codex of remedies.",
+}
+
+MODEL_STATIONS = ("read", "translate", "survey", "reconstruct")
+
+
 class ScriptedGateway:
     """Deterministic fake: reply depends on which prompt/station is calling."""
 
@@ -54,6 +66,8 @@ class ScriptedGateway:
         if request.images:  # read station
             page_id = request.images[0].stem
             text = self.read_texts[page_id]
+        elif request.json_output and "reconstructing the structure" in request.prompt:
+            text = json.dumps(RECONSTRUCT_PLAN)
         elif request.json_output:  # survey station
             text = json.dumps({
                 "terms": [{"term": "febris", "translation": "fever", "note": ""}],
@@ -71,7 +85,7 @@ class ScriptedGateway:
 @pytest.fixture
 def gateway(monkeypatch):
     fake = ScriptedGateway()
-    for module in ("read", "translate", "survey"):
+    for module in MODEL_STATIONS:
         monkeypatch.setattr(f"palimpsest.factory.stations.{module}.generate", fake)
     return fake
 
@@ -98,7 +112,8 @@ def test_recipe_loads_and_validates():
     recipe = load_recipe("latin_manuscript")
     assert [s.station.name for s in recipe.page_stations] == [
         "acquire", "prepare", "read", "translate", "assemble_page"]
-    assert [s.station.name for s in recipe.manuscript_stations] == ["survey"]
+    assert [s.station.name for s in recipe.manuscript_stations] == [
+        "survey", "reconstruct", "publish", "render_epub"]
     assert recipe.page_stations[2].model  # ${VAR} interpolated
 
 
@@ -106,8 +121,8 @@ def test_end_to_end_line(ledger, library, gateway, fetch):
     report = run_line(ledger, library)
 
     assert report.count("failed") == 0
-    # 5 page stations × 2 pages + survey
-    assert report.count("ran") == 11
+    # 5 page stations × 2 pages + 4 manuscript stations
+    assert report.count("ran") == 14
 
     assembled = read_json(artifact_path(DOC, "page_assembled", "f001r", library))
     assert assembled["original"]["text"] == "Experimenta ad morbos"
@@ -141,7 +156,7 @@ def test_second_run_is_all_fresh(ledger, library, gateway, fetch):
     calls_before = len(gateway.calls)
     report = run_line(ledger, library)
     assert report.count("ran") == 0
-    assert report.count("fresh") == 11
+    assert report.count("fresh") == 14
     assert len(gateway.calls) == calls_before  # not a single paid call
 
 
@@ -176,7 +191,7 @@ def test_config_drift_is_outdated_not_rerun(ledger, library, gateway, fetch, tmp
     prompts = tmp_path / "prompts"
     (prompts / "read" / "la").mkdir(parents=True)
     (prompts / "read" / "la" / "diplomatic.txt").write_text("NEW PROMPT", encoding="utf-8")
-    for name in ("survey/la/brief", "translate/la/with_brief"):
+    for name in ("survey/la/brief", "translate/la/with_brief", "reconstruct/la/structure"):
         src = factory_config.PROMPTS_DIR / f"{name}.txt"
         dest = prompts / f"{name}.txt"
         dest.parent.mkdir(parents=True, exist_ok=True)
