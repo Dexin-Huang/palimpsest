@@ -26,6 +26,15 @@ from palimpsest.factory.imaging import glyph_height, ink_masks, to_gray
 
 ANALYSIS_MAX_SIDE = 1600
 MIN_REGION_INK_PX = 60
+# Drawing strokes (diagram circles, long curves) are single ink components
+# big in BOTH dimensions but nearly empty in their bbox; writing components
+# are glyph-scale. Separated before fusing so figures stay whole.
+DRAWING_MIN_GLYPHS = 4.0
+DRAWING_MAX_DENSITY = 0.15
+# Verso bleed-through passes the ink-core test on heavily written folios,
+# but its MEDIAN depth is consistently shallower than same-page real ink
+# (measured on Pal.lat.1199: bleed ≈ 141-146 gray vs text ≈ 111-117).
+BLEED_DEPTH_DELTA = 22
 # Real writing fills ≥ ~4% of its fused bbox; blobs fused out of scattered
 # dirt/foxing specks measure ≤ ~1.6% (measured on Pal.lat.1199).
 MIN_REGION_DENSITY = 0.03
@@ -93,10 +102,14 @@ def analyze(image: np.ndarray, options: dict) -> dict:
     ink = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
     glyph = glyph_height(dark)
 
-    blobs = _drop_edge_artifacts(_blobs(ink, glyph), gray.shape)
+    writing, figure_boxes = _extract_drawings(ink, glyph)
+    blobs = _drop_edge_artifacts(_blobs(writing, glyph), gray.shape)
     blobs = _merge_overlaps(blobs)
-    blobs = [split for blob in blobs for split in _split_tall(ink, blob, glyph)]
-    regions = _classify(blobs, ink, gray.shape, glyph, scale)
+    blobs = [split for blob in blobs for split in _split_tall(writing, blob, glyph)]
+    regions = _classify(blobs, writing, gray, glyph, scale)
+    page_depth = float(np.median(gray[writing > 0])) if cv2.countNonZero(writing) else None
+    regions = _drop_bleed_through(regions, page_depth, options)
+    regions = _add_figures(regions, figure_boxes, ink, scale)
     regions.sort(key=lambda r: (r["kind"] == "marginalia", r["bbox"][1], r["bbox"][0]))
     for order, region in enumerate(regions):
         region["region_id"] = f"r{order:02d}"
@@ -130,6 +143,65 @@ def _blobs(ink: np.ndarray, glyph: int) -> list[tuple[int, int, int, int]]:
     n, _, stats, _ = cv2.connectedComponentsWithStats(fused)
     return [tuple(stats[i][:4]) for i in range(1, n)
             if stats[i][4] >= ink.shape[0] * ink.shape[1] * 0.0004]
+
+
+def _extract_drawings(
+    ink: np.ndarray, glyph: int
+) -> tuple[np.ndarray, list[tuple[int, int, int, int]]]:
+    """Split ink into writing vs drawing strokes; return (writing_mask,
+    merged figure bboxes). A drawing stroke is one component big in both
+    dimensions with almost no fill — a circle arc, not a word."""
+    min_side = glyph * DRAWING_MIN_GLYPHS
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(ink)
+    writing = ink.copy()
+    drawing_boxes = []
+    for i in range(1, n):
+        x, y, bw, bh, area = stats[i]
+        if bw > min_side and bh > min_side and area < DRAWING_MAX_DENSITY * bw * bh:
+            writing[labels == i] = 0
+            drawing_boxes.append((x, y, bw, bh))
+    return writing, _merge_overlaps(drawing_boxes)
+
+
+def _drop_bleed_through(
+    regions: list[dict], page_depth: float | None, options: dict
+) -> list[dict]:
+    """Drop regions whose ink is uniformly shallower than the page's own
+    ink median — verso bleed-through. The page-wide median is dominated by
+    real body text and immune to a few dark initials; on faded hands
+    (where EVERYTHING is shallow) the reference shifts with them."""
+    if page_depth is None or len(regions) < 2:
+        return regions
+    delta = float(options.get("bleed_depth_delta", BLEED_DEPTH_DELTA))
+    return [r for r in regions if r["depth"] <= page_depth + delta]
+
+
+def _add_figures(
+    regions: list[dict], figure_boxes: list[tuple[int, int, int, int]],
+    ink: np.ndarray, scale: float,
+) -> list[dict]:
+    """Figures become whole regions (never split); writing regions mostly
+    inside a figure are dropped — the figure tile reads their labels."""
+    for x, y, bw, bh in figure_boxes:
+        ink_px = int(cv2.countNonZero(ink[y:y + bh, x:x + bw]))
+        regions = [r for r in regions if not _mostly_inside(
+            [int(v * scale) for v in r["bbox"]], (x, y, bw, bh))]
+        regions.append({
+            "kind": "figure",
+            "bbox": [int(v / scale) for v in (x, y, bw, bh)],
+            "est_lines": 1,
+            "ink_px": ink_px,
+            "depth": 0.0,
+        })
+    return regions
+
+
+def _mostly_inside(inner: list[int], outer: tuple[int, int, int, int]) -> bool:
+    ix, iy, iw, ih = inner
+    ox, oy, ow, oh = outer
+    overlap_w = max(0, min(ix + iw, ox + ow) - max(ix, ox))
+    overlap_h = max(0, min(iy + ih, oy + oh) - max(iy, oy))
+    return overlap_w * overlap_h >= 0.7 * iw * ih
 
 
 def _drop_edge_artifacts(
@@ -213,14 +285,16 @@ def _split_tall(
 
 def _classify(
     blobs: list[tuple[int, int, int, int]], ink: np.ndarray,
-    shape: tuple[int, int], glyph: int, scale: float,
+    gray: np.ndarray, glyph: int, scale: float,
 ) -> list[dict]:
-    hs, ws = shape
+    hs, ws = gray.shape
     regions = []
     for x, y, bw, bh in blobs:
-        ink_px = int(cv2.countNonZero(ink[y:y + bh, x:x + bw]))
+        roi_ink = ink[y:y + bh, x:x + bw] > 0
+        ink_px = int(roi_ink.sum())
         if ink_px < MIN_REGION_INK_PX or ink_px < MIN_REGION_DENSITY * bw * bh:
             continue
+        depth = float(np.median(gray[y:y + bh, x:x + bw][roi_ink]))
         cx, cy = (x + bw / 2) / ws, (y + bh / 2) / hs
         frac = (bw * bh) / (hs * ws)
         if frac >= 0.10 and 0.2 <= cx <= 0.8:
@@ -234,6 +308,7 @@ def _classify(
             "bbox": [int(v / scale) for v in (x, y, bw, bh)],
             "est_lines": max(1, round(bh / (glyph * 1.7))),
             "ink_px": ink_px,
+            "depth": depth,
         })
     return regions
 

@@ -116,6 +116,37 @@ def test_segment_dense_page_routes_segmented_with_marginalia(tmp_path):
     assert ordered[-1]["kind"] == "marginalia"
 
 
+def test_segment_extracts_figures_whole(tmp_path):
+    page = _page(1000, 700)
+    _text_block(page, 100, 60, lines=8, line_w=300)
+    # a diagram: large thin-stroke concentric circles — big in both dims,
+    # nearly empty bbox
+    for radius in (150, 110, 70):
+        cv2.circle(page, (350, 650), radius, (30,) * 3, 3)
+    job = _job(tmp_path)
+    _write_clean_image(job, page)
+    payload = Segment().run(job).payload
+
+    figures = [r for r in payload["regions"] if r["kind"] == "figure"]
+    assert len(figures) == 1
+    x, y, bw, bh = figures[0]["bbox"]
+    assert bw > 250 and bh > 250  # the whole diagram, not slices
+    assert any(r["kind"] != "figure" for r in payload["regions"])  # text kept
+
+
+def test_segment_drops_bleed_through(tmp_path):
+    page = _page(1000, 700)
+    _text_block(page, 100, 100, lines=8, line_w=300, shade=30)    # real ink
+    _text_block(page, 100, 450, lines=6, line_w=300, shade=150)   # bleed-depth
+    job = _job(tmp_path)
+    _write_clean_image(job, page)
+    payload = Segment().run(job).payload
+
+    tops = [r["bbox"][1] for r in payload["regions"]]
+    assert any(y < 400 for y in tops)        # real block survives
+    assert not any(y >= 400 for y in tops)   # shallow block dropped
+
+
 # --- read v2 routing ----------------------------------------------------------
 
 class RouteGateway:
