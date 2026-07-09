@@ -3,7 +3,9 @@
 from palimpsest.factory.stations import (  # noqa: F401
     acquire,
     assemble_page,
-    prepare,
+    deframe,
+    dewatermark,
+    flatten,
     publish,
     read,
     reconstruct,

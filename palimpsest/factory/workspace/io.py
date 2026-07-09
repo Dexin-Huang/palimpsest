@@ -36,6 +36,13 @@ def atomic_write_text(path: Path, text: str) -> None:
     _atomic_write(path, lambda handle: handle.write(text))
 
 
+def atomic_write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_bytes(data)
+    os.replace(tmp_path, path)
+
+
 def atomic_write_json(path: Path, payload: Any, *, ensure_ascii: bool = False) -> None:
     atomic_write_text(path, json.dumps(payload, indent=2, ensure_ascii=ensure_ascii))
 

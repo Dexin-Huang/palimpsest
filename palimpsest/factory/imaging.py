@@ -77,28 +77,59 @@ def ink_masks(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return dark, faint
 
 
-def remove_large_light_marks(image: np.ndarray) -> np.ndarray:
-    """Paint watermark-scale light components back to background color.
+def remove_overlay_marks(
+    image: np.ndarray,
+    *,
+    height_fraction: float = 0.01,
+    max_std: float = 12.0,
+    analysis_max_side: int = 1600,
+) -> np.ndarray:
+    """Paint digital overlay marks (watermarks, stamps) back to background.
 
-    Preserves dark ink untouched and keeps small faint marks (pencil notes).
+    Two-part discriminator, both required: letterform HEIGHT (overlay letters
+    are tall; pencil words are wide but short) and intensity UNIFORMITY
+    (a rendered overlay has near-constant gray; pencil and faded ink vary
+    with pressure). Dark ink is never touched.
+
+    Detection runs at analysis scale — INTER_AREA downsampling averages out
+    the JPEG noise that hides low-contrast overlays from the adaptive
+    threshold at full resolution — and the removal mask is painted back at
+    full resolution.
     """
-    gray = to_gray(image)
-    marks = mark_mask(gray)
-    bg = background_level(gray)
-    dark = (gray < bg - DARK_INK_OFFSET).astype(np.uint8) * 255
-    light = cv2.bitwise_and(marks, cv2.bitwise_not(dark))
+    gray_full = to_gray(image)
+    height, width = gray_full.shape
+    scale = min(1.0, analysis_max_side / max(height, width))
+    gray = cv2.resize(gray_full, None, fx=scale, fy=scale,
+                      interpolation=cv2.INTER_AREA) if scale < 1.0 else gray_full
 
-    h, w = gray.shape
-    max_height = max(2, int(min(h, w) * LARGE_LIGHT_HEIGHT_FRACTION))
+    bg = background_level(gray)
+    # The overlay lives in the LIGHT BAND between parchment and ink depth.
+    # Detect in the band directly — the adaptive mark mask only catches
+    # letter fragments because a soft overlay's local contrast is too low.
+    band_low, band_high = bg - DARK_INK_OFFSET, bg - 8
+    light = ((gray > band_low) & (gray < band_high)).astype(np.uint8) * 255
+    light = cv2.morphologyEx(light, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+
+    max_height = max(2, int(min(gray.shape) * height_fraction))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(light)
     to_remove = np.zeros_like(light)
     for i in range(1, n):
-        _, _, bw, bh, _ = stats[i]
-        if bh > max_height:
-            to_remove[labels == i] = 255
-    # dilate slightly so anti-aliased watermark edges go too
-    to_remove = cv2.dilate(to_remove, np.ones((3, 3), np.uint8))
-    to_remove = cv2.bitwise_and(to_remove, cv2.bitwise_not(dark))
+        _, _, bw, bh, area = stats[i]
+        if bh <= max_height or area < 4:
+            continue
+        component = labels == i
+        if float(np.std(gray[component])) <= max_std:
+            to_remove[component] = 255
+
+    if scale < 1.0:
+        to_remove = cv2.resize(to_remove, (width, height),
+                               interpolation=cv2.INTER_NEAREST)
+    # dilate generously so anti-aliased overlay edges go too, then keep hands
+    # off anything that is real dark ink at full resolution
+    pad = max(3, int(round(1 / max(scale, 1e-6))) + 2)
+    to_remove = cv2.dilate(to_remove, np.ones((pad, pad), np.uint8))
+    dark_full = (gray_full < background_level(gray_full) - DARK_INK_OFFSET)
+    to_remove[dark_full] = 0
 
     cleaned = image.copy()
     if cleaned.ndim == 2:
@@ -107,6 +138,39 @@ def remove_large_light_marks(image: np.ndarray) -> np.ndarray:
         fill = np.median(image.reshape(-1, image.shape[2]), axis=0)
         cleaned[to_remove > 0] = fill
     return cleaned
+
+
+def flatten_illumination(image: np.ndarray, *, target: int = 235) -> np.ndarray:
+    """Divide out the low-frequency background field: vellum shading, gutter
+    shadow, and uneven lighting go away; strokes keep their shape and color."""
+    channels = image.astype(np.float32)
+    sigma = max(image.shape[:2]) / 40
+    field = cv2.GaussianBlur(channels, (0, 0), sigmaX=sigma)
+    flat = channels / np.maximum(field, 1) * target
+    return np.clip(flat, 0, 255).astype(np.uint8)
+
+
+def attenuate_light_marks(
+    image: np.ndarray, *, ink_offset: int = DARK_INK_OFFSET, factor: float = 0.45
+) -> np.ndarray:
+    """Push everything LIGHTER than the ink band toward white, proportionally.
+
+    Show-through and residue fade; ink is untouched; nothing is thresholded
+    away — a faint-but-real stroke dims instead of disappearing.
+    """
+    gray = to_gray(image).astype(np.float32)
+    cut = background_level(gray) - ink_offset
+    lighter = gray > cut  # 2-D mask broadcasts over color channels
+    result = image.astype(np.float32)
+    result[lighter] = 255 - (255 - result[lighter]) * factor
+    return np.clip(result, 0, 255).astype(np.uint8)
+
+
+def encode_jpeg(image: np.ndarray, *, quality: int = 92) -> bytes:
+    ok, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    if not ok:
+        raise ValueError("JPEG encoding failed")
+    return buffer.tobytes()
 
 
 def parchment_frame(gray: np.ndarray, *, margin_fraction: float = 0.02) -> tuple[int, int, int, int]:

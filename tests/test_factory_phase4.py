@@ -59,7 +59,7 @@ def test_watermark_removed_faint_marks_kept():
     # dark ink line
     cv2.rectangle(page, (150, 700), (400, 712), (30,) * 3, -1)
 
-    cleaned = imaging.remove_large_light_marks(page)
+    cleaned = imaging.remove_overlay_marks(page)
     gray = imaging.to_gray(cleaned)
     assert gray[220, 300] > 225          # top of watermark ring painted away
     assert gray[400, 120] > 225          # left of ring painted away

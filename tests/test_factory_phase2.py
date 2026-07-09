@@ -125,18 +125,19 @@ def run_line(ledger, library, **kw):
 def test_recipe_loads_and_validates():
     recipe = load_recipe("latin_manuscript")
     assert [s.station.name for s in recipe.page_stations] == [
-        "acquire", "prepare", "segment", "read", "translate", "assemble_page"]
+        "acquire", "deframe", "dewatermark", "flatten", "segment", "read",
+        "translate", "assemble_page"]
     assert [s.station.name for s in recipe.manuscript_stations] == [
         "survey", "reconstruct", "publish", "render_epub"]
-    assert recipe.page_stations[3].model  # ${VAR} interpolated
+    assert recipe.page_stations[5].model  # ${VAR} interpolated
 
 
 def test_end_to_end_line(ledger, library, gateway, fetch):
     report = run_line(ledger, library)
 
     assert report.count("failed") == 0
-    # 6 page stations × 2 pages + 4 manuscript stations
-    assert report.count("ran") == 16
+    # 8 page stations × 2 pages + 4 manuscript stations
+    assert report.count("ran") == 20
 
     assembled = read_json(artifact_path(DOC, "page_assembled", "f001r", library))
     assert assembled["original"]["text"] == "Experimenta ad morbos"
@@ -170,7 +171,7 @@ def test_second_run_is_all_fresh(ledger, library, gateway, fetch):
     calls_before = len(gateway.calls)
     report = run_line(ledger, library)
     assert report.count("ran") == 0
-    assert report.count("fresh") == 16
+    assert report.count("fresh") == 20
     assert len(gateway.calls) == calls_before  # not a single paid call
 
 

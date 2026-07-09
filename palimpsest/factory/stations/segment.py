@@ -29,6 +29,10 @@ MIN_REGION_INK_PX = 60
 # Real writing fills ≥ ~4% of its fused bbox; blobs fused out of scattered
 # dirt/foxing specks measure ≤ ~1.6% (measured on Pal.lat.1199).
 MIN_REGION_DENSITY = 0.03
+# A full-page read needs substantial ink to anchor the model; near-empty
+# pages go as region tiles instead — a stain tile reads as empty, but a
+# near-blank full page invites page-scale hallucination.
+FULL_PAGE_MIN_INK_PX = 1500
 MAX_LINES_PER_REGION = 14     # split blobs taller than this many text lines
 FULL_PAGE_MAX_REGIONS = 3     # routing: few blobs and few lines → one call
 FULL_PAGE_MAX_LINES = 30
@@ -66,7 +70,8 @@ class Segment(Station):
         ink = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
         glyph = glyph_height(dark)
 
-        blobs = _blobs(ink, glyph)
+        blobs = _drop_edge_artifacts(_blobs(ink, glyph), gray.shape)
+        blobs = _merge_overlaps(blobs)
         blobs = [split for blob in blobs for split in _split_tall(ink, blob, glyph)]
         regions = _classify(blobs, ink, gray.shape, glyph, scale)
         regions.sort(key=lambda r: (r["kind"] == "marginalia", r["bbox"][1], r["bbox"][0]))
@@ -75,10 +80,12 @@ class Segment(Station):
             region["reading_order"] = order
 
         total_lines = sum(r["est_lines"] for r in regions)
+        total_ink = sum(r["ink_px"] for r in regions)
         options = job.config.options
         if not regions:
             route = "blank"
-        elif (len(regions) <= int(options.get("full_page_max_regions", FULL_PAGE_MAX_REGIONS))
+        elif (total_ink >= int(options.get("full_page_min_ink", FULL_PAGE_MIN_INK_PX))
+              and len(regions) <= int(options.get("full_page_max_regions", FULL_PAGE_MAX_REGIONS))
               and total_lines <= int(options.get("full_page_max_lines", FULL_PAGE_MAX_LINES))):
             route = "full_page"
         else:
@@ -103,6 +110,55 @@ def _blobs(ink: np.ndarray, glyph: int) -> list[tuple[int, int, int, int]]:
     n, _, stats, _ = cv2.connectedComponentsWithStats(fused)
     return [tuple(stats[i][:4]) for i in range(1, n)
             if stats[i][4] >= ink.shape[0] * ink.shape[1] * 0.0004]
+
+
+def _drop_edge_artifacts(
+    blobs: list[tuple[int, int, int, int]], shape: tuple[int, int]
+) -> list[tuple[int, int, int, int]]:
+    """Filter frame residue BEFORE merging, so junk can't fuse with content.
+
+    Two shapes of residue, both flush to an image edge: thin strips (binding
+    line, gutter sliver) and full-span bands (page-curl shadow, backdrop).
+    Real marginal content — catchwords, folio marks — is neither.
+    """
+    hs, ws = shape
+    kept = []
+    for x, y, bw, bh in blobs:
+        flush_x = x <= 2 or x + bw >= ws - 2
+        flush_y = y <= 2 or y + bh >= hs - 2
+        if flush_x and (bw < ws * 0.07 or bh > hs * 0.8):
+            continue
+        if flush_y and (bh < hs * 0.03 or bw > ws * 0.8):
+            continue
+        kept.append((x, y, bw, bh))
+    return kept
+
+
+def _merge_overlaps(
+    blobs: list[tuple[int, int, int, int]]
+) -> list[tuple[int, int, int, int]]:
+    """Union blobs whose bboxes substantially overlap — L-shaped components
+    produce overlapping boxes that would otherwise be read twice."""
+    merged = list(blobs)
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(merged)):
+            for j in range(i + 1, len(merged)):
+                ax, ay, aw, ah = merged[i]
+                bx, by, bw, bh = merged[j]
+                ix = max(0, min(ax + aw, bx + bw) - max(ax, bx))
+                iy = max(0, min(ay + ah, by + bh) - max(ay, by))
+                if ix * iy >= 0.4 * min(aw * ah, bw * bh):
+                    x0, y0 = min(ax, bx), min(ay, by)
+                    x1, y1 = max(ax + aw, bx + bw), max(ay + ah, by + bh)
+                    merged[i] = (x0, y0, x1 - x0, y1 - y0)
+                    del merged[j]
+                    changed = True
+                    break
+            if changed:
+                break
+    return merged
 
 
 def _split_tall(
@@ -135,12 +191,6 @@ def _classify(
     for x, y, bw, bh in blobs:
         ink_px = int(cv2.countNonZero(ink[y:y + bh, x:x + bw]))
         if ink_px < MIN_REGION_INK_PX or ink_px < MIN_REGION_DENSITY * bw * bh:
-            continue
-        # binding/frame remnants and gutter bleed: strips hugging a border.
-        # Side strips get a wider tolerance — the neighboring page's text
-        # sliver at the gutter is wider than a frame line but always flush.
-        if (bw < ws * 0.07 and (x <= 2 or x + bw >= ws - 2)) or (
-                bh < hs * 0.03 and (y <= 2 or y + bh >= hs - 2)):
             continue
         cx, cy = (x + bw / 2) / ws, (y + bh / 2) / hs
         frac = (bw * bh) / (hs * ws)

@@ -19,6 +19,8 @@ PAGE_LIST_FILENAME = "page_list.json"
 # a station producing an unlisted kind is a validation error.
 PAGE_KIND_SUFFIX: dict[str, str] = {
     "page_image": ".jpg",
+    "page_image_framed": ".jpg",
+    "page_image_unmarked": ".jpg",
     "page_image_clean": ".jpg",
     "page_regions": ".json",
     "page_transcription": ".json",

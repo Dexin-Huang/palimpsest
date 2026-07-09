@@ -3,8 +3,10 @@ language: la
 line:
   page:
     - station: acquire
-    - station: prepare
-      profile: vatican_scan
+    - station: deframe
+    - station: dewatermark
+    - station: flatten
+      mode: attenuate
     - station: segment
     - station: read
       model: ${PALIMPSEST_MODEL_VISION}

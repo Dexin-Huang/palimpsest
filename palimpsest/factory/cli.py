@@ -50,6 +50,15 @@ def add_factory_subparser(subparsers) -> None:
     )
     run.set_defaults(func=cmd_run)
 
+    preview = factory_subparsers.add_parser(
+        "preview", help="Render preprocessing stages + lassos for given pages"
+    )
+    preview.add_argument("--doc-id", required=True)
+    preview.add_argument("--pages", required=True,
+                         help="Comma-separated page ids, e.g. f001r,f002v")
+    preview.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    preview.set_defaults(func=cmd_preview)
+
     site = factory_subparsers.add_parser(
         "site", help="Rebuild the hosted library from all published books"
     )
@@ -92,6 +101,17 @@ def cmd_run(args: argparse.Namespace) -> None:
         elif cell.action == "outdated":
             print(f"  outdated {cell.station} {cell.page_id or '(manuscript)'} "
                   f"— re-run with --refresh {cell.station}")
+
+
+def cmd_preview(args: argparse.Namespace) -> None:
+    from palimpsest.factory.preview import build
+
+    written = build(args.doc_id, args.pages.split(","),
+                    library_root=args.library_root)
+    for path in written:
+        print(path)
+    if not written:
+        print("No artifacts found — run the line (or at least deframe) first.")
 
 
 def cmd_site(args: argparse.Namespace) -> None:
