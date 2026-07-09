@@ -11,6 +11,12 @@ Shape source of truth: [`docs/BLUEPRINT.html`](BLUEPRINT.html) — every
 artifact schema, station I/O, and the recipe format, each marked
 confirmed/proposed/corrected. Shapes are contracts only once confirmed there.
 
+Machine truth: [`docs/CONTRACTS.md`](CONTRACTS.md) — the contract graph
+(input → transformation → output), **generated from the live station and
+contract registries** by `palimpsest factory graph --write-docs` and kept
+current by a test. Contracts are enforced at runtime: unknown kinds fail at
+station registration; JSON artifacts missing required fields fail their cell.
+
 > **Refocus (2026-07-08).** The factory's terminal product is a **readable
 > book**: an EPUB plus a page in a hosted static library, both rendered from
 > one book model (BLUEPRINT.html §7). Ariadne integration is deferred

@@ -3,6 +3,7 @@ plug in here without the conductor knowing them."""
 
 from __future__ import annotations
 
+from palimpsest.factory.core.contracts import CONTRACTS, SOURCE_KINDS
 from palimpsest.factory.core.station import Station
 
 _STATIONS: dict[str, Station] = {}
@@ -11,8 +12,19 @@ _STATIONS: dict[str, Station] = {}
 def register(station: Station) -> Station:
     if station.name in _STATIONS:
         raise ValueError(f"Station already registered: {station.name}")
+    for kind in (*station.consumes, station.produces):
+        if kind not in CONTRACTS and kind not in SOURCE_KINDS:
+            raise ValueError(
+                f"Station {station.name!r} references unknown artifact kind "
+                f"{kind!r} — declare it in core/contracts.py first"
+            )
     _STATIONS[station.name] = station
     return station
+
+
+def all_stations() -> list[Station]:
+    _ensure_loaded()
+    return [_STATIONS[name] for name in sorted(_STATIONS)]
 
 
 def get(name: str) -> Station:

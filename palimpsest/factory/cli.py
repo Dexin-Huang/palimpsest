@@ -50,6 +50,14 @@ def add_factory_subparser(subparsers) -> None:
     )
     run.set_defaults(func=cmd_run)
 
+    graph = factory_subparsers.add_parser(
+        "graph", help="The contract graph (input → transformation → output)"
+    )
+    graph.add_argument("--format", choices=["mermaid", "json"], default="mermaid")
+    graph.add_argument("--write-docs", action="store_true",
+                       help="Regenerate docs/CONTRACTS.md")
+    graph.set_defaults(func=cmd_graph)
+
     preview = factory_subparsers.add_parser(
         "preview", help="Render preprocessing stages + lassos for given pages"
     )
@@ -101,6 +109,15 @@ def cmd_run(args: argparse.Namespace) -> None:
         elif cell.action == "outdated":
             print(f"  outdated {cell.station} {cell.page_id or '(manuscript)'} "
                   f"— re-run with --refresh {cell.station}")
+
+
+def cmd_graph(args: argparse.Namespace) -> None:
+    from palimpsest.factory import graph
+
+    if args.write_docs:
+        print(f"wrote {graph.write_docs()}")
+        return
+    print(graph.to_mermaid() if args.format == "mermaid" else graph.to_json())
 
 
 def cmd_preview(args: argparse.Namespace) -> None:

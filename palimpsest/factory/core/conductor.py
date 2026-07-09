@@ -26,6 +26,7 @@ from pathlib import Path
 
 from palimpsest.factory import prompt_store
 from palimpsest.factory.config import LIBRARY_ROOT
+from palimpsest.factory.core.contracts import validate_payload
 from palimpsest.factory.core.ledger import Ledger, fingerprint
 from palimpsest.factory.core.recipe import Recipe, StationSpec, load as load_recipe
 from palimpsest.factory.core.station import Job, StationConfig
@@ -189,6 +190,7 @@ class Conductor:
             result = station.run(job)
             output_path = station.output_path(job)
             if result.payload is not None:
+                validate_payload(station.produces, result.payload)
                 payload = dict(result.payload)
                 payload["provenance"] = self._provenance(
                     spec, job, config_fp, input_fp, result)

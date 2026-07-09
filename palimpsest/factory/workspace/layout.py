@@ -10,28 +10,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from palimpsest.factory.config import LIBRARY_ROOT
+from palimpsest.factory.core.contracts import CONTRACTS, FORMAT_SUFFIX
 
 METADATA_FILENAME = "metadata.json"
 PAGE_LIST_FILENAME = "page_list.json"
 
-# Page-grain kinds live one-file-per-page under library/<doc_id>/<kind>/;
-# manuscript-grain kinds are single files. This mapping IS the kind registry —
-# a station producing an unlisted kind is a validation error.
+# Storage layout derives from the contract registry (core/contracts.py):
+# page-grain kinds live one-file-per-page under library/<doc_id>/<kind>/;
+# manuscript-grain kinds are single files at their `store` template.
 PAGE_KIND_SUFFIX: dict[str, str] = {
-    "page_image": ".jpg",
-    "page_image_framed": ".jpg",
-    "page_image_unmarked": ".jpg",
-    "page_image_clean": ".jpg",
-    "page_regions": ".json",
-    "page_transcription": ".json",
-    "page_translation": ".json",
-    "page_assembled": ".json",
+    c.kind: FORMAT_SUFFIX[c.format]
+    for c in CONTRACTS.values() if c.grain == "page"
 }
 DOC_KIND_FILENAME: dict[str, str] = {
-    "translation_brief": "translation_brief.json",
-    "manuscript": "manuscript.json",
-    "book": "book/book.json",
-    "book_epub": "book/{doc_id}.epub",
+    c.kind: c.store for c in CONTRACTS.values() if c.grain == "manuscript"
 }
 
 
