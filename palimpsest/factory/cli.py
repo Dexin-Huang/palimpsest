@@ -82,6 +82,20 @@ def add_factory_subparser(subparsers) -> None:
                       help="transcriptions.jsonl for routing sanity checks")
     tune.set_defaults(func=cmd_tune)
 
+    evaluate = factory_subparsers.add_parser(
+        "evaluate", help="Compare factory transcriptions against a reference "
+                         "JSONL: contamination/repetition metrics + optional "
+                         "blind pairwise image judge"
+    )
+    evaluate.add_argument("--doc-id", required=True)
+    evaluate.add_argument("--reference", type=Path, required=True)
+    evaluate.add_argument("--pages", required=True)
+    evaluate.add_argument("--judge-model", default=None)
+    evaluate.add_argument("--image-doc-id", default=None,
+                          help="Doc holding the page images (defaults to --doc-id)")
+    evaluate.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    evaluate.set_defaults(func=cmd_evaluate)
+
     site = factory_subparsers.add_parser(
         "site", help="Rebuild the hosted library from all published books"
     )
@@ -159,6 +173,27 @@ def cmd_tune(args: argparse.Namespace) -> None:
     for row in rows:
         print("  ".join(f"{str(row.get(h, '')):>10}" for h in header))
     print(f"strips: {DEFAULT_OUT_DIR / args.doc_id}")
+
+
+def cmd_evaluate(args: argparse.Namespace) -> None:
+    import sys
+
+    from palimpsest.factory.evaluate import evaluate, render_table
+
+    # judge reasoning may contain characters the Windows console can't encode
+    sys.stdout.reconfigure(errors="replace")
+
+    results = evaluate(
+        args.doc_id, args.reference, args.pages.split(","),
+        library_root=args.library_root,
+        judge_model=args.judge_model,
+        image_doc_id=args.image_doc_id,
+    )
+    print(render_table(results))
+    for result in results:
+        if result.judge_reasoning:
+            print(f"\n[{result.page_id}] judge ({result.judge_winner}, "
+                  f"{result.judge_confidence}): {result.judge_reasoning}")
 
 
 def cmd_site(args: argparse.Namespace) -> None:

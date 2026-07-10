@@ -128,6 +128,9 @@ def _config_kwargs(request: ModelRequest) -> dict:
             config_kwargs["media_resolution"] = _MEDIA_RESOLUTIONS[request.media_resolution]
         except KeyError:
             raise GatewayError(f"Unknown media resolution: {request.media_resolution}")
+    if request.thinking_budget is not None:
+        config_kwargs["thinking_config"] = types.ThinkingConfig(
+            thinking_budget=request.thinking_budget)
     return config_kwargs
 
 

@@ -169,19 +169,22 @@ def test_gemini_config_maps_json_schema():
 # --- read v2 routing ----------------------------------------------------------
 
 class RouteGateway:
+    """Fake for read's generate_json: returns ({'transcription': ...}, response)."""
+
     def __init__(self, finish_reason=None):
         self.calls = []
         self.finish_reason = finish_reason
 
-    def __call__(self, request):
+    def __call__(self, request, **kwargs):
         self.calls.append(request)
         reason = None
         if self.finish_reason and not isinstance(request.images[0], ImageContent):
             reason = self.finish_reason  # only the full-page (Path) call truncates
-        return ModelResponse(
-            text=f"text{len(self.calls)}", model=request.model,
+        response = ModelResponse(
+            text="", model=request.model,
             finish_reason=reason, prompt_tokens=10, output_tokens=5, cost_usd=0.001,
         )
+        return {"transcription": f"text{len(self.calls)}"}, response
 
 
 PROMPT = Prompt(name="read/la/diplomatic", text="Transcribe.", sha256="x" * 64)
@@ -200,7 +203,7 @@ def test_read_blank_route_spends_nothing(tmp_path, monkeypatch):
     _write_clean_image(job, _page())
     _regions_plan(job, "blank", [])
     fake = RouteGateway()
-    monkeypatch.setattr("palimpsest.factory.stations.read.generate", fake)
+    monkeypatch.setattr("palimpsest.factory.stations.read.generate_json", fake)
 
     result = Read().run(job)
     assert result.payload["text"] == ""
@@ -219,7 +222,7 @@ def test_read_segmented_one_call_per_region(tmp_path, monkeypatch):
     ]
     _regions_plan(job, "segmented", regions)
     fake = RouteGateway()
-    monkeypatch.setattr("palimpsest.factory.stations.read.generate", fake)
+    monkeypatch.setattr("palimpsest.factory.stations.read.generate_json", fake)
 
     result = Read().run(job)
     assert len(fake.calls) == 2
@@ -236,7 +239,7 @@ def test_read_full_page_escalates_on_truncation(tmp_path, monkeypatch):
                 "est_lines": 6, "reading_order": 0}]
     _regions_plan(job, "full_page", regions)
     fake = RouteGateway(finish_reason="FinishReason.MAX_TOKENS")
-    monkeypatch.setattr("palimpsest.factory.stations.read.generate", fake)
+    monkeypatch.setattr("palimpsest.factory.stations.read.generate_json", fake)
 
     result = Read().run(job)
     # 1 truncated full-page call + 1 region call

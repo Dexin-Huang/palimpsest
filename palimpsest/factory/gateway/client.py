@@ -35,6 +35,7 @@ class ModelRequest:
     json_output: bool = False            # constrain the response to JSON
     json_schema: Mapping[str, Any] | None = None  # constrained decoding: the
                                          # provider enforces this JSON Schema
+    thinking_budget: int | None = None   # 0 disables thinking; -1 automatic
     allow_empty: bool = False            # empty text is a valid answer, not an error
 
 

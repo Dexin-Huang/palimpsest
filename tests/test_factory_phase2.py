@@ -51,8 +51,8 @@ RECONSTRUCT_PLAN = {
     "readers_note": "A small test codex of remedies.",
 }
 
-TEXT_STATIONS = ("read", "translate")        # call generate() directly
-JSON_STATIONS = ("survey", "reconstruct")    # call generate_json()
+TEXT_STATIONS = ("translate",)                       # call generate() directly
+JSON_STATIONS = ("read", "survey", "reconstruct")    # call generate_json()
 
 
 class ScriptedGateway:
@@ -66,7 +66,7 @@ class ScriptedGateway:
         self.calls.append(request)
         if request.images:  # read station
             page_id = request.images[0].stem
-            text = self.read_texts[page_id]
+            text = json.dumps({"transcription": self.read_texts[page_id]})
         elif request.json_output and "reconstructing the structure" in request.prompt:
             text = json.dumps(RECONSTRUCT_PLAN)
         elif request.json_output:  # survey station
@@ -235,12 +235,15 @@ def test_config_drift_is_outdated_not_rerun(ledger, library, gateway, fetch, tmp
 
 
 def test_failed_page_does_not_stop_line(ledger, library, gateway, fetch, monkeypatch):
-    def flaky(request):
-        if request.images and request.images[0].stem == "f001r":
-            raise RuntimeError("boom")
-        return ScriptedGateway()(request)
+    scripted = ScriptedGateway()
 
-    monkeypatch.setattr("palimpsest.factory.stations.read.generate", flaky)
+    def flaky(request, **kwargs):
+        if request.images and getattr(request.images[0], "stem", "") == "f001r":
+            raise RuntimeError("boom")
+        response = scripted(request)
+        return json.loads(response.text), response
+
+    monkeypatch.setattr("palimpsest.factory.stations.read.generate_json", flaky)
     report = run_line(ledger, library)
 
     failed = [(c.station, c.page_id) for c in report.cells if c.action == "failed"]

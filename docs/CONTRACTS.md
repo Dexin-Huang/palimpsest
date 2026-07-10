@@ -116,7 +116,7 @@ flowchart TB
 | `dewatermark` | dewatermark/v1 | page | `page_image_framed` | `page_image_unmarked` | no |
 | `flatten` | flatten/v1 | page | `page_image_unmarked` | `page_image_clean` | no |
 | `publish` | publish/v1 | manuscript | `manuscript` | `book` | no |
-| `read` | read/v2 | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
+| `read` | read/v3 | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
 | `reconstruct` | reconstruct/v1 | manuscript | `page_assembled` | `manuscript` | yes |
 | `render_epub` | render_epub/v1 | manuscript | `book` | `book_epub` | no |
 | `segment` | segment/v1 | page | `page_image_clean` | `page_regions` | no |

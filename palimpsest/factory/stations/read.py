@@ -19,7 +19,12 @@ import numpy as np
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.gateway.client import ImageContent, ModelRequest, generate
+from palimpsest.factory.gateway.client import (
+    GatewayError,
+    ImageContent,
+    ModelRequest,
+    generate_json,
+)
 from palimpsest.factory.imaging import encode_png
 from palimpsest.factory.workspace.io import read_json
 
@@ -29,10 +34,18 @@ DEFAULT_SYSTEM_PROMPT = (
 TILE_PAD_GLYPHS = 1.5
 _TRUNCATION_REASONS = ("MAX_TOKENS", "LENGTH")
 
+# Thinking models sometimes deliberate in their output; a schema leaves no
+# channel for anything but the transcription itself.
+READ_SCHEMA = {
+    "type": "object",
+    "properties": {"transcription": {"type": "string"}},
+    "required": ["transcription"],
+}
+
 
 class Read(Station):
     name = "read"
-    version = "read/v2"
+    version = "read/v3"
     grain = "page"
     consumes = ("page_image_clean", "page_regions")
     produces = "page_transcription"
@@ -68,7 +81,7 @@ class Read(Station):
         )
 
     def _full_page(self, job: Job, plan: dict, usage: "_Usage"):
-        response = self._call(job, (job.path_of("page_image_clean"),), usage)
+        text, response = self._call(job, (job.path_of("page_image_clean"),), usage)
         truncated = response.finish_reason and any(
             reason in response.finish_reason.upper() for reason in _TRUNCATION_REASONS
         )
@@ -76,7 +89,7 @@ class Read(Station):
             # dense page mis-routed: escalate rather than keep a truncation
             regions, text = self._segmented(job, plan, usage)
             return regions, text, True
-        return [], response.text, False
+        return [], text, False
 
     def _segmented(self, job: Job, plan: dict, usage: "_Usage"):
         image = cv2.imread(str(job.path_of("page_image_clean")))
@@ -90,34 +103,46 @@ class Read(Station):
         ordered = sorted(plan["regions"], key=lambda r: r["reading_order"])
         for region in ordered:
             tile = _tile(image, region["bbox"], pad)
-            response = self._call(job, (ImageContent(encode_png(tile)),), usage)
             entry = {
                 "region_id": region["region_id"],
                 "kind": region["kind"],
                 "bbox": region["bbox"],
-                "text": response.text,
+                "text": "",
             }
+            try:
+                entry["text"], _ = self._call(
+                    job, (ImageContent(encode_png(tile)),), usage,
+                    max_tokens=_tile_token_cap(region["est_lines"]),
+                )
+            except GatewayError as error:
+                # a pathological tile (model loops on damaged/hyper-abbreviated
+                # script) becomes an auditable hole, not a dead page
+                entry["error"] = str(error)
             regions_out.append(entry)
-            texts.append(
-                f"[margin] {response.text}" if region["kind"] == "marginalia"
-                else response.text
-            )
+            if entry["text"]:
+                texts.append(
+                    f"[margin] {entry['text']}" if region["kind"] == "marginalia"
+                    else entry["text"]
+                )
         return regions_out, "\n\n".join(texts)
 
-    def _call(self, job: Job, images: tuple, usage: "_Usage"):
+    def _call(self, job: Job, images: tuple, usage: "_Usage",
+              max_tokens: int | None = None):
         params = job.config.params
-        response = generate(ModelRequest(
+        value, response = generate_json(ModelRequest(
             model=job.config.model,
             prompt=job.config.prompt.text,
             system=params.get("system", DEFAULT_SYSTEM_PROMPT),
             images=images,
             temperature=params.get("temperature", 0.1),
-            max_output_tokens=params.get("max_output_tokens", 32768),
+            max_output_tokens=max_tokens or params.get("max_output_tokens", 32768),
             media_resolution=params.get("media_resolution"),
-            allow_empty=True,  # a blank page or empty tile is a valid reading
+            json_output=True,
+            json_schema=READ_SCHEMA,
+            thinking_budget=params.get("thinking_budget"),
         ))
         usage.add(response)
-        return response
+        return value["transcription"].strip(), response
 
 
 class _Usage:
@@ -130,6 +155,12 @@ class _Usage:
         self.tokens_in += response.prompt_tokens
         self.tokens_out += response.output_tokens
         self.cost += response.cost_usd or 0.0
+
+
+def _tile_token_cap(est_lines: int) -> int:
+    """A tile's transcription is bounded by its line count; a runaway model
+    loop should hit a cheap ceiling, not burn 32k tokens before failing."""
+    return min(4000, max(800, est_lines * 80 + 400))
 
 
 def _tile(image: np.ndarray, bbox: list[int], pad: int) -> np.ndarray:
