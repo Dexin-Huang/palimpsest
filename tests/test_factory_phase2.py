@@ -217,7 +217,8 @@ def test_config_drift_is_outdated_not_rerun(ledger, library, gateway, fetch, tmp
     prompts = tmp_path / "prompts"
     (prompts / "read" / "la").mkdir(parents=True)
     (prompts / "read" / "la" / "diplomatic.txt").write_text("NEW PROMPT", encoding="utf-8")
-    for name in ("survey/la/brief", "translate/la/with_brief", "reconstruct/la/structure"):
+    for name in ("survey/generic/brief", "translate/la/with_brief",
+                 "reconstruct/generic/structure"):
         src = factory_config.PROMPTS_DIR / f"{name}.txt"
         dest = prompts / f"{name}.txt"
         dest.parent.mkdir(parents=True, exist_ok=True)

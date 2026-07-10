@@ -14,6 +14,8 @@ per-region texts and geometry, so nothing downstream changes shape.
 
 from __future__ import annotations
 
+import re
+
 import cv2
 import numpy as np
 
@@ -142,7 +144,7 @@ class Read(Station):
             thinking_budget=params.get("thinking_budget"),
         ))
         usage.add(response)
-        return value["transcription"].strip(), response
+        return _sanitize(value["transcription"]), response
 
 
 class _Usage:
@@ -155,6 +157,22 @@ class _Usage:
         self.tokens_in += response.prompt_tokens
         self.tokens_out += response.output_tokens
         self.cost += response.cost_usd or 0.0
+
+
+_TRAILING_JUNK = re.compile(r"[\s`{}\[\]<>|~^\\_]+$")
+_TRAILING_ESCAPE = re.compile(r"(?:/n|\\n)$")
+
+
+def _sanitize(text: str) -> str:
+    """Strip model-noise tails (stray escapes/braces like '/n_`}') that
+    sometimes trail the transcription string. Only trailing junk runs are
+    touched — page content is never edited."""
+    text = text.strip()
+    while True:
+        cleaned = _TRAILING_ESCAPE.sub("", _TRAILING_JUNK.sub("", text))
+        if cleaned == text:
+            return text
+        text = cleaned
 
 
 def _tile_token_cap(est_lines: int) -> int:

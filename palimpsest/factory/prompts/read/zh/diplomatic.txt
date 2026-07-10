@@ -1,0 +1,5 @@
+Transcribe all visible text in this image exactly as written. The text is Classical Chinese written in VERTICAL columns read top to bottom, with columns ordered RIGHT to LEFT.
+
+Output one column per line, in reading order: the rightmost column is the first line of your transcription. Preserve the characters exactly as written, using the closest standard Unicode character for variant or nonstandard forms. Do not add punctuation, do not modernize, do not translate. If a character is illegible, write 〔?〕 once and continue with the next legible character — never repeat placeholders. Do not explain your reasoning or describe the page.
+
+Respond as JSON: {"transcription": "<one column per line, rightmost column first>"}
