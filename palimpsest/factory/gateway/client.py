@@ -12,6 +12,7 @@ import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Mapping
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,8 @@ class ModelRequest:
     max_output_tokens: int = 32768
     media_resolution: str | None = None  # "low" | "medium" | "high"
     json_output: bool = False            # constrain the response to JSON
+    json_schema: Mapping[str, Any] | None = None  # constrained decoding: the
+                                         # provider enforces this JSON Schema
     allow_empty: bool = False            # empty text is a valid answer, not an error
 
 

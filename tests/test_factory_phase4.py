@@ -147,6 +147,25 @@ def test_segment_drops_bleed_through(tmp_path):
     assert not any(y >= 400 for y in tops)   # shallow block dropped
 
 
+# --- gateway config mapping ----------------------------------------------------
+
+def test_gemini_config_maps_json_schema():
+    from palimpsest.factory.gateway.gemini import _config_kwargs
+    from palimpsest.factory.gateway.client import ModelRequest
+
+    schema = {"type": "object", "properties": {"a": {"type": "string"}},
+              "required": ["a"]}
+    kwargs = _config_kwargs(ModelRequest(
+        model="m", prompt="p", json_output=True, json_schema=schema))
+    assert kwargs["response_mime_type"] == "application/json"
+    assert kwargs["response_json_schema"] == schema
+    assert "response_schema" not in kwargs  # mutually exclusive on the backend
+
+    plain = _config_kwargs(ModelRequest(model="m", prompt="p", json_output=True))
+    assert plain["response_mime_type"] == "application/json"
+    assert "response_json_schema" not in plain
+
+
 # --- read v2 routing ----------------------------------------------------------
 
 class RouteGateway:

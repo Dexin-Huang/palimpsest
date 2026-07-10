@@ -18,6 +18,41 @@ from palimpsest.factory.workspace.io import read_json
 
 _FLOW_JOINS = {"hyphenation_repair", "sentence_continuation"}
 
+PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sections": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "heading": {"type": "string"},
+                    "from_page": {"type": "string"},
+                    "to_page": {"type": "string"},
+                },
+                "required": ["heading", "from_page", "to_page"],
+            },
+        },
+        "joins": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "from_page": {"type": "string"},
+                    "to_page": {"type": "string"},
+                    "kind": {"type": "string", "enum": [
+                        "hyphenation_repair", "sentence_continuation",
+                        "paragraph_break", "section_break"]},
+                    "rationale": {"type": "string"},
+                },
+                "required": ["from_page", "to_page", "kind"],
+            },
+        },
+        "readers_note": {"type": "string"},
+    },
+    "required": ["sections", "joins", "readers_note"],
+}
+
 
 class Reconstruct(Station):
     name = "reconstruct"
@@ -39,6 +74,7 @@ class Reconstruct(Station):
             temperature=job.config.params.get("temperature", 0.1),
             max_output_tokens=job.config.params.get("max_output_tokens", 32768),
             json_output=True,
+            json_schema=PLAN_SCHEMA,
         ))
 
         by_id = {page["page_id"]: page for page in pages}

@@ -15,6 +15,29 @@ TOKENS_PER_CHAR = 0.35  # rough estimate for mixed Latin/abbreviations
 MAX_TOKENS_PER_CHUNK = 20_000
 
 
+def _entry(*fields: str) -> dict:
+    return {
+        "type": "object",
+        "properties": {field: {"type": "string"} for field in fields},
+        "required": list(fields[:2]),
+    }
+
+
+BRIEF_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "terms": {"type": "array", "items": _entry("term", "translation", "note")},
+        "sections": {"type": "array", "items": _entry("start_page", "description")},
+        "abbreviations": {"type": "array", "items": _entry("abbrev", "expansion")},
+        "entities": {"type": "array", "items": _entry("name", "translation")},
+        "flags": {"type": "array", "items": _entry("page_id", "issue")},
+        "style_notes": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["terms", "sections", "abbreviations", "entities", "flags",
+                 "style_notes"],
+}
+
+
 class Survey(Station):
     name = "survey"
     version = "survey/v1"
@@ -42,6 +65,7 @@ class Survey(Station):
                 temperature=job.config.params.get("temperature", 0.1),
                 max_output_tokens=job.config.params.get("max_output_tokens", 32768),
                 json_output=True,
+                json_schema=BRIEF_SCHEMA,
             ))
             partials.append(partial)
             tokens_in += response.prompt_tokens

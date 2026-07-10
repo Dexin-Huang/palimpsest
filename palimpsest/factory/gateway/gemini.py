@@ -79,19 +79,7 @@ def generate(request: ModelRequest) -> ModelResponse:
                 types.Part.from_bytes(data=image.read_bytes(), mime_type=_mime_type(image))
             )
 
-    config_kwargs: dict = {
-        "temperature": request.temperature,
-        "max_output_tokens": request.max_output_tokens,
-    }
-    if request.system is not None:
-        config_kwargs["system_instruction"] = request.system
-    if request.json_output:
-        config_kwargs["response_mime_type"] = "application/json"
-    if request.media_resolution is not None:
-        try:
-            config_kwargs["media_resolution"] = _MEDIA_RESOLUTIONS[request.media_resolution]
-        except KeyError:
-            raise GatewayError(f"Unknown media resolution: {request.media_resolution}")
+    config_kwargs = _config_kwargs(request)
 
     try:
         response = _client().models.generate_content(
@@ -119,6 +107,28 @@ def generate(request: ModelRequest) -> ModelResponse:
         total_tokens=total_tokens,
         cost_usd=estimate_cost(request.model, prompt_tokens, output_tokens),
     )
+
+
+def _config_kwargs(request: ModelRequest) -> dict:
+    config_kwargs: dict = {
+        "temperature": request.temperature,
+        "max_output_tokens": request.max_output_tokens,
+    }
+    if request.system is not None:
+        config_kwargs["system_instruction"] = request.system
+    if request.json_schema is not None:
+        # constrained decoding: response_json_schema takes a plain JSON
+        # Schema dict; the mime type is required and NOT auto-set by the SDK
+        config_kwargs["response_mime_type"] = "application/json"
+        config_kwargs["response_json_schema"] = dict(request.json_schema)
+    elif request.json_output:
+        config_kwargs["response_mime_type"] = "application/json"
+    if request.media_resolution is not None:
+        try:
+            config_kwargs["media_resolution"] = _MEDIA_RESOLUTIONS[request.media_resolution]
+        except KeyError:
+            raise GatewayError(f"Unknown media resolution: {request.media_resolution}")
+    return config_kwargs
 
 
 def _response_text(response: object, *, allow_empty: bool = False) -> tuple[str, str | None]:

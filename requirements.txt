@@ -24,3 +24,4 @@ PyYAML>=6.0
 EbookLib>=0.18
 numpy>=2.0
 opencv-python-headless>=4.10
+genai-prices>=0.1
