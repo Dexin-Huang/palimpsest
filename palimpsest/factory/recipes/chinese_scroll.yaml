@@ -13,13 +13,23 @@ line:
     - station: read
       model: ${PALIMPSEST_MODEL_VISION}
       prompt: read/zh/diplomatic
-      params: { temperature: 0.7, media_resolution: high,
-                max_output_tokens: 32768, thinking_budget: 0 }
+      # temperature 0.1 + dynamic thinking, unlike the Latin lane's 0.7/0:
+      # regular kaishu columns don't trap low-temperature decoding the way
+      # abbreviated Latin script does, and 0.7 made the twice-photographed
+      # seam columns diverge between reads (P.3477, 2026-07-10). The read
+      # schema keeps thinking out of the transcription channel.
+      params: { temperature: 0.1, media_resolution: high,
+                max_output_tokens: 32768, thinking_budget: -1 }
     - station: translate
       model: ${PALIMPSEST_MODEL_READING}
       prompt: translate/zh/with_brief
       overlap: 1
+      # Gallica photographs a scroll as overlapping segments (~2 columns
+      # repeat at every cut); trim the re-photographed columns before they
+      # are translated twice
+      trim_seam_overlap: true
     - station: assemble_page
+      trim_seam_overlap: true
   manuscript:
     - station: survey
       model: ${PALIMPSEST_MODEL_READING}

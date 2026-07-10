@@ -15,6 +15,7 @@ from pathlib import Path
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.gateway.client import ModelRequest, generate
+from palimpsest.factory.seams import prev_page_id, trim_overlap
 from palimpsest.factory.workspace.io import read_json
 
 DEFAULT_OVERLAP = 1
@@ -46,7 +47,10 @@ class Translate(Station):
             job.path_of("page_transcription", page["page_id"])
             for page in self._context_window(job)
         ]
-        return own_and_neighbors + [job.path_of("translation_brief")]
+        previous = self._seam_neighbor(job)
+        if previous:
+            own_and_neighbors.append(job.path_of("page_transcription", previous))
+        return list(dict.fromkeys(own_and_neighbors)) + [job.path_of("translation_brief")]
 
     def run(self, job: Job) -> StationResult:
         window = self._context_window(job)
@@ -60,13 +64,24 @@ class Translate(Station):
         left = self._format_context(window[:own_index], texts)
         right = self._format_context(window[own_index + 1:], texts)
 
+        page_text = texts[job.page_id]["text"]
+        seam = None
+        previous = self._seam_neighbor(job)
+        if previous:
+            prev_text = (
+                texts[previous]
+                if previous in texts
+                else read_json(job.path_of("page_transcription", previous))
+            )["text"]
+            page_text, seam = trim_overlap(prev_text, page_text)
+
         brief = read_json(job.path_of("translation_brief"))
         brief.pop("provenance", None)  # guidance for the model, not bookkeeping
 
         prompt = (
             job.config.prompt.text
             .replace("{BRIEF}", json.dumps(brief, ensure_ascii=False, indent=1))
-            .replace("{PAGE_TEXT}", texts[job.page_id]["text"])
+            .replace("{PAGE_TEXT}", page_text)
             .replace("{LEFT_CONTEXT}", left)
             .replace("{RIGHT_CONTEXT}", right)
         )
@@ -84,11 +99,19 @@ class Translate(Station):
                 "translation": translation,
                 "notes": "",
                 "flags": flags,
+                "seam": seam,
             },
             tokens_in=response.prompt_tokens,
             tokens_out=response.output_tokens,
             cost_usd=response.cost_usd,
         )
+
+    def _seam_neighbor(self, job: Job) -> str | None:
+        """Previous page id when this recipe trims re-photographed seam
+        columns (overlapping scroll segments) before translating."""
+        if not job.config.options.get("trim_seam_overlap"):
+            return None
+        return prev_page_id(job.pages, job.page_id)
 
     def _context_window(self, job: Job) -> list[dict]:
         overlap = int(job.config.options.get("overlap", DEFAULT_OVERLAP))
