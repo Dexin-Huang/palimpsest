@@ -5,6 +5,7 @@ from palimpsest.factory.stations import (  # noqa: F401
     assemble_page,
     deframe,
     dewatermark,
+    emend,
     flatten,
     publish,
     read,

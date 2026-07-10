@@ -17,6 +17,9 @@ flowchart TB
   deframe --> page_image_framed
   page_image_framed --> dewatermark
   dewatermark --> page_image_unmarked
+  manuscript --> emend
+  page_assembled --> emend
+  emend --> emendations
   page_image_unmarked --> flatten
   flatten --> page_image_clean
   manuscript --> publish
@@ -43,6 +46,8 @@ flowchart TB
   style deframe fill:#eef2ec,stroke:#9ab08f
   dewatermark(["dewatermark<br/><i>page</i>"])
   style dewatermark fill:#eef2ec,stroke:#9ab08f
+  emend(["emend ✱<br/><i>manuscript</i>"])
+  style emend fill:#eef2ec,stroke:#9ab08f
   flatten(["flatten<br/><i>page</i>"])
   style flatten fill:#eef2ec,stroke:#9ab08f
   publish(["publish<br/><i>manuscript</i>"])
@@ -61,6 +66,7 @@ flowchart TB
   style translate fill:#eef2ec,stroke:#9ab08f
   book["book"]
   book_epub["book_epub"]
+  emendations["emendations"]
   manuscript["manuscript"]
   page_assembled["page_assembled"]
   page_image["page_image"]
@@ -101,6 +107,8 @@ flowchart TB
 | | | | *The jig: glossary, outline, entities, flags guiding every translate.* | |
 | `manuscript` | manuscript | json | `doc_id`, `sections`, `joins`, `readers_note` | `manuscript.json` |
 | | | | *Reconstruction: sections in both languages + auditable joins.* | |
+| `emendations` | manuscript | json | `doc_id`, `sections`, `apparatus` | `emendations.json` |
+| | | | *The final editorial pass: an emended reading per section + the apparatus recording every change. The diplomatic layer is never edited; this sits beside it.* | |
 | `book` | manuscript | json | `doc_id`, `title`, `language`, `chapters`, `colophon` | `book/book.json` |
 | | | | *The book model: bilingual chapters + provenance colophon.* | |
 | `book_epub` | manuscript | epub | — | `book/{doc_id}.epub` |
@@ -114,6 +122,7 @@ flowchart TB
 | `assemble_page` | assemble_page/v1 | page | `page_transcription`, `page_translation` | `page_assembled` | no |
 | `deframe` | deframe/v1 | page | `page_image` | `page_image_framed` | no |
 | `dewatermark` | dewatermark/v1 | page | `page_image_framed` | `page_image_unmarked` | no |
+| `emend` | emend/v1 | manuscript | `manuscript`, `page_assembled` | `emendations` | yes |
 | `flatten` | flatten/v1 | page | `page_image_unmarked` | `page_image_clean` | no |
 | `publish` | publish/v1 | manuscript | `manuscript` | `book` | no |
 | `read` | read/v3 | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |

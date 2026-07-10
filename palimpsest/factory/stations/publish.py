@@ -26,7 +26,7 @@ class Publish(Station):
     def input_paths(self, job: Job) -> list[Path]:
         # The colophon reads provenance stamps off the page artifacts and the
         # brief — hermetic rule: everything read is declared.
-        return [
+        paths = [
             job.path_of("manuscript"),
             job.path_of("translation_brief"),
             metadata_path(job.doc_id, job.library_root),
@@ -34,12 +34,22 @@ class Publish(Station):
               for kind in ("page_transcription", "page_translation")
               for page in job.pages),
         ]
+        if job.config.options.get("use_emendations"):
+            paths.append(job.path_of("emendations"))
+        return paths
 
     def run(self, job: Job) -> StationResult:
         manuscript = read_json(job.path_of("manuscript"))
         catalog = read_json(
             metadata_path(job.doc_id, job.library_root)
         ).get("source_catalog", {})
+
+        readings: list[str | None] = [None] * len(manuscript["sections"])
+        apparatus: list[dict] = []
+        if job.config.options.get("use_emendations"):
+            emendations = read_json(job.path_of("emendations"))
+            readings = [s["reading"] for s in emendations["sections"]]
+            apparatus = emendations["apparatus"]
 
         return StationResult(payload={
             "doc_id": job.doc_id,
@@ -61,10 +71,14 @@ class Publish(Station):
                     "heading": section["heading"],
                     "translation": section["translation"],
                     "original": section["original"],
+                    # the emended READING; the verbatim original stays beside it
+                    "reading": reading,
                     "pages": section["pages"],
                 }
-                for index, section in enumerate(manuscript["sections"], start=1)
+                for index, (section, reading) in enumerate(
+                    zip(manuscript["sections"], readings), start=1)
             ],
+            "apparatus": apparatus,
             "colophon": self._colophon(job),
         })
 

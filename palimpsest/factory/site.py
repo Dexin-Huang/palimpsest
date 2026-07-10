@@ -124,10 +124,23 @@ def _reader_html(model: dict) -> str:
             f"{html.escape(chapter['pages']['to'])}</div>"
         )
         parts.append(_paragraphs(chapter["translation"]))
+        label = "Original"
+        original_text = chapter["original"]
+        if chapter.get("reading"):
+            label = "Original (emended reading)"
+            original_text = chapter["reading"]
         parts.append(
-            "<div class='original'><h3>Original</h3>"
-            + _paragraphs(chapter["original"]) + "</div>"
+            f"<div class='original'><h3>{label}</h3>"
+            + _paragraphs(original_text) + "</div>"
         )
+    if model.get("apparatus"):
+        parts.append("<h2>Apparatus</h2>")
+        for entry in model["apparatus"]:
+            parts.append(
+                f"<p class='muted'>{html.escape(entry['original'])} → "
+                f"{html.escape(entry['emended'])} — "
+                f"<i>{html.escape(entry['reason'])}</i></p>"
+            )
     parts.append(
         "<div class='colophon'>"
         f"<p>Transcribed by {html.escape(str(colophon.get('transcribed_by')))} · "

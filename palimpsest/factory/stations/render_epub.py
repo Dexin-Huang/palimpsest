@@ -58,13 +58,21 @@ class RenderEpub(Station):
                 "note", "A Note to the Reader",
                 _paragraphs(book_model["readers_note"])))
         for chapter in book_model["chapters"]:
+            original_heading = "Original text"
+            original_text = chapter["original"]
+            if chapter.get("reading"):
+                original_heading = "Original text (emended reading)"
+                original_text = chapter["reading"]
             pages.append(_chapter_page(
                 chapter["id"], chapter["heading"],
                 f'<p class="folios">ff. {chapter["pages"]["from"]}–'
                 f'{chapter["pages"]["to"]}</p>'
                 + _paragraphs(chapter["translation"])
-                + f'<div class="original"><h3>Original text</h3>'
-                  f'{_paragraphs(chapter["original"])}</div>'))
+                + f'<div class="original"><h3>{original_heading}</h3>'
+                  f'{_paragraphs(original_text)}</div>'))
+        if book_model.get("apparatus"):
+            pages.append(_chapter_page(
+                "apparatus", "Apparatus", _apparatus_html(book_model["apparatus"])))
         pages.append(_chapter_page(
             "colophon", "Colophon", _colophon_html(book_model)))
 
@@ -110,6 +118,20 @@ def _title_page(model: dict) -> epub.EpubHtml:
     page = epub.EpubHtml(uid="title", title=model["title"], file_name="title.xhtml")
     page.content = "".join(lines)
     return page
+
+
+def _apparatus_html(apparatus: list[dict]) -> str:
+    entries = "".join(
+        f"<p>{html.escape(entry['original'])} → "
+        f"{html.escape(entry['emended'])}<br/>"
+        f"<i>{html.escape(entry['reason'])}</i></p>"
+        for entry in apparatus
+    )
+    return (
+        '<div class="colophon"><p>Changes made by the editorial pass; the '
+        "verbatim transcription is preserved in the library workspace.</p>"
+        f"{entries}</div>"
+    )
 
 
 def _colophon_html(model: dict) -> str:

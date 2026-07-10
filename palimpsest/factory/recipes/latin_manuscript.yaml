@@ -34,6 +34,10 @@ line:
     - station: reconstruct
       model: ${PALIMPSEST_MODEL_READING}
       prompt: reconstruct/generic/structure
+    - station: emend
+      model: ${PALIMPSEST_MODEL_READING}
+      prompt: emend/generic/reading
     - station: publish
+      use_emendations: true
       original_language: la
     - station: render_epub

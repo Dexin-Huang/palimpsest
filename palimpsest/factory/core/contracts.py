@@ -73,6 +73,13 @@ _ALL = (
         required=("doc_id", "sections", "joins", "readers_note"),
         store="manuscript.json"),
     ArtifactContract(
+        "emendations", "manuscript", "json",
+        "The final editorial pass: an emended reading per section + the "
+        "apparatus recording every change. The diplomatic layer is never "
+        "edited; this sits beside it.",
+        required=("doc_id", "sections", "apparatus"),
+        store="emendations.json"),
+    ArtifactContract(
         "book", "manuscript", "json",
         "The book model: bilingual chapters + provenance colophon.",
         required=("doc_id", "title", "language", "chapters", "colophon"),
