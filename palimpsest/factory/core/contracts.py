@@ -73,6 +73,13 @@ _ALL = (
         required=("doc_id", "sections", "joins", "readers_note"),
         store="manuscript.json"),
     ArtifactContract(
+        "reference", "manuscript", "json",
+        "The reference dossier: document identification plus, per passage "
+        "that tracks a transmitted text, the controlling received wording "
+        "with citation, confidence, and verification source.",
+        required=("doc_id", "identification", "reference_points"),
+        store="reference.json"),
+    ArtifactContract(
         "emendations", "manuscript", "json",
         "The final editorial pass: an emended reading per section + the "
         "apparatus recording every change. The diplomatic layer is never "

@@ -34,9 +34,12 @@ line:
     - station: reconstruct
       model: ${PALIMPSEST_MODEL_READING}
       prompt: reconstruct/generic/structure
+    - station: reference
+      model: gpt-5.6-sol
+      prompt: reference/generic/identify
     - station: emend
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: emend/generic/reading
+      model: gpt-5.6-luna
+      prompt: emend/generic/agent
     - station: publish
       use_emendations: true
       original_language: la

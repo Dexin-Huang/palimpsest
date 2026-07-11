@@ -18,7 +18,9 @@ flowchart TB
   page_image_framed --> dewatermark
   dewatermark --> page_image_unmarked
   manuscript --> emend
+  reference --> emend
   page_assembled --> emend
+  page_image_clean --> emend
   emend --> emendations
   page_image_unmarked --> flatten
   flatten --> page_image_clean
@@ -29,6 +31,8 @@ flowchart TB
   read --> page_transcription
   page_assembled --> reconstruct
   reconstruct --> manuscript
+  manuscript --> reference
+  reference --> reference
   book --> render_epub
   render_epub --> book_epub
   page_image_clean --> segment
@@ -56,6 +60,8 @@ flowchart TB
   style read fill:#eef2ec,stroke:#9ab08f
   reconstruct(["reconstruct ✱<br/><i>manuscript</i>"])
   style reconstruct fill:#eef2ec,stroke:#9ab08f
+  reference(["reference ✱<br/><i>manuscript</i>"])
+  style reference fill:#eef2ec,stroke:#9ab08f
   render_epub(["render_epub<br/><i>manuscript</i>"])
   style render_epub fill:#eef2ec,stroke:#9ab08f
   segment(["segment<br/><i>page</i>"])
@@ -78,6 +84,7 @@ flowchart TB
   page_regions["page_regions"]
   page_transcription["page_transcription"]
   page_translation["page_translation"]
+  reference["reference"]
   translation_brief["translation_brief"]
 ```
 
@@ -107,6 +114,8 @@ flowchart TB
 | | | | *The jig: glossary, outline, entities, flags guiding every translate.* | |
 | `manuscript` | manuscript | json | `doc_id`, `sections`, `joins`, `readers_note` | `manuscript.json` |
 | | | | *Reconstruction: sections in both languages + auditable joins.* | |
+| `reference` | manuscript | json | `doc_id`, `identification`, `reference_points` | `reference.json` |
+| | | | *The reference dossier: document identification plus, per passage that tracks a transmitted text, the controlling received wording with citation, confidence, and verification source.* | |
 | `emendations` | manuscript | json | `doc_id`, `sections`, `apparatus` | `emendations.json` |
 | | | | *The final editorial pass: an emended reading per section + the apparatus recording every change. The diplomatic layer is never edited; this sits beside it.* | |
 | `book` | manuscript | json | `doc_id`, `title`, `language`, `chapters`, `colophon` | `book/book.json` |
@@ -122,11 +131,12 @@ flowchart TB
 | `assemble_page` | assemble_page/v1 | page | `page_transcription`, `page_translation` | `page_assembled` | no |
 | `deframe` | deframe/v1 | page | `page_image` | `page_image_framed` | no |
 | `dewatermark` | dewatermark/v1 | page | `page_image_framed` | `page_image_unmarked` | no |
-| `emend` | emend/v1 | manuscript | `manuscript`, `page_assembled` | `emendations` | yes |
+| `emend` | emend/v2 | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
 | `flatten` | flatten/v1 | page | `page_image_unmarked` | `page_image_clean` | no |
 | `publish` | publish/v1 | manuscript | `manuscript` | `book` | no |
 | `read` | read/v3 | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
 | `reconstruct` | reconstruct/v1 | manuscript | `page_assembled` | `manuscript` | yes |
+| `reference` | reference/v1 | manuscript | `manuscript` | `reference` | yes |
 | `render_epub` | render_epub/v1 | manuscript | `book` | `book_epub` | no |
 | `segment` | segment/v1 | page | `page_image_clean` | `page_regions` | no |
 | `survey` | survey/v1 | manuscript | `page_transcription` | `translation_brief` | yes |

@@ -52,7 +52,7 @@ RECONSTRUCT_PLAN = {
 }
 
 TEXT_STATIONS = ("translate",)                                # call generate()
-JSON_STATIONS = ("read", "survey", "reconstruct", "emend")    # call generate_json()
+JSON_STATIONS = ("read", "survey", "reconstruct")             # call generate_json()
 
 
 class ScriptedGateway:
@@ -69,14 +69,6 @@ class ScriptedGateway:
             text = json.dumps({"transcription": self.read_texts[page_id]})
         elif request.json_output and "reconstructing the structure" in request.prompt:
             text = json.dumps(RECONSTRUCT_PLAN)
-        elif request.json_output and "final editorial pass" in request.prompt:
-            text = json.dumps({
-                "sections": [{"heading": "Remedies",
-                              "reading": "Experimenta ad morbos EMENDED"}],
-                "apparatus": [{"section": "Remedies", "original": "morbos",
-                               "emended": "morbos EMENDED",
-                               "reason": "test emendation"}],
-            })
         elif request.json_output:  # survey station
             text = json.dumps({
                 "terms": [{"term": "febris", "translation": "fever", "note": ""}],
@@ -93,6 +85,7 @@ class ScriptedGateway:
 
 @pytest.fixture
 def gateway(monkeypatch):
+    from palimpsest.factory import agent_cell
     from palimpsest.factory.gateway.client import parse_json_response
 
     fake = ScriptedGateway()
@@ -101,10 +94,42 @@ def gateway(monkeypatch):
         response = fake(request)
         return parse_json_response(response.text), response
 
+    def fake_agent_run(workspace, task, model, timeout_s=0):
+        # scripted stand-ins for the two editorial agents: reference emits an
+        # empty dossier; emend applies one covered, anchored emendation
+        out = workspace / "out"
+        if "out/emendations.json" not in task:
+            (out / "reference.json").write_text(json.dumps({
+                "identification": {"work": "Test codex", "tradition": "test"},
+                "reference_points": [], "editorial_notes": [],
+            }), encoding="utf-8")
+        else:
+            evidence = json.loads((workspace / "evidence" / "manuscript.json")
+                                  .read_text(encoding="utf-8"))
+            (out / "emendations.json").write_text(json.dumps({
+                "sections": [
+                    {"heading": s["heading"],
+                     "reading": s["original"].replace("morbos", "morbos EMENDED")}
+                    for s in evidence["sections"]],
+                "apparatus": [{"section": s["heading"], "original": "morbos",
+                               "emended": "morbos EMENDED",
+                               "reason": "test emendation", "evidence": "structure"}
+                              for s in evidence["sections"]
+                              if "morbos" in s["original"]],
+            }, ensure_ascii=False), encoding="utf-8")
+        return agent_cell.AgentRun(
+            session_id="00000000-0000-0000-0000-000000000000",
+            tokens=100, log_path=out / "agent_run.log")
+
+    def fail_resume(*args, **kwargs):
+        raise AssertionError("verifier rejected the scripted emendation")
+
     for module in TEXT_STATIONS:
         monkeypatch.setattr(f"palimpsest.factory.stations.{module}.generate", fake)
     for module in JSON_STATIONS:
         monkeypatch.setattr(f"palimpsest.factory.stations.{module}.generate_json", fake_json)
+    monkeypatch.setattr("palimpsest.factory.agent_cell.run", fake_agent_run)
+    monkeypatch.setattr("palimpsest.factory.agent_cell.resume", fail_resume)
     return fake
 
 
@@ -147,7 +172,7 @@ def test_recipe_loads_and_validates():
         "acquire", "deframe", "dewatermark", "flatten", "segment", "read",
         "translate", "assemble_page"]
     assert [s.station.name for s in recipe.manuscript_stations] == [
-        "survey", "reconstruct", "emend", "publish", "render_epub"]
+        "survey", "reconstruct", "reference", "emend", "publish", "render_epub"]
     assert recipe.page_stations[5].model  # ${VAR} interpolated
 
 
@@ -155,8 +180,8 @@ def test_end_to_end_line(ledger, library, gateway, fetch):
     report = run_line(ledger, library)
 
     assert report.count("failed") == 0
-    # 8 page stations × 2 pages + 5 manuscript stations
-    assert report.count("ran") == 21
+    # 8 page stations × 2 pages + 6 manuscript stations
+    assert report.count("ran") == 22
 
     assembled = read_json(artifact_path(DOC, "page_assembled", "f001r", library))
     assert assembled["original"]["text"] == "Experimenta ad morbos"
@@ -190,7 +215,7 @@ def test_second_run_is_all_fresh(ledger, library, gateway, fetch):
     calls_before = len(gateway.calls)
     report = run_line(ledger, library)
     assert report.count("ran") == 0
-    assert report.count("fresh") == 21
+    assert report.count("fresh") == 22
     assert len(gateway.calls) == calls_before  # not a single paid call
 
 
@@ -226,7 +251,8 @@ def test_config_drift_is_outdated_not_rerun(ledger, library, gateway, fetch, tmp
     (prompts / "read" / "la").mkdir(parents=True)
     (prompts / "read" / "la" / "diplomatic.txt").write_text("NEW PROMPT", encoding="utf-8")
     for name in ("survey/generic/brief", "translate/la/with_brief",
-                 "reconstruct/generic/structure", "emend/generic/reading"):
+                 "reconstruct/generic/structure", "reference/generic/identify",
+                 "emend/generic/agent"):
         src = factory_config.PROMPTS_DIR / f"{name}.txt"
         dest = prompts / f"{name}.txt"
         dest.parent.mkdir(parents=True, exist_ok=True)

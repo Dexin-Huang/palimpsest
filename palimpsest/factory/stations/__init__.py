@@ -10,6 +10,7 @@ from palimpsest.factory.stations import (  # noqa: F401
     publish,
     read,
     reconstruct,
+    reference,
     render_epub,
     segment,
     survey,
