@@ -94,7 +94,7 @@ def gateway(monkeypatch):
         response = fake(request)
         return parse_json_response(response.text), response
 
-    def fake_agent_run(workspace, task, model, timeout_s=0):
+    def fake_agent_run(workspace, task, model, timeout_s=0, executor="codex"):
         # scripted stand-ins for the two editorial agents: reference emits an
         # empty dossier; emend applies one covered, anchored emendation
         out = workspace / "out"
