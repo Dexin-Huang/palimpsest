@@ -47,6 +47,7 @@ class Reference(Station):
             workspace, TASK, model=job.config.model,
             timeout_s=int(job.config.options.get("timeout_s",
                                                  agent_cell.DEFAULT_TIMEOUT_S)),
+            executor=str(job.config.options.get("executor", "codex")),
         )
         artifact = agent_cell.read_artifact(workspace, "reference.json")
         return StationResult(

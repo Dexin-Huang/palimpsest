@@ -65,8 +65,9 @@ class Emend(Station):
         )
         timeout = int(job.config.options.get("timeout_s",
                                              agent_cell.DEFAULT_TIMEOUT_S))
+        executor = str(job.config.options.get("executor", "codex"))
         run = agent_cell.run(workspace, TASK, model=job.config.model,
-                             timeout_s=timeout)
+                             timeout_s=timeout, executor=executor)
         artifact = agent_cell.read_artifact(workspace, "emendations.json")
         tokens = run.tokens
 
@@ -77,7 +78,8 @@ class Emend(Station):
                 job.config.options.get("max_repairs", 2)):
             repair = agent_cell.resume(
                 workspace, run.session_id,
-                _repair_message(failures, sweeps), timeout_s=timeout)
+                _repair_message(failures, sweeps), timeout_s=timeout,
+                executor=executor)
             tokens += repair.tokens
             artifact = agent_cell.read_artifact(workspace, "emendations.json")
             failures = coverage_failures(sections, artifact)
