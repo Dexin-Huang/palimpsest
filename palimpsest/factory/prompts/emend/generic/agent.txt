@@ -44,6 +44,13 @@ Pass 2 — adjudicate the worklist. Evidence hierarchy, in order:
    your final summary. Where the manuscript coherently DIVERGES from the
    received text, keep the manuscript reading and record the divergence —
    a variant witness is data, not an error.
+   The dossier NEVER outranks legible ink. Before emending any span on
+   dossier or catalog testimony alone, zoom that span; if the ink legibly
+   supports a different wording than the received text — an attribution,
+   a title, a name — the ink wins, the emendation is limited to what the
+   ink actually shows, and the divergence goes in the apparatus. External
+   testimony may correct a MISREAD of the ink, never overwrite what the
+   ink says.
 4. Internal structure — repeated frames and formulas within this
    manuscript itself.
 Rules: minimal intervention; no modernizing, no orthographic normalization,
