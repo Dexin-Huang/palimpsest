@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from palimpsest.factory.config import LIBRARY_ROOT
-from palimpsest.factory.gateway.client import ModelRequest, generate_json
+from palimpsest.factory.gateway import ModelRequest, generate_json
 from palimpsest.factory.workspace.io import read_json
 from palimpsest.factory.workspace.layout import artifact_path
 

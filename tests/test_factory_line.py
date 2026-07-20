@@ -15,7 +15,7 @@ import palimpsest.factory.stations.acquire as acquire_module
 from palimpsest.factory.core.conductor import Conductor
 from palimpsest.factory.core.ledger import Ledger
 from palimpsest.factory.core.recipe import load as load_recipe
-from palimpsest.factory.gateway.client import ModelResponse
+from palimpsest.factory.gateway import ModelResponse
 from palimpsest.factory.workspace.io import atomic_write_json, read_json
 from palimpsest.factory.workspace.layout import artifact_path
 

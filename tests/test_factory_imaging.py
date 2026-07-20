@@ -7,7 +7,7 @@ import numpy as np
 
 from palimpsest.factory import imaging
 from palimpsest.factory.core.station import Job, StationConfig
-from palimpsest.factory.gateway.client import ImageContent, ModelResponse
+from palimpsest.factory.gateway import ImageContent, ModelResponse
 from palimpsest.factory.prompt_store import Prompt
 from palimpsest.factory.stations.read import Read
 from palimpsest.factory.stations.segment import Segment
@@ -158,7 +158,7 @@ def test_segment_drops_bleed_through(tmp_path):
 
 def test_gemini_config_maps_json_schema():
     from palimpsest.factory.gateway.gemini import _config_kwargs
-    from palimpsest.factory.gateway.client import ModelRequest
+    from palimpsest.factory.gateway import ModelRequest
 
     schema = {
         "type": "object",

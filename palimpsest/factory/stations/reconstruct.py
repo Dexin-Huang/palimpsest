@@ -13,7 +13,7 @@ import json
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.gateway.client import ModelRequest, generate_json
+from palimpsest.factory.gateway import ModelRequest, generate_json
 from palimpsest.factory.workspace.io import read_json
 
 _FLOW_JOINS = {"hyphenation_repair", "sentence_continuation"}

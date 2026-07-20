@@ -14,7 +14,7 @@ from pathlib import Path
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.gateway.client import ModelRequest, generate
+from palimpsest.factory.gateway import ModelRequest, generate
 from palimpsest.factory.seams import prev_page_id, trim_overlap
 from palimpsest.factory.workspace.io import read_json
 

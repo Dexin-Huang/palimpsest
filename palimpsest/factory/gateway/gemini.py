@@ -12,7 +12,7 @@ from pathlib import Path
 from google import genai
 from google.genai import errors, types
 
-from palimpsest.factory.gateway.client import (
+from palimpsest.factory.gateway.protocol import (
     GatewayError,
     ImageContent,
     ModelRequest,

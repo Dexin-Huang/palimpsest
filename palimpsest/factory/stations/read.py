@@ -21,7 +21,7 @@ import numpy as np
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.gateway.client import (
+from palimpsest.factory.gateway import (
     GatewayError,
     ImageContent,
     ModelRequest,
