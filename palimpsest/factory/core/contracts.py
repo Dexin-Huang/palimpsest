@@ -59,6 +59,11 @@ _ALL = (
         "English translation of one page, with continuity flags.",
         required=("doc_id", "page_id", "translation", "flags")),
     ArtifactContract(
+        "page_alignment", "page", "json",
+        "Forced alignment: per-character ink bounding boxes + count stats "
+        "(GLYPHS.md M1). Unbound characters are marked, never forced.",
+        required=("doc_id", "page_id", "columns", "stats")),
+    ArtifactContract(
         "page_assembled", "page", "json",
         "The small loop's finished part: original ∥ translation, aligned.",
         required=("doc_id", "page_id", "original", "translation", "inputs")),

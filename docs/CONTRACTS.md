@@ -10,6 +10,9 @@ code; if it disagrees with `docs/BLUEPRINT.html`, THIS file is right.
 flowchart TB
   page_list --> acquire
   acquire --> page_image
+  page_image_clean --> align
+  page_transcription --> align
+  align --> page_alignment
   page_transcription --> assemble_page
   page_translation --> assemble_page
   assemble_page --> page_assembled
@@ -44,6 +47,8 @@ flowchart TB
   translate --> page_translation
   acquire(["acquire<br/><i>page</i>"])
   style acquire fill:#eef2ec,stroke:#9ab08f
+  align(["align<br/><i>page</i>"])
+  style align fill:#eef2ec,stroke:#9ab08f
   assemble_page(["assemble_page<br/><i>page</i>"])
   style assemble_page fill:#eef2ec,stroke:#9ab08f
   deframe(["deframe<br/><i>page</i>"])
@@ -74,6 +79,7 @@ flowchart TB
   book_epub["book_epub"]
   emendations["emendations"]
   manuscript["manuscript"]
+  page_alignment["page_alignment"]
   page_assembled["page_assembled"]
   page_image["page_image"]
   page_image_clean["page_image_clean"]
@@ -108,6 +114,8 @@ flowchart TB
 | | | | *Diplomatic transcription; per-region texts when the page was segmented.* | |
 | `page_translation` | page | json | `doc_id`, `page_id`, `translation`, `flags` | `<kind>/<page_id>.json` |
 | | | | *English translation of one page, with continuity flags.* | |
+| `page_alignment` | page | json | `doc_id`, `page_id`, `columns`, `stats` | `<kind>/<page_id>.json` |
+| | | | *Forced alignment: per-character ink bounding boxes + count stats (GLYPHS.md M1). Unbound characters are marked, never forced.* | |
 | `page_assembled` | page | json | `doc_id`, `page_id`, `original`, `translation`, `inputs` | `<kind>/<page_id>.json` |
 | | | | *The small loop's finished part: original ∥ translation, aligned.* | |
 | `translation_brief` | manuscript | json | `version`, `document`, `glossary`, `outline` | `translation_brief.json` |
@@ -128,6 +136,7 @@ flowchart TB
 | Station | Version | Grain | Consumes | Produces | Model |
 |---|---|---|---|---|---|
 | `acquire` | acquire/v1 | page | `page_list` | `page_image` | no |
+| `align` | align/v1 | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
 | `assemble_page` | assemble_page/v1 | page | `page_transcription`, `page_translation` | `page_assembled` | no |
 | `deframe` | deframe/v1 | page | `page_image` | `page_image_framed` | no |
 | `dewatermark` | dewatermark/v1 | page | `page_image_framed` | `page_image_unmarked` | no |

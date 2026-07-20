@@ -20,6 +20,7 @@ line:
       # schema keeps thinking out of the transcription channel.
       params: { temperature: 0.1, media_resolution: high,
                 max_output_tokens: 32768, thinking_budget: -1 }
+    - station: align
     - station: translate
       model: ${PALIMPSEST_MODEL_READING}
       prompt: translate/zh/with_brief
