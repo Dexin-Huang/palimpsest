@@ -1,211 +1,225 @@
 # Palimpsest
 
-Palimpsest reads the tracks history forgot.
+Palimpsest turns manuscript images into trustworthy, readable books.
 
-Palimpsest is a dual-mode prospecting and ingestion engine for neglected textual
-archives. It feeds [Ariadne](../meridian/ariadne/), a Mundaneum-class knowledge
-compiler that assembles source-grounded semantic structure out of primary
-evidence. Palimpsest exists to do the work Ariadne's default Cartographer
-cannot: find labor-killed dreams in published prefaces, and turn image-bound
-manuscripts into clean, anchored text.
+It is a provenance-first production factory: an IIIF manifest enters as a work
+order; a recipe routes every page through explicit stations; the final book
+model renders to EPUB and a static library. Every transformation declares its
+inputs and output, every artifact is written atomically, and every model call
+is fingerprinted and costed.
 
-The operating thesis: the ideas most worth recovering are the ones that were
-right but early — specifically, the ones whose only bottleneck was menial
-cognitive labor (cataloguing, indexing, transcribing, cross-referencing).
-AI's unique civilizational contribution is unlimited cataloguing labor at
-trustworthy provenance. Palimpsest hunts for projects that died waiting for
-exactly that.
+## The line
 
-## Status
-
-Palimpsest is currently mid-restructure from a manuscript publishing pipeline
-into its dual-mode form. The source-mode heavy path works end-to-end; the
-opportunity-mode prospecting path is being rebuilt. The gate sequencing and
-the live state of the restructuring are tracked in
-[`docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07_ADDENDUM.md`](docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07_ADDENDUM.md).
-
-Live top-level CLI surface (see `palimpsest/cli.py`):
-
-- `palimpsest discovery ...` — discovery + triage over curated public sources
-- `palimpsest library ...` — canonical library intake, download, clean, status
-- `palimpsest transcribe ...` — VLM transcription, survey, enrich
-
-The retired `palimpsest book` / publishing stack has been archived; see
-[§5 Repo layout](#repo-layout) for what moved where.
-
-## Quick start
-
-Install in editable mode:
-
-```bash
-python -m pip install --user --editable .
+```text
+IIIF manifest
+    │
+    ▼
+metadata + page_list
+    │
+    ├─ page line, parallel per page
+    │  acquire → deframe → dewatermark → flatten → segment → read
+    │          → align (recipe-dependent) → translate → assemble_page
+    │
+    └─ manuscript line
+       survey → reconstruct → reference → emend → publish → render_epub
 ```
 
-Create a local `.env` from [`.env.example`](.env.example). The relevant keys:
+The page line preserves the evidence layer: source image, cleaned image,
+diplomatic transcription, translation, and their provenance remain separate.
+The manuscript line reconstructs continuity, checks received readings, records
+editorial changes in an apparatus, and publishes without mutating the
+diplomatic transcription.
+
+## Install
+
+Palimpsest requires Python 3.11 or newer.
+
+```bash
+python -m pip install --editable ".[dev]"
+```
+
+Copy `.env.example` to `.env` and set `GEMINI_API_KEY`. The two recipe model
+defaults can be overridden there:
 
 ```env
-GEMINI_API_KEY=your-api-key-here
-PALIMPSEST_MODEL_TRIAGE=gemini-3.1-flash-lite-preview
-PALIMPSEST_MODEL_VISION=gemini-3.1-flash-lite-preview
+PALIMPSEST_MODEL_VISION=gemini-3.1-pro-preview
 PALIMPSEST_MODEL_READING=gemini-3.1-flash-lite-preview
-PALIMPSEST_MODEL_RECON=gemini-3.1-flash-image-preview
 ```
 
-Use `*-image-preview` models only for image-generation / reconstruction lanes,
-never for the main transcription lane.
+The `reference` and `emend` stations use an agent executor selected in the
+recipe. Their current recipes require either the `codex` or `omp` CLI on
+`PATH`; the default is `codex`.
 
-Smoke-test the CLI:
+## Run a manuscript
 
-```bash
-python -m palimpsest --help
-```
+### 1. Intake from IIIF
 
-### A full source-mode run
-
-One document, end-to-end, from IIIF manifest to enriched JSONL. These are the
-commands verified in [`CLAUDE.md`](CLAUDE.md) against the current package.
-
-Create a canonical library record from a IIIF manifest:
+Intake validates a IIIF Presentation 2 or 3 manifest, writes the two source
+contracts, and creates the work order in the ledger:
 
 ```bash
-python -m palimpsest library intake \
+python -m palimpsest intake \
   --doc-id vatican_pal_lat_1267 \
-  --manifest https://digi.vatlib.it/iiif/MSS_Pal.lat.1267/manifest.json
+  --manifest https://digi.vatlib.it/iiif/MSS_Pal.lat.1267/manifest.json \
+  --recipe latin_manuscript
 ```
 
-Download page images:
+For a document that already has `library/<doc_id>/metadata.json` and
+`page_list.json`, adopt it without rewriting either source record:
 
 ```bash
-python -m palimpsest library download --doc-id vatican_pal_lat_1267
+python -m palimpsest adopt \
+  --doc-id vatican_pal_lat_1267 \
+  --recipe latin_manuscript
 ```
 
-Transcribe the images to JSONL:
+### 2. Run the line
 
 ```bash
-python -m palimpsest transcribe run \
-  --image-dir library/vatican_pal_lat_1267/images \
-  --prompt-name transcription_json \
-  --workers 10 \
-  --skip-existing
+python -m palimpsest run --doc-id vatican_pal_lat_1267 --workers 6
 ```
 
-Build a translation brief (glossary, outline, terms):
+The conductor resumes from `library/factory.db`. Fresh cells are skipped;
+input drift reruns stale cells; configuration drift is reported as outdated
+without silently repeating paid work. Refresh a changed station explicitly:
 
 ```bash
-python -m palimpsest transcribe survey \
-  --input library/vatican_pal_lat_1267/transcription/transcriptions.jsonl
+python -m palimpsest run \
+  --doc-id vatican_pal_lat_1267 \
+  --refresh read
 ```
 
-Enrich with glossary + overlap context + boundary repair:
+Use `--executor subprocess` to isolate each cell in a fresh Python process.
+The station contract and artifacts are identical under either executor.
+
+### 3. Inspect and publish
 
 ```bash
-python -m palimpsest transcribe enrich \
-  --input library/vatican_pal_lat_1267/transcription/transcriptions.jsonl
+python -m palimpsest status --doc-id vatican_pal_lat_1267
+python -m palimpsest site
 ```
 
-The terminal artifact today is `enriched.jsonl`. The phase-B `assemble` stage
-(see [§6 Current state + what's next](#current-state--whats-next)) will turn
-that into the Ariadne handoff bundle.
+Terminal outputs:
 
-## Architecture overview
-
-Palimpsest is dual-mode by design:
-
-- **Source mode** is the expensive pipeline:
-  `discover → intake → download → transcribe → survey → enrich → (future) assemble`.
-  It runs on manuscripts, scans, and marginalia that Ariadne cannot consume
-  directly. The eventual output per document is a three-file bundle:
-  `<doc_id>.md`, `<doc_id>.manifest.json`, `<doc_id>.anchors.json`, sitting
-  beside the source markdown so Ariadne's honeycomb can pick it up as a
-  sidecar without re-transcribing.
-
-- **Opportunity mode** is the cheap broad scan. It hunts clean published
-  material — critical-edition prefaces, editorial introductions, colophons,
-  marginalia, oral histories — for labor-killed dreams, and emits structured
-  `DreamCandidate` records into a rolling portfolio shortlist. The opportunity
-  schema and Gallica prefaces adapter are under active construction;
-  see the addendum linked in [Status](#status) for current gate state.
-
-For the full strategic framing, see
-[`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md) and
-[`docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07.md`](docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07.md).
-
-## Recovery pointer
-
-If you are reading this repo for the first time and the code looks like it is
-halfway between two worlds, it is. Palimpsest just finished a 16-commit
-restructuring from a manuscript publishing pipeline (with an HTML reader, page
-packets, and a folio renderer as its terminal stage) into a dual-mode ingestion
-engine that feeds Ariadne. The old publishing stack has been archived to
-`archives/2026-04-07_publishing_stack/`. The new shape, the sequencing gates,
-and everything Codex got right and wrong during the restructuring analysis are
-captured in
-[`docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07.md`](docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07.md)
-and its
-[ADDENDUM](docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07_ADDENDUM.md). Read the
-addendum first if you want the corrected sequencing.
-
-## Repo layout
-
-```
-palimpsest/        # core Python package
-  cli.py           # top-level CLI entrypoint
-  commands/        # subparser wiring: discovery, library, transcribe
-  discovery/       # source adapters, triage, discovery DB
-  library/         # IIIF intake, download, image cleaning
-  transcribe.py    # VLM transcription engine
-  survey.py        # translation brief builder
-  enrich.py        # batch translation with glossary + overlap + repair
-  prompts/         # external prompt files
-library/           # canonical outputs for each document
-  <doc_id>/
-    metadata.json
-    page_list.json
-    images/
-    transcription/
-discovery/         # registries, manifest cache, crawl artifacts
-docs/              # system documentation
-archives/          # retired stacks (publishing stack lives here)
-scripts/           # thin CLI wrappers
+```text
+library/<doc_id>/book/book.json
+library/<doc_id>/book/<doc_id>.epub
+site/index.html
 ```
 
-Every document lives under `library/<doc_id>/` with stable metadata, a
-page list, downloaded images, and per-page JSONL outputs. Canonical JSON
-is the source of truth; anything derived from it belongs outside the
-library root.
+## Commands
 
-## Current state + what's next
+| Command | Purpose |
+|---|---|
+| `init-db` | Initialize the SQLite inventory and production ledger |
+| `intake` | Turn an IIIF manifest into source contracts and a work order |
+| `adopt` | Put an existing library workspace on the line |
+| `run` | Execute or resume a recipe |
+| `status` | Show work orders or completed station runs |
+| `graph` | Render the live artifact/station contract graph |
+| `preview` | Render preprocessing stages and segmentation lassos |
+| `tune` | Tune segmentation offline without network or ledger writes |
+| `evaluate` | Compare factory transcriptions with a reference |
+| `site` | Rebuild the static library from published book models |
 
-Working today:
+Run `python -m palimpsest <command> --help` for command-specific options.
 
-- Source-mode heavy path from IIIF manifest through `enriched.jsonl`.
-- Discovery DB with Vatican, IDP, and Gallica adapters.
-- Manuscript-shaped triage via `discovery/triage.py`.
+## Swappable seams
 
-In progress:
+### Recipes
 
-- **Phase A — Honeycomb sidecar bypass** (in the Ariadne repo). Teaches
-  `ariadne/honeycomb.py` to recognize `<stem>.manifest.json` beside
-  `<stem>.md` and consume the pre-built manifest instead of re-transcribing.
-- **Phase D — Discovery schema reset**. The current `Opportunity` record is
-  manuscript-shaped; opportunity mode needs a corpus-agnostic `Prospect`.
-- **Phase C — Gallica prospecting adapter.** First opportunity-mode corpus:
-  Collection Budé → Classiques Garnier → Pléiade.
-- **Phase B — Source-mode `assemble` stage.** The missing terminal step that
-  emits the `<doc_id>.md` + `<doc_id>.manifest.json` + `<doc_id>.anchors.json`
-  bundle Ariadne expects.
-- **Phase E — Vestigial layer cleanup.** Lands after the new seams exist.
+A recipe is the route sheet. It chooses station order, models, prompts,
+generation parameters, and station options without changing conductor code.
+The repository currently ships:
 
-For the reasoning behind this ordering (and the reversal from Codex's
-original sequence), see
-[`docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07_ADDENDUM.md`](docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07_ADDENDUM.md).
+- `latin_manuscript`
+- `chinese_scroll`
 
-## Further reading
+Recipe keys are strict. Unknown parameters or station options fail during load,
+before a network request or paid model call.
 
-- [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md) — core principles and repo layout rules
-- [`docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07.md`](docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07.md) — full strategic analysis
-- [`docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07_ADDENDUM.md`](docs/CODEX_RESTRUCTURING_ANALYSIS_2026-04-07_ADDENDUM.md) — verification pass + corrected sequencing
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/MODEL_STRATEGY.md`](docs/MODEL_STRATEGY.md)
-- [`docs/READING_PROMPTS.md`](docs/READING_PROMPTS.md)
-- [`CLAUDE.md`](CLAUDE.md) — canonical command reference for coding agents
+### Stations
+
+Every station has one contract:
+
+```python
+name: str
+implementation_fingerprint: str
+grain: "page" | "manuscript"
+consumes: tuple[str, ...]
+produces: str
+run(job) -> StationResult
+```
+
+Stations do not call one another, touch the ledger, or choose execution order.
+A station reads only its fingerprinted inputs and writes one output. Adding a
+new transformation means registering a station and composing it in a recipe;
+the conductor remains unchanged.
+
+### Model gateway
+
+Model-backed stations submit provider-neutral `ModelRequest` values and receive
+`ModelResponse` values carrying text, token usage, and cost. Provider-specific
+SDK behavior, retries, response parsing, and pricing stay behind the gateway.
+
+### Executors
+
+The conductor sends a complete `CellSpec` to an executor. `inline` and
+`subprocess` are interchangeable execution policies; neither owns scheduling,
+freshness, or the ledger. Agentic editorial stations have a second contained
+executor seam for `codex` and `omp`.
+
+### Contracts and workspace
+
+`palimpsest/factory/core/contracts.py` is the artifact type system.
+`palimpsest/factory/workspace/layout.py` derives every path from it. The live
+contract graph is generated from the contract and station registries:
+
+```bash
+python -m palimpsest graph
+python -m palimpsest graph --write-docs
+```
+
+`docs/CONTRACTS.md` is machine truth and is checked by the test suite.
+
+## Repository layout
+
+```text
+palimpsest/
+  cli.py                    top-level command entrypoint
+  factory/
+    core/                   contracts, recipes, stations, conductor, ledger
+    gateway/                provider-neutral model boundary
+    stations/               one module per transformation
+    workspace/              atomic I/O and the single path contract
+    prompts/                content-hashed prompt files
+    recipes/                swappable route sheets
+    intake.py               IIIF boundary
+    site.py                 static-library renderer
+library/
+  <doc_id>/                 source records and local factory artifacts
+  factory.db                local inventory and production log
+tests/                      deterministic factory contract and behavior tests
+docs/
+  FACTORY.md                architecture and invariants
+  CONTRACTS.md              generated live graph
+  GLYPHS.md                 alignment and glyph-system design
+```
+
+Generated images, model artifacts, books, runs, the ledger, and the static site
+are local and ignored by Git. `metadata.json` and `page_list.json` are the
+portable source records for adopted workspaces.
+
+## Design rules
+
+1. One artifact kind, one contract, one path.
+2. One transformation, one station, one output.
+3. Prompts are files and are content-hashed.
+4. Recipes configure behavior; the conductor does not know corpora.
+5. Paid work never reruns implicitly after configuration drift.
+6. The diplomatic layer is immutable; reconstruction and emendation sit beside it.
+7. The ledger is append-only production history, not the archive itself.
+8. Presentation consumes the book model and never reaches back into the line.
+
+The pre-cutover repository is preserved remotely on
+`archive/pre-factory-cutover-2026-07-20`.

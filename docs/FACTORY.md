@@ -1,507 +1,267 @@
-# The Factory
+# Palimpsest Factory
 
-System design for the modular re-architecture of Palimpsest. This supersedes
-the ad-hoc stage wiring that grew during the publishing era and defines the
-target shape everything migrates toward.
+Palimpsest is a provenance-first production system for recovering readable
+books from manuscript images. An IIIF manifest enters as a work order; a recipe
+moves every page through image preparation, reading, translation, editorial
+reconstruction, and publication; the outputs are an EPUB and a static-library
+reader generated from one book model.
 
-Status: **accepted** (2026-07-08). Grounded in a full coupling audit of the
-current package; the specific defects each element fixes are cited inline.
+This document describes the implemented system. The live artifact and station
+graph is generated from code in [`CONTRACTS.md`](CONTRACTS.md).
 
-Shape source of truth: [`docs/BLUEPRINT.html`](BLUEPRINT.html) — every
-artifact schema, station I/O, and the recipe format, each marked
-confirmed/proposed/corrected. Shapes are contracts only once confirmed there.
+## Product boundary
 
-Machine truth: [`docs/CONTRACTS.md`](CONTRACTS.md) — the contract graph
-(input → transformation → output), **generated from the live station and
-contract registries** by `palimpsest factory graph --write-docs` and kept
-current by a test. Contracts are enforced at runtime: unknown kinds fail at
-station registration; JSON artifacts missing required fields fail their cell.
+The factory owns the complete path from an archive manifest to a published
+book:
 
-> **Refocus (2026-07-08).** The factory's terminal product is a **readable
-> book**: an EPUB plus a page in a hosted static library, both rendered from
-> one book model (BLUEPRINT.html §7). Ariadne integration is deferred
-> entirely — a ground-truth check found its assumed "sidecar bypass" does not
-> exist (Ariadne v0.3 forbids sidecar files; it ingests one clean markdown
-> file), and when integration returns, `manuscript/translation.md` is already
-> the right input shape. Nothing in the line targets Ariadne.
+1. validate and ingest an IIIF manifest;
+2. acquire and normalize page images;
+3. identify readable regions and transcribe each page;
+4. align transcription columns and translate with manuscript-wide context;
+5. reconstruct page fragments into a continuous manuscript;
+6. build a bounded reference dossier and an evidence-anchored critical reading;
+7. compile a single book model;
+8. render EPUB and static-library outputs.
 
-Build strategy: **greenfield in a new subpackage** (`palimpsest/factory/`).
-The old pipeline modules stay untouched and runnable while the factory is
-built beside them. Once the factory reproduces the golden path (verified by
-diffing outputs on a reference document), the pre-factory state is archived
-on a remote branch (`archive/pre-factory`) and the old modules are deleted
-from the working tree. No in-place porting, no half-migrated limbo.
+The archive is the source of page identity and imagery. The factory is the
+source of every derived artifact. The book model is the source for every
+presentation format.
 
----
+## Command surface
 
-## 1. The picture
+All production commands are top-level Palimpsest commands:
 
-Palimpsest is a factory. Scout heads roam the archives and feed interesting
-items onto the line. The line runs two nested loops: a **page line** (the small
-loop) that turns one page image into an assembled bilingual page record, and a
-**manuscript line** (the big loop) that turns a tray of assembled pages into a
-reconstructed manuscript — original text plus English translation — published
-as a readable book: an EPUB and a page in the hosted library.
-
-```
-   SCOUT HEADS                    THE LINE
-  ┌───────────┐
-  │ vatican   │──┐
-  │ idp       │──┤   ┌────────┐   ┌─────────────────────────────────────┐
-  │ gallica   │──┼──▶│ triage │──▶│ promote ──▶ WORK ORDER enters line  │
-  │ (more…)   │──┘   └────────┘   └─────────────────────────────────────┘
-  └───────────┘                                     │
-                                                    ▼
-  MANUSCRIPT LINE (big loop) ────────────────────────────────────────────
-  │                                                                     │
-  │  intake ─▶ ┌─ PAGE LINE (small loop, ×N pages, parallel) ─────────┐ │
-  │            │                                                      │ │
-  │            │  acquire ─▶ prepare ─▶ read ─▶ translate ─▶ assemble │ │
-  │            │  (download)  (clean)   (VLM)   (w/ brief)   (page)   │ │
-  │            └──────────────────────────────────────────────────────┘ │
-  │                 ▲                                                   │
-  │   survey ───────┘ (builds the "jig": glossary/brief the page       │
-  │   (ms-level)       line's translate station clamps into)           │
-  │                                                                    │
-  │  reconstruct ─▶ publish                                            │
-  │  (boundary      (book model + <doc_id>.epub;                       │
-  │   repair,        site build renders the hosted library             │
-  │   collation)     from all published book models)                   │
-  └────────────────────────────────────────────────────────────────────┘
+```text
+palimpsest init-db
+palimpsest intake --doc-id DOC --recipe RECIPE --manifest URL
+palimpsest adopt --doc-id DOC --recipe RECIPE
+palimpsest run --doc-id DOC
+palimpsest status [--doc-id DOC]
+palimpsest graph [--format json|mermaid] [--write-docs]
+palimpsest preview --doc-id DOC --pages PAGE...
+palimpsest tune --doc-id DOC --pages PAGE...
+palimpsest evaluate ...
+palimpsest site
 ```
 
-Every box is a **station**. Stations are interchangeable parts: same
-interface, different internals. What runs at each slot — which prompt, which
-model, which language, which cleaning profile — is decided by a **recipe**,
-not by code.
+`intake` is the normal entry point. It fetches one IIIF manifest, validates the
+selected recipe before writing anything, builds canonical `metadata.json` and
+`page_list.json` records, writes both atomically, and creates the work order in
+the same command. `adopt` only registers an already-valid canonical workspace.
 
----
+`run` executes the work order's recipe. A successful full run marks the work
+order `complete`; a run containing any failed cell marks it `failed`. Starting
+or resuming a run marks it `active`. Operators can park a work order explicitly
+through the ledger API without changing its production history.
 
-## 2. Core concepts
+## Architecture
 
-### 2.1 Work order
-
-The unit of factory work. One work order = one item (a manuscript, a codex, a
-bound volume of prefaces). It carries:
-
-- `doc_id` — stable identity, same as today's `library/<doc_id>/`
-- `recipe` — which route sheet this item follows
-- provenance of how it entered the line (which scout head, triage score,
-  prospect record) — nothing is re-typed by hand
-
-A work order's pages are its sub-units. Page-line stations operate per page;
-manuscript-line stations operate on the whole order.
-
-### 2.2 Station
-
-A station is one processing step with one uniform contract:
-
-```python
-class Station(Protocol):
-    name: str                      # "read", "translate", "prepare", …
-    consumes: tuple[Kind, ...]     # artifact kinds it requires
-    produces: tuple[Kind, ...]     # artifact kinds it emits
-
-    def run(self, order: WorkOrder, ws: Workspace, cfg: StationConfig) -> StationResult: ...
+```mermaid
+flowchart LR
+    archive[IIIF archive] --> intake[Intake]
+    intake --> metadata[metadata]
+    intake --> page_list[page_list]
+    metadata --> conductor[Conductor]
+    page_list --> conductor
+    recipe[Recipe] --> conductor
+    conductor --> stations[Hermetic stations]
+    stations --> artifacts[Provenance-stamped artifacts]
+    stations --> ledger[(SQLite ledger)]
+    artifacts --> book[Book model]
+    book --> epub[EPUB]
+    book --> site[Static library]
 ```
 
-Rules:
+### Contracts
 
-- **Hermetic.** One station execution touches exactly: its declared input
-  artifacts (read-only), its own output artifact (one atomic write), and the
-  ledger (its own rows). No shared mutable state, no scratch files outside
-  its output slot, no reading siblings' work-in-progress. This is what makes
-  fan-out safe: a thousand workers — threads, processes, or spawned agents —
-  can run (page × station) cells of the same document concurrently and cannot
-  corrupt each other, because no two executions ever write the same file and
-  the ledger (SQLite WAL) is the only rendezvous point.
-- **Stateless.** A station keeps no memory between executions. Everything it
-  knows arrives in the work order, the workspace, and its config; everything
-  it learned leaves in the artifact and the ledger row.
-- **Declared I/O.** `consumes`/`produces` are artifact *kinds* (e.g.
-  `page_image`, `page_image_clean`, `page_transcription`, `translation_brief`,
-  `page_assembled`, `book`). The conductor uses these to order stations and
-  to validate recipes at load time — a recipe that wires `translate` before
-  anything produces `page_transcription` fails before a single API call.
-- **Provenance-stamped.** Every artifact a station writes carries a
-  provenance record: station name + version, model id, prompt name + content
-  hash, generation params, token usage, cost, timestamp. This is
-  non-negotiable — it is what makes the library trustworthy and lets every
-  published book carry an honest colophon.
-- **Registered by name.** A station registry maps `name → implementation`, so
-  recipes reference stations by string and new stations plug in without
-  touching the conductor.
+Every artifact kind has one registry entry defining:
 
-Stations replace the current stage functions. Notably there is **one** `read`
-station slot, not separate OCR + transcribe stations: we are VLM-native and
-have no legacy HTR pass. A corpus that genuinely needs two reading passes
-(e.g. raw read then diplomatic normalization) expresses that as two `read`
-stations in its recipe with different prompts — the slot is generic, the
-recipe decides.
+- grain: page or manuscript;
+- format: JSON, JPEG, or EPUB;
+- required JSON fields;
+- canonical workspace location;
+- semantic description.
 
-### 2.3 Recipe (route sheet)
+Every station declares one grain, all consumed kinds, exactly one produced
+kind, whether it calls a model, and the recipe parameters and options it
+accepts. Registration rejects unknown artifact kinds. Recipe loading rejects
+unknown station names, missing model or prompt bindings, parameters or options
+not declared by the station, and impossible dependency order. JSON outputs are
+validated against their artifact contract before they are written.
 
-A recipe is data, not code: a YAML file naming the ordered stations for an
-item class and binding each slot's swappable parts.
+### Recipes
 
-```yaml
-# recipes/latin_manuscript.yaml
-name: latin_manuscript
-language: la
-line:
-  page:
-    - station: acquire
-    - station: prepare
-      profile: parchment_default
-    - station: read
-      model: ${PALIMPSEST_MODEL_VISION}
-      prompt: read/la/diplomatic_json
-      params: { temperature: 0.1, media_resolution: high }
-    - station: translate
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: translate/la/with_brief
-      requires_jig: translation_brief
-    - station: assemble_page
-  manuscript:
-    - station: survey            # produces the translation_brief jig
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: survey/la/brief
-    - station: reconstruct
-      prompt: reconstruct/boundary_repair
-    - station: publish
-      formats: [epub]        # book.json is always written; site build reads it
+A recipe is a declarative route sheet with separate page and manuscript lanes.
+The page lane is ordered and runs concurrently across pages. The manuscript
+lane runs after every page dependency required by its next station is present.
+
+The maintained recipes are:
+
+- `latin_manuscript`
+- `chinese_scroll`
+
+Recipe interpolation accepts only the named model settings in factory
+configuration. Missing settings fail during recipe loading rather than during
+paid work.
+
+### Conductor
+
+The conductor is the only component that knows ordering, concurrency,
+freshness, or ledger state. Its unit of execution is a cell:
+
+```text
+(document, page or manuscript, station)
 ```
 
-Hot-swapping is now a one-line diff: a Greek papyri corpus is
-`recipes/greek_papyri.yaml` with different prompts and maybe a different
-`prepare` profile; trying a new model on the read slot is one field. **No
-recipe change ever requires a code change** unless a genuinely new station
-kind is being built.
+For each cell it:
 
-This directly fixes the audit's finding that today, swapping the enrich
-prompt, changing any temperature, or using a non-default model per stage
-requires editing module constants.
+1. resolves the station's declared inputs;
+2. computes implementation, configuration, and input fingerprints;
+3. decides whether to run, skip, or report explicit refresh requirements;
+4. appends a running record to the ledger;
+5. delegates execution to the configured executor;
+6. validates and atomically commits the output;
+7. records success, usage, cost, or a structured failure.
 
-### 2.4 Conductor
+Page cells execute through a bounded thread pool. Ledger writes share one
+serialized SQLite connection in WAL mode. A manuscript cell never starts until
+all required page artifacts exist.
 
-The orchestrator. `palimpsest run --doc-id X` (recipe comes from the work
-order) does:
+### Executors
 
-1. Load recipe, validate station graph against the registry.
-2. Read the ledger; compute which stations still owe artifacts, per page and
-   per manuscript.
-3. Run page-line stations with bounded parallelism across pages (one shared
-   worker-pool implementation — replacing the four independent hand-rolled
-   concurrency patterns in transcribe/enrich/survey/triage today).
-4. Run manuscript-line stations when their inputs are complete (survey can
-   run as soon as all reads are done, while late pages are still translating
-   only if the recipe says the brief is required — the conductor respects
-   `requires_jig`).
-5. Record every transition in the ledger. Crash-safe: re-running `run` always
-   resumes from the ledger, never re-does paid work, never needs
-   `--skip-existing` flags.
+Executors receive a fully resolved cell specification and return a structured
+cell outcome. They never choose recipe order and never mutate the ledger.
 
-The conductor is the *only* component that knows about ordering and
-concurrency. Stations never call each other and never import each other's
-internals. Because station executions are hermetic (§2.2), the worker pool's
-size is a dial, not a design constraint — and so is the worker itself: the
-**executor seam** (`run --executor inline|subprocess`) dispatches each cell
-as a self-contained JSON `CellSpec` (declared inputs, config, fingerprints,
-prompt hash — the worker's whole world) to whichever executor is configured.
-`inline` runs in the conductor's thread; `subprocess` spawns one isolated
-process per cell; an agent executor is the same shape with a smarter worker.
-Workers verify their prompt hash against the spec, never touch the ledger,
-and report a structured outcome — fleet workers with zero shared context by
-construction.
+- `inline` runs the station in the conductor process;
+- `subprocess` runs a fresh Python process for crash and interpreter isolation;
+- configured agent executors stage an airlocked workspace containing only the
+  station prompt, declared evidence, relevant images, and an output directory.
 
-### 2.5 The ledger: inventory + production log
+Agent-backed stations run a production attempt, validate the artifact, and may
+send bounded repair turns into the same session. Exhausted repairs produce a
+failed cell; they never produce a placeholder artifact.
 
-One SQLite database, `library/factory.db`, is the factory's memory. It is
-both the **inventory** (what the scouts have found, what's on the line) and
-the **production log** (what work was done, by which process version, at
-which cost). Three tables:
+### Model gateway
 
-```sql
--- Everything the scout heads find. One row per prospect, promoted or not.
-CREATE TABLE prospects (
-  prospect_id   TEXT PRIMARY KEY,
-  head          TEXT NOT NULL,        -- 'vatican' | 'idp' | 'gallica' | …
-  archive_ref   TEXT NOT NULL,        -- shelfmark / ark / external id
-  manifest_url  TEXT,
-  title         TEXT,
-  language      TEXT,
-  date_range    TEXT,
-  triage_score  INTEGER,
-  triage_json   TEXT,                 -- full triage reasoning, provenance
-  found_at      TEXT NOT NULL,
-  status        TEXT NOT NULL         -- found | triaged | promoted | rejected
-);
+Stations call one gateway interface. A model identifier selects the provider;
+stations do not instantiate provider clients. The gateway owns retries,
+transient-error classification, structured JSON decoding, token accounting,
+and cost calculation. Model, prompt hash, parameters, token use, and cost are
+recorded in provenance and the ledger.
 
--- Work orders: prospects that were promoted onto the line.
-CREATE TABLE items (
-  doc_id       TEXT PRIMARY KEY,
-  prospect_id  TEXT REFERENCES prospects(prospect_id),
-  recipe       TEXT NOT NULL,
-  mode         TEXT NOT NULL,         -- 'source' | 'opportunity'
-  promoted_at  TEXT NOT NULL,
-  status       TEXT NOT NULL          -- active | complete | parked | failed
-);
+### Workspace
 
--- Append-only production log. One row per station execution, page-grained
--- for page-line stations (page_id set), item-grained for manuscript-line
--- stations (page_id NULL). Rows are never updated or deleted.
-CREATE TABLE stage_runs (
-  run_id             INTEGER PRIMARY KEY,
-  doc_id             TEXT NOT NULL REFERENCES items(doc_id),
-  page_id            TEXT,            -- NULL for manuscript-line stations
-  station            TEXT NOT NULL,   -- 'prepare' | 'read' | 'translate' | …
-  status             TEXT NOT NULL,   -- running | done | failed:<reason>
-  station_version    TEXT NOT NULL,   -- 'read/v2'
-  model              TEXT,
-  prompt_name        TEXT,
-  prompt_hash        TEXT,            -- content hash of the exact prompt text
-  params_hash        TEXT,            -- generation params fingerprint
-  config_fingerprint TEXT NOT NULL,   -- hash(station_version+model+prompt+params)
-  input_fingerprint  TEXT NOT NULL,   -- hash of upstream artifacts consumed
-  output_fingerprint TEXT,            -- hash of what this run produced; downstream
-                                      -- staleness is detected against this (§2.6)
-  output_path        TEXT,
-  tokens_in          INTEGER, tokens_out INTEGER, cost_usd REAL,
-  started_at         TEXT NOT NULL, finished_at TEXT,
-  error              TEXT
-);
+Canonical workspaces live under `library/<doc_id>/`. Artifact paths come only
+from the contract registry and workspace layout module. Page-grain artifacts
+are one file per page under a kind-named directory; manuscript-grain artifacts
+use the registry's single filename.
+
+Important source and terminal artifacts are:
+
+```text
+library/<doc_id>/
+  metadata.json
+  page_list.json
+  page_image/
+  page_image_framed/
+  page_image_unmarked/
+  page_image_clean/
+  page_regions/
+  page_transcription/
+  page_alignment/
+  translation_brief.json
+  page_translation/
+  page_assembled/
+  manuscript.json
+  reference.json
+  emendations.json
+  book/book.json
+  book/book.epub
 ```
 
-`prospects ⋈ items ⋈ stage_runs` answers both the inventory questions
-("what has the Gallica head found above score 80 that we haven't run yet?")
-and the production questions ("which pages of Pal.lat.1267 were read by
-`read/v1` on the old flash model, and what did each cost?"). The **current
-state** of the line is a view — latest successful run per
-(doc, page, station) — not a mutable column, so history is never lost.
+The complete path map and required JSON fields are generated in
+[`CONTRACTS.md`](CONTRACTS.md).
 
-Because `stage_runs` is append-only, "page 0042 scanned by process v1, model
-X" and its later refresh by v2 are both permanent records. The DB is an
-index, not the archive: every artifact on disk also carries its own embedded
-provenance stamp, so `factory.db` can be rebuilt from the workspace if it is
-ever lost (design rule §6.4 makes this possible).
+## Freshness and provenance
 
-This replaces: the library `metadata.json` status string that stops updating
-after download, the `--skip-existing` output-scanning, the per-batch-run-only
-`batch_manifest.json`, and the separate discovery SQLite DB (the `prospects`
-table absorbs it). `metadata.json` stays — it holds *what the item is*; the
-ledger holds *where it is on the line and how it got there*.
+A station implementation is identified by a SHA-256 digest of executable
+factory source plus the station's qualified identity. No manually named
+implementation generation exists. Any factory code drift changes identity
+automatically rather than masquerading as fresh work.
 
-### 2.6 Staleness and stage refresh
+The conductor computes two decision fingerprints:
 
-The factory is an incremental build system. Freshness is decided by the two
-fingerprints every run records:
-
-- **Config drift** — the recipe now binds this station to a different
-  model/prompt/params/station-version than the latest run used
-  (`config_fingerprint` mismatch). The stage is **outdated**. Outdated work
-  is *not* redone automatically — re-running paid API work is always an
-  explicit decision.
-- **Input drift** — an upstream station was re-run, so this stage's recorded
-  `input_fingerprint` no longer matches the current upstream artifacts. The
-  stage is **stale**. Stale artifacts no longer derive from what's above
-  them, so plain `run` *does* redo them to restore line consistency.
-
-The operator loop this enables:
-
-```
-# A better vision model ships. Point the recipe's read slot at it, then:
-palimpsest status --doc-id X          # read: outdated (config drift), rest: fresh
-palimpsest run --doc-id X --refresh read
-                                      # read re-runs page by page under the new
-                                      # config; translate/assemble/reconstruct
-                                      # flip to stale as each page's read lands
-palimpsest run --doc-id X             # rebuilds everything stale downstream
+```text
+configuration = hash(implementation, model, prompt hash, parameters, options)
+inputs        = hash(all declared input content, non-file signature inputs)
 ```
 
-Refresh is per-stage and page-granular: refreshing `read` never touches
-`acquire`/`prepare` artifacts, and a page whose new read output is
-byte-identical to the old one (same output hash) does not propagate staleness
-downstream — no cascade without cause.
+Decision rules:
 
-### 2.7 Scout heads
+- no successful prior run: run;
+- configuration and inputs match: skip as fresh;
+- inputs changed: run because upstream evidence changed;
+- configuration changed: report outdated and require explicit `--refresh`;
+- requested refresh: run.
 
-Discovery becomes a set of independent **heads**, each an adapter over one
-archive (Vatican, IDP, Gallica today; more later). Heads share one contract:
-emit rows into the `prospects` table (§2.5). Triage scores them in place.
-Then the seam that is missing today:
+JSON artifact hashing excludes its provenance object, preventing timestamps
+from making unchanged content look stale. Binary artifacts hash their bytes.
+Every JSON output receives a provenance stamp containing station identity,
+configuration and input fingerprints, creation time, model and prompt identity
+when applicable, parameters, token use, and cost.
 
-**`promote`** — converts an approved prospect into a work order: inserts an
-`items` row referencing the prospect (so scout provenance is a join away,
-never re-typed), creates `library/<doc_id>/` with metadata drawn from the
-prospect record, and assigns a recipe by corpus rules. From that moment the
-item is on the line and `palimpsest run` carries it to the end.
+## Ledger
 
-Promotion can be gated (`--auto` above a score threshold, or interactive
-review of the shortlist) — the gate is policy, the seam is code.
+`library/factory.db` contains two durable tables:
 
-This is also where dual-mode lives cleanly: **source-mode** prospects promote
-into the manuscript line; **opportunity-mode** prospects (labor-killed dreams
-in prefaces) promote into a different, cheaper recipe whose line might be just
-`acquire → read → extract_dream` — same factory, different route sheet.
+- `items`: one work order per document, with recipe, creation time, and
+  operational status;
+- `stage_runs`: append-only cell executions, fingerprints, output location,
+  model usage, cost, timestamps, and failures.
 
-### 2.8 Shared services (factory utilities)
+`stage_state` is a view of the latest successful run for each document,
+station, and page. Refreshing work appends history; it never overwrites an old
+run. Artifacts remain independently auditable from their embedded provenance.
 
-The infrastructure every station uses, built exactly once:
+## Editorial model
 
-- **Model gateway** — one client seam wrapping providers (Gemini `genai`
-  today, Claude SDK for agentic scouts, others later). One place for: client
-  lifecycle, retries, response parsing, JSON-fence stripping, token
-  accounting, cost metering (pricing tables live here), and the Batch API
-  lifecycle as an alternate execution mode of the same gateway. Replaces the
-  five duplicated call sites and two parallel model stacks.
-- **Prompt store** — all prompts are files under
-  `palimpsest/prompts/<station>/<language>/<name>.txt`, resolved by one
-  loader, content-hashed for provenance. Replaces today's four binding
-  mechanisms (including the prompt embedded as a Python string in scout.py).
-- **Artifact I/O** — one module for atomic JSON/JSONL read/write (the
-  existing `library/io.py` atomic writer, promoted to package-wide use) and
-  the workspace path contract (one `layout.py`; today there are three
-  `PROJECT_ROOT` definitions and stations that bypass `contracts.py` with
-  string literals).
-- **Config** — one `config.py`: env-backed model defaults, library root,
-  factory DB path. No more per-subcommand hardcoded path defaults.
+The editorial line preserves separate evidence layers:
 
----
+- `page_transcription`: diplomatic page reading;
+- `page_alignment`: character-to-image anchors and column geometry;
+- `page_translation`: translated page text with context notes;
+- `manuscript`: reconstructed continuous original and translation;
+- `reference`: bounded external evidence tied to manuscript anchors;
+- `emendations`: proposed readings plus an apparatus explaining each change;
+- `book`: chapters containing translation, verbatim original, emended reading,
+  apparatus, catalog identity, and production colophon.
 
-## 3. The two loops, precisely
+Emendation never mutates the diplomatic transcription or reconstructed
+manuscript. Publication presents the layers together, preserving both readable
+text and the evidence required to audit it.
 
-### Page line (small loop) — per page, parallel across pages
+## Publication
 
-| Station | Consumes | Produces | Swappable parts |
-|---|---|---|---|
-| `acquire` | page_list entry | `page_image` | IIIF size/quality params |
-| `prepare` | `page_image` | `page_image_clean` | cleaning profile |
-| `read` | `page_image_clean` | `page_transcription` | model, prompt, params |
-| `translate` | `page_transcription`, `translation_brief` (jig) | `page_translation` | model, prompt, target language |
-| `assemble_page` | `page_transcription`, `page_translation` | `page_assembled` | layout of the bilingual record |
+`publish` creates the book model as pure structured content. `render_epub`
+renders an EPUB from that model. `site` rebuilds the hosted shelf and per-book
+reader from all published book models. Presentation code does not read upstream
+station artifacts directly.
 
-`page_assembled` is the small loop's finished part: one record holding the
-original transcription and its translation, aligned, with anchors and full
-provenance. (Today's `enriched.jsonl` records are the proto-form of this.)
+The publication colophon reports the model and prompt identity for model-backed
+stations, implementation fingerprints for every contributing station, total
+recorded production cost, source catalog identity, and page count.
 
-### Manuscript line (big loop) — per item
+## Invariants
 
-| Station | Consumes | Produces | Notes |
-|---|---|---|---|
-| `survey` | all `page_transcription` | `translation_brief` | The **jig**: glossary, outline, named entities, style guide that the page line's `translate` clamps into. Runs after reads, before translations. |
-| `reconstruct` | all `page_assembled` | `manuscript_original`, `manuscript_translation`, `joins` | Cross-page boundary repair, collation into continuous original text + continuous English, section structure recovered. |
-| `publish` | reconstruction outputs + metadata | `book` | The book model (`book/book.json`) + `<doc_id>.epub`. Chapters carry both languages; the colophon states what transcribed and translated the book, from which shelfmark, at what cost. |
-
-The hosted library (`site/`) is a library-level derivation, not a station: a
-static site rebuilt any time from every published `book/book.json` — the
-shelf page plus a reader per book, deployable to any static host.
-
-The big loop is deliberately thin right now — `reconstruct` is the station
-with the most unbuilt substance (it absorbs today's enrich-time overlap/
-boundary-repair logic and extends it to full collation). More manuscript-level
-stations (e.g. `verify`, `illuminate`/image-reconstruction lanes using the
-`*-image-preview` models) slot in later without touching anything else.
-
----
-
-## 4. Package layout (target)
-
-Everything new lives under one subpackage, `palimpsest/factory/`, so the old
-world is deletable in a single stroke when parity lands:
-
-```
-palimpsest/
-  factory/                    # ← the entire new world
-    core/
-      station.py              # Station protocol, artifact kinds, provenance record
-      registry.py             # station name → implementation
-      recipe.py               # recipe load + validation
-      conductor.py            # orchestration, worker pool, staleness resolution
-      ledger.py               # factory.db access: prospects / items / stage_runs
-    stations/
-      acquire.py  prepare.py  read.py  translate.py  assemble_page.py
-      survey.py   reconstruct.py  publish.py
-    site.py                   # hosted-library builder (aggregates book models)
-    scouts/
-      heads/                  # vatican.py, idp.py, gallica.py (adapter contract)
-      triage.py
-      promote.py              # prospect → work order (the new seam)
-    gateway/
-      client.py               # provider seam
-      gemini.py  claude.py
-      pricing.py  batch.py
-    prompts/<station>/<language>/<name>.txt
-    recipes/*.yaml
-    workspace/
-      layout.py               # the one path contract
-      io.py                   # atomic writers, JSONL
-    config.py
-    cli.py                    # wired as `palimpsest factory …` during build,
-                              # promoted to the top-level CLI at cutover
-  …existing modules…          # untouched until cutover, then deleted
-```
-
-CLI surface collapses toward: `palimpsest scout …`, `palimpsest promote …`,
-`palimpsest run --doc-id X`, `palimpsest status [--doc-id X]`. Stage-level
-control stays as flags (`palimpsest run --only read`, `--refresh read`) but
-the golden path is one verb.
-
----
-
-## 5. Build plan (greenfield)
-
-The factory is built fresh under `palimpsest/factory/`, lifting logic from
-the old modules where it's sound but never importing them. The old pipeline
-keeps working throughout — it is the reference implementation the factory is
-verified against.
-
-1. **Skeleton + utilities.** Scaffold the subpackage; build `gateway/`,
-   prompt store, `workspace/`, `config.py`, and the ledger schema
-   (`factory.db`). These have no dependency on pipeline semantics and
-   everything else stands on them.
-2. **Station protocol + page line.** Station/registry/recipe/conductor core,
-   then the page-line stations (`acquire`, `prepare`, `read`, `translate`,
-   `assemble_page`) — logic lifted from `download.py`, `clean.py`,
-   `transcribe.py`, `enrich.py`, re-homed onto the gateway and ledger.
-3. **Manuscript line.** `survey` (lifted), then the new substance:
-   `reconstruct`, `publish` (book model + EPUB), and the site builder — the
-   factory's terminal product: readable books.
-4. **Parity gate.** Run old pipeline and factory on the same reference
-   document (Pal.lat.1267); diff transcription/translation outputs. The
-   factory must reproduce the golden path before anything is deleted.
-5. **Scouts + promote.** Heads re-homed under the adapter contract, triage
-   ported, `prospects` migration from the old discovery DB, `promote` built
-   (this is where addendum Phase C Gallica and Phase D `Prospect` schema
-   land).
-6. **Cutover.** Push branch `archive/pre-factory` to the GitHub remote;
-   delete the old modules from the working tree; promote the factory CLI to
-   the top level; rewrite README/CLAUDE.md command surfaces. (Addendum
-   Phase E — vestigial cleanup — happens implicitly here, since the dead
-   weight simply doesn't come along: `packets/`, `compat.py`, orphaned
-   prompts, re-export shims.)
-
-Ordering rationale: utilities before stations because every station stands on
-them; page line before manuscript line because the big loop consumes the
-small loop's parts; the parity gate before scouts because parity is what
-licenses deletion, and scouts can land while cutover is being prepared.
-
----
-
-## 6. Design rules (what keeps it from re-convolving)
-
-1. Stations never import other stations. Cross-station data flows only
-   through workspace artifacts.
-2. The conductor is the only component with ordering/concurrency knowledge.
-3. Anything a recipe can express must not be expressible in code too — one
-   place, one mechanism (kills config drift).
-4. Every artifact write is atomic and provenance-stamped, or it doesn't
-   merge. Disk artifacts are the archive; `factory.db` is an index over them
-   and must remain rebuildable from the workspace alone.
-5. Prompts are files. A prompt in a Python string is a bug.
-6. New corpus = new recipe (+ maybe a scout head). If a new corpus requires
-   editing the conductor, the design has failed — file it as such.
-7. `stage_runs` is append-only. History of what was produced by which
-   process version is never overwritten — it is the inventory's audit trail.
-8. One execution, one output file. A station run may read only its declared
-   inputs and write only its own artifact slot; the ledger is the sole shared
-   mutable state. Any station that needs more than that is two stations.
+1. One artifact kind has one contract and one canonical path.
+2. A station has declared inputs and exactly one output.
+3. A recipe is validated completely before execution.
+4. Only the conductor schedules work or updates production history.
+5. Executors and stations never write the ledger.
+6. Artifact commits are atomic.
+7. Successful history is append-only.
+8. Paid work is not repeated after configuration drift without explicit
+   operator intent.
+9. Source evidence, editorial intervention, and presentation remain distinct.
+10. Every published book can be traced to page artifacts, prompts, models,
+    implementation content, and archive source.

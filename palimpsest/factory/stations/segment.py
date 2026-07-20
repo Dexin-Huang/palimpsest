@@ -43,28 +43,39 @@ MIN_REGION_DENSITY = 0.03
 # near-blank full page invites page-scale hallucination. Measured on
 # Pal.lat.1199: real-but-light content ≈ 22k ink px, stain/bleed bands ≈ 10k.
 FULL_PAGE_MIN_INK_PX = 15000
-MAX_LINES_PER_REGION = 14     # split blobs taller than this many text lines
-FULL_PAGE_MAX_REGIONS = 3     # routing: few blobs and few lines → one call
+MAX_LINES_PER_REGION = 14  # split blobs taller than this many text lines
+FULL_PAGE_MAX_REGIONS = 3  # routing: few blobs and few lines → one call
 FULL_PAGE_MAX_LINES = 30
 
 
 class Segment(Station):
     name = "segment"
-    version = "segment/v1"
+
     grain = "page"
     consumes = ("page_image_clean",)
     produces = "page_regions"
+    option_keys = frozenset(
+        {
+            "include_faint",
+            "full_page_min_ink",
+            "full_page_max_regions",
+            "full_page_max_lines",
+            "bleed_depth_delta",
+        }
+    )
 
     def run(self, job: Job) -> StationResult:
         image = cv2.imread(str(job.path_of("page_image_clean")))
         if image is None:
             raise ValueError(f"Unreadable image: {job.path_of('page_image_clean')}")
         payload = analyze(image, dict(job.config.options))
-        return StationResult(payload={
-            "doc_id": job.doc_id,
-            "page_id": job.page_id,
-            **payload,
-        })
+        return StationResult(
+            payload={
+                "doc_id": job.doc_id,
+                "page_id": job.page_id,
+                **payload,
+            }
+        )
 
 
 def analyze(image: np.ndarray, options: dict) -> dict:
@@ -84,8 +95,11 @@ def analyze(image: np.ndarray, options: dict) -> dict:
             "regions": [],
         }
     scale = min(1.0, ANALYSIS_MAX_SIDE / max(h, w))
-    gray = cv2.resize(gray_full, None, fx=scale, fy=scale,
-                      interpolation=cv2.INTER_AREA) if scale < 1.0 else gray_full
+    gray = (
+        cv2.resize(gray_full, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        if scale < 1.0
+        else gray_full
+    )
 
     dark, faint = ink_masks(gray)
     # The faint channel (pencil notes, faded ink) is opt-in: on textured
@@ -107,7 +121,9 @@ def analyze(image: np.ndarray, options: dict) -> dict:
     blobs = _merge_overlaps(blobs)
     blobs = [split for blob in blobs for split in _split_tall(writing, blob, glyph)]
     regions = _classify(blobs, writing, gray, glyph, scale)
-    page_depth = float(np.median(gray[writing > 0])) if cv2.countNonZero(writing) else None
+    page_depth = (
+        float(np.median(gray[writing > 0])) if cv2.countNonZero(writing) else None
+    )
     regions = _drop_bleed_through(regions, page_depth, options)
     regions = _add_figures(regions, figure_boxes, ink, scale)
     regions.sort(key=lambda r: (r["kind"] == "marginalia", r["bbox"][1], r["bbox"][0]))
@@ -119,9 +135,12 @@ def analyze(image: np.ndarray, options: dict) -> dict:
     total_ink = sum(r["ink_px"] for r in regions)
     if not regions:
         route = "blank"
-    elif (total_ink >= int(options.get("full_page_min_ink", FULL_PAGE_MIN_INK_PX))
-          and len(regions) <= int(options.get("full_page_max_regions", FULL_PAGE_MAX_REGIONS))
-          and total_lines <= int(options.get("full_page_max_lines", FULL_PAGE_MAX_LINES))):
+    elif (
+        total_ink >= int(options.get("full_page_min_ink", FULL_PAGE_MIN_INK_PX))
+        and len(regions)
+        <= int(options.get("full_page_max_regions", FULL_PAGE_MAX_REGIONS))
+        and total_lines <= int(options.get("full_page_max_lines", FULL_PAGE_MAX_LINES))
+    ):
         route = "full_page"
     else:
         route = "segmented"
@@ -136,13 +155,18 @@ def analyze(image: np.ndarray, options: dict) -> dict:
 
 def _blobs(ink: np.ndarray, glyph: int) -> list[tuple[int, int, int, int]]:
     fuse_words = cv2.getStructuringElement(
-        cv2.MORPH_RECT, (max(3, int(glyph * 2.2)), max(3, int(glyph * 0.8))))
+        cv2.MORPH_RECT, (max(3, int(glyph * 2.2)), max(3, int(glyph * 0.8)))
+    )
     fuse_lines = cv2.getStructuringElement(
-        cv2.MORPH_RECT, (max(3, int(glyph * 0.8)), max(3, int(glyph * 1.7))))
+        cv2.MORPH_RECT, (max(3, int(glyph * 0.8)), max(3, int(glyph * 1.7)))
+    )
     fused = cv2.dilate(cv2.dilate(ink, fuse_words), fuse_lines)
     n, _, stats, _ = cv2.connectedComponentsWithStats(fused)
-    return [tuple(stats[i][:4]) for i in range(1, n)
-            if stats[i][4] >= ink.shape[0] * ink.shape[1] * 0.0004]
+    return [
+        tuple(stats[i][:4])
+        for i in range(1, n)
+        if stats[i][4] >= ink.shape[0] * ink.shape[1] * 0.0004
+    ]
 
 
 def _extract_drawings(
@@ -177,22 +201,29 @@ def _drop_bleed_through(
 
 
 def _add_figures(
-    regions: list[dict], figure_boxes: list[tuple[int, int, int, int]],
-    ink: np.ndarray, scale: float,
+    regions: list[dict],
+    figure_boxes: list[tuple[int, int, int, int]],
+    ink: np.ndarray,
+    scale: float,
 ) -> list[dict]:
     """Figures become whole regions (never split); writing regions mostly
     inside a figure are dropped — the figure tile reads their labels."""
     for x, y, bw, bh in figure_boxes:
-        ink_px = int(cv2.countNonZero(ink[y:y + bh, x:x + bw]))
-        regions = [r for r in regions if not _mostly_inside(
-            [int(v * scale) for v in r["bbox"]], (x, y, bw, bh))]
-        regions.append({
-            "kind": "figure",
-            "bbox": [int(v / scale) for v in (x, y, bw, bh)],
-            "est_lines": 1,
-            "ink_px": ink_px,
-            "depth": 0.0,
-        })
+        ink_px = int(cv2.countNonZero(ink[y : y + bh, x : x + bw]))
+        regions = [
+            r
+            for r in regions
+            if not _mostly_inside([int(v * scale) for v in r["bbox"]], (x, y, bw, bh))
+        ]
+        regions.append(
+            {
+                "kind": "figure",
+                "bbox": [int(v / scale) for v in (x, y, bw, bh)],
+                "est_lines": 1,
+                "ink_px": ink_px,
+                "depth": 0.0,
+            }
+        )
     return regions
 
 
@@ -236,7 +267,7 @@ def _drop_edge_artifacts(
 
 
 def _merge_overlaps(
-    blobs: list[tuple[int, int, int, int]]
+    blobs: list[tuple[int, int, int, int]],
 ) -> list[tuple[int, int, int, int]]:
     """Union blobs whose bboxes substantially overlap — L-shaped components
     produce overlapping boxes that would otherwise be read twice."""
@@ -272,29 +303,32 @@ def _split_tall(
     if lines <= MAX_LINES_PER_REGION:
         return [bbox]
     pieces = int(np.ceil(lines / MAX_LINES_PER_REGION))
-    profile = ink[y:y + bh, x:x + bw].sum(axis=1)
+    profile = ink[y : y + bh, x : x + bw].sum(axis=1)
     cuts = []
     for k in range(1, pieces):
         target = int(bh * k / pieces)
         lo = max(0, target - int(line_height * 2))
         hi = min(bh - 1, target + int(line_height * 2))
-        cuts.append(lo + int(np.argmin(profile[lo:hi + 1])))
+        cuts.append(lo + int(np.argmin(profile[lo : hi + 1])))
     edges = [0, *sorted(cuts), bh]
     return [(x, y + a, bw, b - a) for a, b in zip(edges, edges[1:]) if b - a > glyph]
 
 
 def _classify(
-    blobs: list[tuple[int, int, int, int]], ink: np.ndarray,
-    gray: np.ndarray, glyph: int, scale: float,
+    blobs: list[tuple[int, int, int, int]],
+    ink: np.ndarray,
+    gray: np.ndarray,
+    glyph: int,
+    scale: float,
 ) -> list[dict]:
     hs, ws = gray.shape
     regions = []
     for x, y, bw, bh in blobs:
-        roi_ink = ink[y:y + bh, x:x + bw] > 0
+        roi_ink = ink[y : y + bh, x : x + bw] > 0
         ink_px = int(roi_ink.sum())
         if ink_px < MIN_REGION_INK_PX or ink_px < MIN_REGION_DENSITY * bw * bh:
             continue
-        depth = float(np.median(gray[y:y + bh, x:x + bw][roi_ink]))
+        depth = float(np.median(gray[y : y + bh, x : x + bw][roi_ink]))
         cx, cy = (x + bw / 2) / ws, (y + bh / 2) / hs
         frac = (bw * bh) / (hs * ws)
         if frac >= 0.10 and 0.2 <= cx <= 0.8:
@@ -303,13 +337,15 @@ def _classify(
             kind = "marginalia"
         else:
             kind = "block"
-        regions.append({
-            "kind": kind,
-            "bbox": [int(v / scale) for v in (x, y, bw, bh)],
-            "est_lines": max(1, round(bh / (glyph * 1.7))),
-            "ink_px": ink_px,
-            "depth": depth,
-        })
+        regions.append(
+            {
+                "kind": kind,
+                "bbox": [int(v / scale) for v in (x, y, bw, bh)],
+                "est_lines": max(1, round(bh / (glyph * 1.7))),
+                "ink_px": ink_px,
+                "depth": depth,
+            }
+        )
     return regions
 
 

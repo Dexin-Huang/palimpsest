@@ -25,11 +25,12 @@ TASK = (
 
 class Reference(Station):
     name = "reference"
-    version = "reference/v1"
+
     grain = "manuscript"
     consumes = ("manuscript",)
     produces = "reference"
     uses_model = True
+    option_keys = frozenset({"timeout_s", "executor"})
 
     def run(self, job: Job) -> StationResult:
         manuscript = read_json(job.path_of("manuscript"))
@@ -44,9 +45,12 @@ class Reference(Station):
             images=[],
         )
         run = agent_cell.run(
-            workspace, TASK, model=job.config.model,
-            timeout_s=int(job.config.options.get("timeout_s",
-                                                 agent_cell.DEFAULT_TIMEOUT_S)),
+            workspace,
+            TASK,
+            model=job.config.model,
+            timeout_s=int(
+                job.config.options.get("timeout_s", agent_cell.DEFAULT_TIMEOUT_S)
+            ),
             executor=str(job.config.options.get("executor", "codex")),
         )
         artifact = agent_cell.read_artifact(workspace, "reference.json")

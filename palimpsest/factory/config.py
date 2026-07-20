@@ -30,9 +30,6 @@ def _env(key: str, default: str = "") -> str:
 LIBRARY_ROOT = Path(_env("PALIMPSEST_LIBRARY_ROOT", str(PROJECT_ROOT / "library")))
 FACTORY_DB_PATH = Path(_env("PALIMPSEST_FACTORY_DB", str(LIBRARY_ROOT / "factory.db")))
 
-# Model defaults per lane. Recipe bindings override these per station.
+# Model defaults used by recipe interpolation.
 MODEL_VISION = _env("PALIMPSEST_MODEL_VISION", "gemini-3.1-pro-preview")
 MODEL_READING = _env("PALIMPSEST_MODEL_READING", "gemini-3.1-flash-lite-preview")
-MODEL_TRIAGE = _env("PALIMPSEST_MODEL_TRIAGE", MODEL_READING)
-MODEL_RECON = _env("PALIMPSEST_MODEL_RECON", "gemini-3.1-flash-image-preview")
-MODEL_SCOUT = _env("PALIMPSEST_MODEL_SCHOLAR_AGENT", "claude-sonnet-4-5")

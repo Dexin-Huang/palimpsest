@@ -36,11 +36,13 @@ def _parse_flags(text: str) -> tuple[str, dict]:
 
 class Translate(Station):
     name = "translate"
-    version = "translate/v1"
+
     grain = "page"
     consumes = ("page_transcription", "translation_brief")
     produces = "page_translation"
     uses_model = True
+    param_keys = frozenset({"temperature", "max_output_tokens"})
+    option_keys = frozenset({"overlap", "trim_seam_overlap"})
 
     def input_paths(self, job: Job) -> list[Path]:
         own_and_neighbors = [
@@ -50,19 +52,23 @@ class Translate(Station):
         previous = self._seam_neighbor(job)
         if previous:
             own_and_neighbors.append(job.path_of("page_transcription", previous))
-        return list(dict.fromkeys(own_and_neighbors)) + [job.path_of("translation_brief")]
+        return list(dict.fromkeys(own_and_neighbors)) + [
+            job.path_of("translation_brief")
+        ]
 
     def run(self, job: Job) -> StationResult:
         window = self._context_window(job)
         texts = {
-            page["page_id"]: read_json(job.path_of("page_transcription", page["page_id"]))
+            page["page_id"]: read_json(
+                job.path_of("page_transcription", page["page_id"])
+            )
             for page in window
         }
         own_index = next(
             i for i, page in enumerate(window) if page["page_id"] == job.page_id
         )
         left = self._format_context(window[:own_index], texts)
-        right = self._format_context(window[own_index + 1:], texts)
+        right = self._format_context(window[own_index + 1 :], texts)
 
         page_text = texts[job.page_id]["text"]
         seam = None
@@ -79,18 +85,21 @@ class Translate(Station):
         brief.pop("provenance", None)  # guidance for the model, not bookkeeping
 
         prompt = (
-            job.config.prompt.text
-            .replace("{BRIEF}", json.dumps(brief, ensure_ascii=False, indent=1))
+            job.config.prompt.text.replace(
+                "{BRIEF}", json.dumps(brief, ensure_ascii=False, indent=1)
+            )
             .replace("{PAGE_TEXT}", page_text)
             .replace("{LEFT_CONTEXT}", left)
             .replace("{RIGHT_CONTEXT}", right)
         )
-        response = generate(ModelRequest(
-            model=job.config.model,
-            prompt=prompt,
-            temperature=job.config.params.get("temperature", 0.1),
-            max_output_tokens=job.config.params.get("max_output_tokens", 32768),
-        ))
+        response = generate(
+            ModelRequest(
+                model=job.config.model,
+                prompt=prompt,
+                temperature=job.config.params.get("temperature", 0.1),
+                max_output_tokens=job.config.params.get("max_output_tokens", 32768),
+            )
+        )
         translation, flags = _parse_flags(response.text)
         return StationResult(
             payload={
@@ -118,7 +127,7 @@ class Translate(Station):
         index = next(
             i for i, page in enumerate(job.pages) if page["page_id"] == job.page_id
         )
-        return list(job.pages[max(0, index - overlap): index + 1 + overlap])
+        return list(job.pages[max(0, index - overlap) : index + 1 + overlap])
 
     @staticmethod
     def _format_context(pages: list[dict], texts: dict[str, dict]) -> str:

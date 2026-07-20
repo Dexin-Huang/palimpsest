@@ -43,8 +43,11 @@ class SubprocessExecutor:
     def execute(self, spec: CellSpec) -> CellOutcome:
         completed = subprocess.run(
             [sys.executable, "-m", "palimpsest.factory.cellmain"],
-            input=spec.to_json(), capture_output=True, text=True,
-            encoding="utf-8", timeout=self._timeout,
+            input=spec.to_json(),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=self._timeout,
         )
         if completed.returncode != 0:
             try:
@@ -67,4 +70,6 @@ def make(name: str):
     try:
         return EXECUTORS[name]()
     except KeyError:
-        raise ValueError(f"Unknown executor {name!r}; have {sorted(EXECUTORS)}") from None
+        raise ValueError(
+            f"Unknown executor {name!r}; have {sorted(EXECUTORS)}"
+        ) from None

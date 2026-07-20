@@ -1,4 +1,4 @@
-"""align: forced alignment of the transcription to ink (GLYPHS.md M1).
+"""align: forced alignment of the transcription to page ink.
 
 Pure geometry, no model call. Binds each transcribed character to a blob
 bounding box via column projection + DTW, yielding coordinates for the
@@ -19,7 +19,7 @@ from palimpsest.factory.workspace.io import read_json
 
 class Align(Station):
     name = "align"
-    version = "align/v1"
+
     grain = "page"
     consumes = ("page_image_clean", "page_transcription")
     produces = "page_alignment"
@@ -27,15 +27,16 @@ class Align(Station):
     def run(self, job: Job) -> StationResult:
         image = cv2.imread(str(job.path_of("page_image_clean")))
         if image is None:
-            raise ValueError(
-                f"Unreadable image: {job.path_of('page_image_clean')}")
+            raise ValueError(f"Unreadable image: {job.path_of('page_image_clean')}")
         transcription = read_json(job.path_of("page_transcription"))
         aligned = align_page(image, transcription["text"].splitlines())
-        return StationResult(payload={
-            "doc_id": job.doc_id,
-            "page_id": job.page_id,
-            **aligned,
-        })
+        return StationResult(
+            payload={
+                "doc_id": job.doc_id,
+                "page_id": job.page_id,
+                **aligned,
+            }
+        )
 
 
 register(Align())

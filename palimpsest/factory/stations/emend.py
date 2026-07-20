@@ -37,11 +37,12 @@ TASK = (
 
 class Emend(Station):
     name = "emend"
-    version = "emend/v2"
+
     grain = "manuscript"
     consumes = ("manuscript", "reference", "page_assembled", "page_image_clean")
     produces = "emendations"
     uses_model = True
+    option_keys = frozenset({"timeout_s", "executor", "max_repairs"})
 
     def run(self, job: Job) -> StationResult:
         manuscript = read_json(job.path_of("manuscript"))
@@ -60,14 +61,19 @@ class Emend(Station):
                 "variants": {"variants": self._seam_variants(job)},
                 "reference": reference,
             },
-            images=[job.path_of("page_image_clean", page["page_id"])
-                    for page in job.pages],
+            images=[
+                job.path_of("page_image_clean", page["page_id"]) for page in job.pages
+            ],
         )
-        timeout = int(job.config.options.get("timeout_s",
-                                             agent_cell.DEFAULT_TIMEOUT_S))
+        timeout = int(job.config.options.get("timeout_s", agent_cell.DEFAULT_TIMEOUT_S))
         executor = str(job.config.options.get("executor", "codex"))
-        run = agent_cell.run(workspace, TASK, model=job.config.model,
-                             timeout_s=timeout, executor=executor)
+        run = agent_cell.run(
+            workspace,
+            TASK,
+            model=job.config.model,
+            timeout_s=timeout,
+            executor=executor,
+        )
         artifact = agent_cell.read_artifact(workspace, "emendations.json")
         tokens = run.tokens
 
@@ -75,11 +81,15 @@ class Emend(Station):
         sweeps = systematic_sweeps(sections, artifact)  # advisory, first round only
         rounds = 0
         while (failures or sweeps) and rounds < int(
-                job.config.options.get("max_repairs", 2)):
+            job.config.options.get("max_repairs", 2)
+        ):
             repair = agent_cell.resume(
-                workspace, run.session_id,
-                _repair_message(failures, sweeps), timeout_s=timeout,
-                executor=executor)
+                workspace,
+                run.session_id,
+                _repair_message(failures, sweeps),
+                timeout_s=timeout,
+                executor=executor,
+            )
             tokens += repair.tokens
             artifact = agent_cell.read_artifact(workspace, "emendations.json")
             failures = coverage_failures(sections, artifact)
@@ -89,15 +99,17 @@ class Emend(Station):
             raise ValueError(
                 "emendation rejected after repair — "
                 + "; ".join(failures[:5])
-                + (f" (+{len(failures) - 5} more)" if len(failures) > 5 else ""))
+                + (f" (+{len(failures) - 5} more)" if len(failures) > 5 else "")
+            )
 
         return StationResult(
             payload={
                 "doc_id": job.doc_id,
                 "sections": [
                     {"heading": ours["heading"], "reading": theirs["reading"]}
-                    for ours, theirs in zip(manuscript["sections"],
-                                            artifact["sections"])
+                    for ours, theirs in zip(
+                        manuscript["sections"], artifact["sections"]
+                    )
                 ],
                 "apparatus": artifact["apparatus"],
             },
@@ -111,22 +123,26 @@ class Emend(Station):
         variants = []
         pages = sorted(job.pages, key=lambda p: p.get("order", 0))
         for index, page in enumerate(pages):
-            assembled = read_json(
-                job.path_of("page_assembled", page["page_id"]))
+            assembled = read_json(job.path_of("page_assembled", page["page_id"]))
             seam = (assembled.get("original") or {}).get("seam")
             if not seam or not seam.get("dropped_text") or index == 0:
                 continue
             previous = read_json(
-                job.path_of("page_assembled", pages[index - 1]["page_id"]))
-            kept = [line for line in previous["original"]["text"].splitlines()
-                    if line.strip()][-seam["lines"]:]
-            variants.append({
-                "at_seam_between": [pages[index - 1]["page_id"],
-                                    page["page_id"]],
-                "kept_reading": "\n".join(kept),
-                "duplicate_reading": seam["dropped_text"],
-                "note": "same physical columns, two independent transcriptions",
-            })
+                job.path_of("page_assembled", pages[index - 1]["page_id"])
+            )
+            kept = [
+                line
+                for line in previous["original"]["text"].splitlines()
+                if line.strip()
+            ][-seam["lines"] :]
+            variants.append(
+                {
+                    "at_seam_between": [pages[index - 1]["page_id"], page["page_id"]],
+                    "kept_reading": "\n".join(kept),
+                    "duplicate_reading": seam["dropped_text"],
+                    "note": "same physical columns, two independent transcriptions",
+                }
+            )
         return variants
 
 
@@ -139,12 +155,14 @@ def _repair_message(failures: list[str], sweeps: list[str]) -> str:
             "orthographic normalizations) or add the missing apparatus entry "
             "if the change is a genuine, evidenced emendation. Fix unanchored "
             "entries so their snippets match the text exactly.\n"
-            + "\n".join(f"- {f}" for f in failures))
+            + "\n".join(f"- {f}" for f in failures)
+        )
     if sweeps:
         parts.append(
             "CONSISTENCY SWEEP — for each item, treat the surviving "
             "instances or record in the apparatus why they stand:\n"
-            + "\n".join(f"- {s}" for s in sweeps))
+            + "\n".join(f"- {s}" for s in sweeps)
+        )
     parts.append("Rewrite out/emendations.json; change nothing else.")
     return "\n\n".join(parts)
 

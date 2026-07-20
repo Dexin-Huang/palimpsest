@@ -79,19 +79,26 @@ def execute_cell(spec: CellSpec) -> CellOutcome:
                 f"store now has {prompt.sha256[:12]}… — refusing to run"
             )
 
-    pages = tuple(sorted(
-        read_json(page_list_path(spec.doc_id, library_root))["pages"],
-        key=lambda p: p.get("order", 0),
-    ))
+    pages = tuple(
+        sorted(
+            read_json(page_list_path(spec.doc_id, library_root))["pages"],
+            key=lambda p: p.get("order", 0),
+        )
+    )
     page = None
     if spec.page_id is not None:
         page = next(p for p in pages if p["page_id"] == spec.page_id)
 
     job = Job(
-        doc_id=spec.doc_id, pages=pages, page=page, library_root=library_root,
+        doc_id=spec.doc_id,
+        pages=pages,
+        page=page,
+        library_root=library_root,
         config=StationConfig(
-            model=spec.model, prompt=prompt,
-            params=dict(spec.params), options=dict(spec.options),
+            model=spec.model,
+            prompt=prompt,
+            params=dict(spec.params),
+            options=dict(spec.options),
         ),
     )
 
@@ -118,7 +125,7 @@ def execute_cell(spec: CellSpec) -> CellOutcome:
 def _provenance(spec: CellSpec, station, prompt, result) -> dict:
     stamp = {
         "station": station.name,
-        "station_version": station.version,
+        "station_fingerprint": station.implementation_fingerprint,
         "config_fingerprint": spec.config_fingerprint,
         "input_fingerprint": spec.input_fingerprint,
         "created_at": utc_now(),

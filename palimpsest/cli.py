@@ -2,21 +2,13 @@ from __future__ import annotations
 
 import argparse
 
-from palimpsest.commands import (
-    add_discovery_subparser,
-    add_library_subparser,
-    add_transcribe_subparser,
-)
-from palimpsest.factory.cli import add_factory_subparser
+from palimpsest.factory.cli import add_commands
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Palimpsest CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    add_discovery_subparser(subparsers)
-    add_library_subparser(subparsers)
-    add_transcribe_subparser(subparsers)
-    add_factory_subparser(subparsers)
+    add_commands(subparsers)
     return parser
 
 

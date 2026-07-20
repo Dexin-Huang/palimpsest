@@ -1,14 +1,13 @@
 """The hosted library: a static site rendered from every published book model.
 
 Library-level derivation, not a station — rebuild any time with
-``palimpsest factory site``. Output is host-agnostic static HTML (GitHub
+``palimpsest site``. Output is host-agnostic static HTML (GitHub
 Pages works): a shelf page plus a reader per book, with the EPUB alongside.
 """
 
 from __future__ import annotations
 
 import html
-import json
 import shutil
 from pathlib import Path
 
@@ -41,7 +40,9 @@ _TOGGLE_JS = (
 )
 
 
-def build(library_root: Path = LIBRARY_ROOT, site_root: Path = DEFAULT_SITE_ROOT) -> list[str]:
+def build(
+    library_root: Path = LIBRARY_ROOT, site_root: Path = DEFAULT_SITE_ROOT
+) -> list[str]:
     """Render the site from every doc that has a published book model.
     Returns the doc_ids shelved."""
     models = []
@@ -78,9 +79,13 @@ def _shelf_html(models: list[dict]) -> str:
     for model in models:
         source = model.get("source", {})
         detail = " · ".join(
-            html.escape(str(part)) for part in
-            (source.get("shelfmark"), source.get("date"),
-             model.get("language", {}).get("original")) if part
+            html.escape(str(part))
+            for part in (
+                source.get("shelfmark"),
+                source.get("date"),
+                model.get("language", {}).get("original"),
+            )
+            if part
         )
         cards.append(
             f"<div class='book'><h2><a href='{model['doc_id']}/'>"
@@ -131,7 +136,8 @@ def _reader_html(model: dict) -> str:
             original_text = chapter["reading"]
         parts.append(
             f"<div class='original'><h3>{label}</h3>"
-            + _paragraphs(original_text) + "</div>"
+            + _paragraphs(original_text)
+            + "</div>"
         )
     if model.get("apparatus"):
         parts.append("<h2>Apparatus</h2>")

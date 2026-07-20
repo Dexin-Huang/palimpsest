@@ -18,10 +18,11 @@ from palimpsest.factory.workspace.io import atomic_write_bytes
 
 class Dewatermark(Station):
     name = "dewatermark"
-    version = "dewatermark/v1"
+
     grain = "page"
     consumes = ("page_image_framed",)
     produces = "page_image_unmarked"
+    option_keys = frozenset({"height_fraction", "max_std"})
 
     def run(self, job: Job) -> StationResult:
         image = cv2.imread(str(job.path_of("page_image_framed")))

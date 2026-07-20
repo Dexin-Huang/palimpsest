@@ -22,10 +22,11 @@ from palimpsest.factory.workspace.io import atomic_write_bytes
 
 class Deframe(Station):
     name = "deframe"
-    version = "deframe/v1"
+
     grain = "page"
     consumes = ("page_image",)
     produces = "page_image_framed"
+    option_keys = frozenset({"frame_margin"})
 
     def run(self, job: Job) -> StationResult:
         image = cv2.imread(str(job.path_of("page_image")))

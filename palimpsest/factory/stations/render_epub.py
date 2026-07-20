@@ -29,7 +29,7 @@ h1, h2 { font-weight: normal; }
 
 class RenderEpub(Station):
     name = "render_epub"
-    version = "render_epub/v1"
+
     grain = "manuscript"
     consumes = ("book",)
     produces = "book_epub"
@@ -47,34 +47,46 @@ class RenderEpub(Station):
             book.add_author(book_model["author"])
 
         css = epub.EpubItem(
-            uid="style", file_name="style.css", media_type="text/css",
+            uid="style",
+            file_name="style.css",
+            media_type="text/css",
             content=_STYLE.encode("utf-8"),
         )
         book.add_item(css)
 
         pages = [_title_page(book_model)]
         if book_model.get("readers_note"):
-            pages.append(_chapter_page(
-                "note", "A Note to the Reader",
-                _paragraphs(book_model["readers_note"])))
+            pages.append(
+                _chapter_page(
+                    "note",
+                    "A Note to the Reader",
+                    _paragraphs(book_model["readers_note"]),
+                )
+            )
         for chapter in book_model["chapters"]:
             original_heading = "Original text"
             original_text = chapter["original"]
             if chapter.get("reading"):
                 original_heading = "Original text (emended reading)"
                 original_text = chapter["reading"]
-            pages.append(_chapter_page(
-                chapter["id"], chapter["heading"],
-                f'<p class="folios">ff. {chapter["pages"]["from"]}–'
-                f'{chapter["pages"]["to"]}</p>'
-                + _paragraphs(chapter["translation"])
-                + f'<div class="original"><h3>{original_heading}</h3>'
-                  f'{_paragraphs(original_text)}</div>'))
+            pages.append(
+                _chapter_page(
+                    chapter["id"],
+                    chapter["heading"],
+                    f'<p class="folios">ff. {chapter["pages"]["from"]}–'
+                    f"{chapter['pages']['to']}</p>"
+                    + _paragraphs(chapter["translation"])
+                    + f'<div class="original"><h3>{original_heading}</h3>'
+                    f"{_paragraphs(original_text)}</div>",
+                )
+            )
         if book_model.get("apparatus"):
-            pages.append(_chapter_page(
-                "apparatus", "Apparatus", _apparatus_html(book_model["apparatus"])))
-        pages.append(_chapter_page(
-            "colophon", "Colophon", _colophon_html(book_model)))
+            pages.append(
+                _chapter_page(
+                    "apparatus", "Apparatus", _apparatus_html(book_model["apparatus"])
+                )
+            )
+        pages.append(_chapter_page("colophon", "Colophon", _colophon_html(book_model)))
 
         for page in pages:
             page.add_item(css)
@@ -93,8 +105,7 @@ class RenderEpub(Station):
 def _paragraphs(text: str) -> str:
     blocks = [b.strip() for b in text.split("\n\n") if b.strip()]
     return "".join(
-        "<p>" + html.escape(block).replace("\n", "<br/>") + "</p>"
-        for block in blocks
+        "<p>" + html.escape(block).replace("\n", "<br/>") + "</p>" for block in blocks
     )
 
 
@@ -110,8 +121,9 @@ def _title_page(model: dict) -> epub.EpubHtml:
     if model.get("author"):
         lines.append(f"<p>{html.escape(model['author'])}</p>")
     detail = " · ".join(
-        html.escape(str(part)) for part in
-        (source.get("shelfmark"), source.get("date")) if part
+        html.escape(str(part))
+        for part in (source.get("shelfmark"), source.get("date"))
+        if part
     )
     if detail:
         lines.append(f'<p class="folios">{detail}</p>')

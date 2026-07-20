@@ -53,7 +53,7 @@ def trim_overlap(prev_text: str, text: str) -> tuple[str, dict | None]:
         return text, None
     kept = text.splitlines()
     dropped: list[str] = []
-    while kept and len([l for l in dropped if l.strip()]) < overlap["lines"]:
+    while kept and len([line for line in dropped if line.strip()]) < overlap["lines"]:
         dropped.append(kept.pop(0))
     return "\n".join(kept).strip("\n"), {**overlap, "dropped_text": "\n".join(dropped)}
 

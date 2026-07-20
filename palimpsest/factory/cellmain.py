@@ -19,10 +19,14 @@ def main() -> int:
     try:
         outcome = execute_cell(spec)
     except Exception as error:  # report structured failure to the conductor
-        print(json.dumps({
-            "kind": type(error).__name__.lower(),
-            "message": str(error),
-        }))
+        print(
+            json.dumps(
+                {
+                    "kind": type(error).__name__.lower(),
+                    "message": str(error),
+                }
+            )
+        )
         return 1
     print(outcome.to_json())
     return 0

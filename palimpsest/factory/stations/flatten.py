@@ -27,10 +27,11 @@ MODES = ("none", "flatten", "attenuate")
 
 class Flatten(Station):
     name = "flatten"
-    version = "flatten/v1"
+
     grain = "page"
     consumes = ("page_image_unmarked",)
     produces = "page_image_clean"
+    option_keys = frozenset({"mode", "factor"})
 
     def run(self, job: Job) -> StationResult:
         mode = job.config.options.get("mode", "flatten")
@@ -48,7 +49,8 @@ class Flatten(Station):
         result = flatten_illumination(image)
         if mode == "attenuate":
             result = attenuate_light_marks(
-                result, factor=float(job.config.options.get("factor", 0.45)))
+                result, factor=float(job.config.options.get("factor", 0.45))
+            )
         atomic_write_bytes(self.output_path(job), encode_jpeg(result))
         return StationResult()
 

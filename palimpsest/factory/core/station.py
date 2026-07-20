@@ -14,6 +14,8 @@ Two artifact modes, signalled by ``StationResult.payload``:
 """
 
 from __future__ import annotations
+import hashlib
+from functools import cache
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,13 +25,26 @@ from palimpsest.factory.prompt_store import Prompt
 from palimpsest.factory.workspace.layout import PAGE_KIND_SUFFIX, artifact_path
 
 
+@cache
+def _factory_implementation_digest() -> bytes:
+    """Hash executable factory source so code drift cannot masquerade as fresh."""
+    root = Path(__file__).resolve().parents[1]
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*.py")):
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.digest()
+
+
 @dataclass(frozen=True)
 class StationConfig:
     """A recipe slot, resolved: model + loaded prompt + params + options."""
 
     model: str | None = None
     prompt: Prompt | None = None
-    params: Mapping[str, Any] = field(default_factory=dict)   # generation params
+    params: Mapping[str, Any] = field(default_factory=dict)  # generation params
     options: Mapping[str, Any] = field(default_factory=dict)  # station-specific
 
 
@@ -38,8 +53,8 @@ class Job:
     """One executable cell: (doc × station) or (doc × page × station)."""
 
     doc_id: str
-    pages: tuple[dict, ...]          # full ordered page_list entries
-    page: dict | None                # this cell's page; None for manuscript grain
+    pages: tuple[dict, ...]  # full ordered page_list entries
+    page: dict | None  # this cell's page; None for manuscript grain
     library_root: Path
     config: StationConfig
 
@@ -49,7 +64,9 @@ class Job:
 
     def path_of(self, kind: str, page_id: str | None = None) -> Path:
         return artifact_path(
-            self.doc_id, kind, page_id if page_id is not None else self.page_id,
+            self.doc_id,
+            kind,
+            page_id if page_id is not None else self.page_id,
             self.library_root,
         )
 
@@ -73,11 +90,21 @@ class Station:
     """
 
     name: str
-    version: str
+
+    @property
+    def implementation_fingerprint(self) -> str:
+        """Source-derived identity recorded in provenance and freshness state."""
+        station = f"{type(self).__module__}.{type(self).__qualname__}".encode("utf-8")
+        return hashlib.sha256(_factory_implementation_digest() + station).hexdigest()[
+            :16
+        ]
+
     grain: Literal["page", "manuscript"]
     consumes: tuple[str, ...]
     produces: str
     uses_model: bool = False
+    param_keys: frozenset[str] = frozenset()
+    option_keys: frozenset[str] = frozenset()
 
     def input_paths(self, job: Job) -> list[Path]:
         if self.grain == "page":
@@ -85,8 +112,7 @@ class Station:
         paths = []
         for kind in self.consumes:
             if kind in PAGE_KIND_SUFFIX:  # one file per page
-                paths.extend(
-                    job.path_of(kind, page["page_id"]) for page in job.pages)
+                paths.extend(job.path_of(kind, page["page_id"]) for page in job.pages)
             else:  # manuscript-grain kinds are single files
                 paths.append(job.path_of(kind))
         return paths

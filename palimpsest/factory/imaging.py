@@ -13,9 +13,9 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-DARK_INK_OFFSET = 50        # gray levels below parchment median = dark ink
-INK_CORE_OFFSET = 85        # a REAL ink stroke has a core at least this far
-                            # below parchment; verso show-through never does
+DARK_INK_OFFSET = 50  # gray levels below parchment median = dark ink
+INK_CORE_OFFSET = 85  # a REAL ink stroke has a core at least this far
+# below parchment; verso show-through never does
 # Light components TALLER than this fraction of the short page side are
 # watermark/stamp letterforms. Height is the discriminator: a faint pencil
 # word is wide but short; watermark letters are tall even one at a time.
@@ -36,8 +36,12 @@ def background_level(gray: np.ndarray) -> float:
 def mark_mask(gray: np.ndarray) -> np.ndarray:
     """Everything that is not parchment: adaptive threshold handles gradients."""
     return cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV, blockSize=35, C=18,
+        gray,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        blockSize=35,
+        C=18,
     )
 
 
@@ -99,8 +103,11 @@ def remove_overlay_marks(
     gray_full = to_gray(image)
     height, width = gray_full.shape
     scale = min(1.0, analysis_max_side / max(height, width))
-    gray = cv2.resize(gray_full, None, fx=scale, fy=scale,
-                      interpolation=cv2.INTER_AREA) if scale < 1.0 else gray_full
+    gray = (
+        cv2.resize(gray_full, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        if scale < 1.0
+        else gray_full
+    )
 
     bg = background_level(gray)
     # The overlay lives in the LIGHT BAND between parchment and ink depth.
@@ -122,13 +129,14 @@ def remove_overlay_marks(
             to_remove[component] = 255
 
     if scale < 1.0:
-        to_remove = cv2.resize(to_remove, (width, height),
-                               interpolation=cv2.INTER_NEAREST)
+        to_remove = cv2.resize(
+            to_remove, (width, height), interpolation=cv2.INTER_NEAREST
+        )
     # dilate generously so anti-aliased overlay edges go too, then keep hands
     # off anything that is real dark ink at full resolution
     pad = max(3, int(round(1 / max(scale, 1e-6))) + 2)
     to_remove = cv2.dilate(to_remove, np.ones((pad, pad), np.uint8))
-    dark_full = (gray_full < background_level(gray_full) - DARK_INK_OFFSET)
+    dark_full = gray_full < background_level(gray_full) - DARK_INK_OFFSET
     to_remove[dark_full] = 0
 
     cleaned = image.copy()
@@ -173,7 +181,9 @@ def encode_jpeg(image: np.ndarray, *, quality: int = 92) -> bytes:
     return buffer.tobytes()
 
 
-def parchment_frame(gray: np.ndarray, *, margin_fraction: float = 0.02) -> tuple[int, int, int, int]:
+def parchment_frame(
+    gray: np.ndarray, *, margin_fraction: float = 0.02
+) -> tuple[int, int, int, int]:
     """Locate the page itself: the largest bright region vs the dark backdrop
     (binding, scanner bed). Returns (x0, y0, x1, y1) with an inward margin.
 
@@ -186,7 +196,8 @@ def parchment_frame(gray: np.ndarray, *, margin_fraction: float = 0.02) -> tuple
     if cv2.countNonZero(bright) > 0.92 * h * w:
         return 0, 0, w, h
     bright = cv2.morphologyEx(
-        bright, cv2.MORPH_CLOSE, np.ones((max(3, h // 100),) * 2, np.uint8))
+        bright, cv2.MORPH_CLOSE, np.ones((max(3, h // 100),) * 2, np.uint8)
+    )
     n, labels, stats, _ = cv2.connectedComponentsWithStats(bright)
     if n < 2:
         return 0, 0, w, h
@@ -196,8 +207,9 @@ def parchment_frame(gray: np.ndarray, *, margin_fraction: float = 0.02) -> tuple
     return x + mx, y + my, x + bw - mx, y + bh - my
 
 
-def trim_gutter(gray: np.ndarray, *, search_fraction: float = 0.3,
-                min_depth: int = 35) -> tuple[int, int]:
+def trim_gutter(
+    gray: np.ndarray, *, search_fraction: float = 0.3, min_depth: int = 35
+) -> tuple[int, int]:
     """Find the binding crease inside a framed page and return (x0, x1) crop.
 
     When the parchment frame connects across the gutter, a strip of the
@@ -216,7 +228,7 @@ def trim_gutter(gray: np.ndarray, *, search_fraction: float = 0.3,
     if left.min() < bg - min_depth:
         x0 = int(np.argmin(left)) + max(2, w // 200)
     x1 = w
-    right = column_median[w - zone:]
+    right = column_median[w - zone :]
     if right.min() < bg - min_depth:
         x1 = w - zone + int(np.argmin(right)) - max(2, w // 200)
     if x1 - x0 < w * 0.4:  # refuse absurd cuts; keep the frame as-is
@@ -233,7 +245,8 @@ def glyph_height(ink: np.ndarray) -> int:
     h = ink.shape[0]
     n, _, stats, _ = cv2.connectedComponentsWithStats(ink)
     heights = [
-        stats[i][3] for i in range(1, n)
+        stats[i][3]
+        for i in range(1, n)
         if 3 <= stats[i][3] <= h * 0.05 and stats[i][4] >= 8 and stats[i][2] >= 2
     ]
     if not heights:

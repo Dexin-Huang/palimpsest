@@ -4,11 +4,10 @@
 preprocessing stage side by side, ending with the lasso overlay + route).
 
 ``factory tune`` computes the whole chain IN MEMORY — deframe, dewatermark,
-flatten, segment — from whatever images exist (factory ``page_image/`` or
-the legacy ``images/`` dir), renders the same strips, and prints a routing
-table, optionally sanity-scored against a reference transcription JSONL
-(text length is weak ground truth for ink). No ledger writes, no network,
-no model calls: the offline optimization loop for the lasso system.
+flatten, and segment — from canonical ``page_image`` artifacts, renders the
+same strips, and prints a routing table, optionally sanity-scored against a
+reference transcription JSONL. No ledger writes, no network, no model calls:
+this is the offline optimization loop for the lasso system.
 """
 
 from __future__ import annotations
@@ -100,12 +99,14 @@ def tune(
         clean = attenuate_light_marks(flatten_illumination(unmarked))
         plan = analyze(clean, {})
 
-        strip = np.hstack([
-            _labeled_panel(original, "original"),
-            _labeled_panel(framed, "deframe"),
-            _labeled_panel(unmarked, "dewatermark"),
-            _labeled_panel(_draw_plan(clean, plan), "flatten + lassos"),
-        ])
+        strip = np.hstack(
+            [
+                _labeled_panel(original, "original"),
+                _labeled_panel(framed, "deframe"),
+                _labeled_panel(unmarked, "dewatermark"),
+                _labeled_panel(_draw_plan(clean, plan), "flatten + lassos"),
+            ]
+        )
         cv2.imwrite(str(out_dir / f"{page_id}.png"), strip)
 
         kinds = [r["kind"] for r in plan["regions"]]
@@ -135,8 +136,7 @@ def _reference_lengths(path: Path) -> dict[str, int]:
 
 
 def _verdict(plan: dict, ref_chars: int) -> str:
-    """Weak sanity check: legacy text length vs what the lassos found.
-    (Legacy text includes watermark garbage, so thresholds are loose.)"""
+    """Weak sanity check: reference length versus the detected lassos."""
     if ref_chars > 800 and plan["route"] == "blank":
         return "MISSING-INK?"
     if ref_chars < 120 and plan["route"] != "blank" and plan["regions"]:
@@ -145,14 +145,10 @@ def _verdict(plan: dict, ref_chars: int) -> str:
 
 
 def _find_source_image(doc_id: str, page_id: str, library_root: Path) -> Path:
-    factory_image = artifact_path(doc_id, "page_image", page_id, library_root)
-    if factory_image.exists():
-        return factory_image
-    legacy_image = library_root / doc_id / "images" / f"{page_id}.jpg"
-    if legacy_image.exists():
-        return legacy_image
-    raise FileNotFoundError(
-        f"No image for {doc_id}/{page_id} in page_image/ or images/")
+    image = artifact_path(doc_id, "page_image", page_id, library_root)
+    if not image.exists():
+        raise FileNotFoundError(f"No page_image for {doc_id}/{page_id}")
+    return image
 
 
 def _draw_plan(image: np.ndarray, plan: dict) -> np.ndarray:
@@ -162,16 +158,30 @@ def _draw_plan(image: np.ndarray, plan: dict) -> np.ndarray:
         x, y, bw, bh = region["bbox"]
         color = KIND_COLORS.get(region["kind"], (128, 128, 128))
         cv2.rectangle(viz, (x, y), (x + bw, y + bh), color, thickness)
-        cv2.putText(viz, f"{region['region_id']} {region['kind']} {region['est_lines']}L",
-                    (x, max(18, y - 8)), cv2.FONT_HERSHEY_SIMPLEX,
-                    image.shape[0] / 2200, color, thickness)
-    cv2.putText(viz, f"route: {plan.get('route', '?')}",
-                (20, image.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX,
-                image.shape[0] / 1400, (30, 30, 200), thickness + 1)
+        cv2.putText(
+            viz,
+            f"{region['region_id']} {region['kind']} {region['est_lines']}L",
+            (x, max(18, y - 8)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            image.shape[0] / 2200,
+            color,
+            thickness,
+        )
+    cv2.putText(
+        viz,
+        f"route: {plan.get('route', '?')}",
+        (20, image.shape[0] - 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        image.shape[0] / 1400,
+        (30, 30, 200),
+        thickness + 1,
+    )
     return viz
 
 
-def _overlay(image: np.ndarray, doc_id: str, page_id: str, library_root: Path) -> np.ndarray:
+def _overlay(
+    image: np.ndarray, doc_id: str, page_id: str, library_root: Path
+) -> np.ndarray:
     regions_path = artifact_path(doc_id, "page_regions", page_id, library_root)
     if not regions_path.exists():
         return image
@@ -182,12 +192,24 @@ def _overlay(image: np.ndarray, doc_id: str, page_id: str, library_root: Path) -
         x, y, bw, bh = region["bbox"]
         color = KIND_COLORS.get(region["kind"], (128, 128, 128))
         cv2.rectangle(viz, (x, y), (x + bw, y + bh), color, thickness)
-        cv2.putText(viz, f"{region['region_id']} {region['kind']}",
-                    (x, max(18, y - 8)), cv2.FONT_HERSHEY_SIMPLEX,
-                    image.shape[0] / 2200, color, thickness)
-    cv2.putText(viz, f"route: {plan.get('route', '?')}",
-                (20, image.shape[0] - 30), cv2.FONT_HERSHEY_SIMPLEX,
-                image.shape[0] / 1400, (30, 30, 200), thickness + 1)
+        cv2.putText(
+            viz,
+            f"{region['region_id']} {region['kind']}",
+            (x, max(18, y - 8)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            image.shape[0] / 2200,
+            color,
+            thickness,
+        )
+    cv2.putText(
+        viz,
+        f"route: {plan.get('route', '?')}",
+        (20, image.shape[0] - 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        image.shape[0] / 1400,
+        (30, 30, 200),
+        thickness + 1,
+    )
     return viz
 
 
@@ -195,6 +217,5 @@ def _labeled_panel(image: np.ndarray, label: str) -> np.ndarray:
     scale = PANEL_HEIGHT / image.shape[0]
     panel = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     bar = np.full((36, panel.shape[1], 3), 24, np.uint8)
-    cv2.putText(bar, label, (10, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                (220, 220, 220), 1)
+    cv2.putText(bar, label, (10, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 220, 220), 1)
     return np.vstack([bar, panel])

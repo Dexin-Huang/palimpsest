@@ -47,11 +47,20 @@ READ_SCHEMA = {
 
 class Read(Station):
     name = "read"
-    version = "read/v3"
+
     grain = "page"
     consumes = ("page_image_clean", "page_regions")
     produces = "page_transcription"
     uses_model = True
+    param_keys = frozenset(
+        {
+            "system",
+            "temperature",
+            "max_output_tokens",
+            "media_resolution",
+            "thinking_budget",
+        }
+    )
 
     def run(self, job: Job) -> StationResult:
         plan = read_json(job.path_of("page_regions"))
@@ -113,7 +122,9 @@ class Read(Station):
             }
             try:
                 entry["text"], _ = self._call(
-                    job, (ImageContent(encode_png(tile)),), usage,
+                    job,
+                    (ImageContent(encode_png(tile)),),
+                    usage,
                     max_tokens=_tile_token_cap(region["est_lines"]),
                 )
             except GatewayError as error:
@@ -123,26 +134,30 @@ class Read(Station):
             regions_out.append(entry)
             if entry["text"]:
                 texts.append(
-                    f"[margin] {entry['text']}" if region["kind"] == "marginalia"
+                    f"[margin] {entry['text']}"
+                    if region["kind"] == "marginalia"
                     else entry["text"]
                 )
         return regions_out, "\n\n".join(texts)
 
-    def _call(self, job: Job, images: tuple, usage: "_Usage",
-              max_tokens: int | None = None):
+    def _call(
+        self, job: Job, images: tuple, usage: "_Usage", max_tokens: int | None = None
+    ):
         params = job.config.params
-        value, response = generate_json(ModelRequest(
-            model=job.config.model,
-            prompt=job.config.prompt.text,
-            system=params.get("system", DEFAULT_SYSTEM_PROMPT),
-            images=images,
-            temperature=params.get("temperature", 0.1),
-            max_output_tokens=max_tokens or params.get("max_output_tokens", 32768),
-            media_resolution=params.get("media_resolution"),
-            json_output=True,
-            json_schema=READ_SCHEMA,
-            thinking_budget=params.get("thinking_budget"),
-        ))
+        value, response = generate_json(
+            ModelRequest(
+                model=job.config.model,
+                prompt=job.config.prompt.text,
+                system=params.get("system", DEFAULT_SYSTEM_PROMPT),
+                images=images,
+                temperature=params.get("temperature", 0.1),
+                max_output_tokens=max_tokens or params.get("max_output_tokens", 32768),
+                media_resolution=params.get("media_resolution"),
+                json_output=True,
+                json_schema=READ_SCHEMA,
+                thinking_budget=params.get("thinking_budget"),
+            )
+        )
         usage.add(response)
         return _sanitize(value["transcription"]), response
 
@@ -192,7 +207,7 @@ def _tile(image: np.ndarray, bbox: list[int], pad: int) -> np.ndarray:
     side = max(ch, cw)
     tile = np.full((side, side, 3), 255, np.uint8)
     oy, ox = (side - ch) // 2, (side - cw) // 2
-    tile[oy:oy + ch, ox:ox + cw] = crop
+    tile[oy : oy + ch, ox : ox + cw] = crop
     return tile
 
 

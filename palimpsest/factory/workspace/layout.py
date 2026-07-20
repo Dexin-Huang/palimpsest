@@ -1,8 +1,7 @@
 """The one path contract for ``library/<doc_id>/`` workspaces.
 
-All stations resolve artifact locations through these helpers — never
-through string literals (the legacy pipeline's `download.py` bypassing its
-own contracts module is exactly the defect this exists to prevent).
+Every station resolves artifact locations through these helpers rather than
+constructing paths independently.
 """
 
 from __future__ import annotations
@@ -12,15 +11,14 @@ from pathlib import Path
 from palimpsest.factory.config import LIBRARY_ROOT
 from palimpsest.factory.core.contracts import CONTRACTS, FORMAT_SUFFIX
 
-METADATA_FILENAME = "metadata.json"
-PAGE_LIST_FILENAME = "page_list.json"
+METADATA_FILENAME = CONTRACTS["metadata"].store
+PAGE_LIST_FILENAME = CONTRACTS["page_list"].store
 
 # Storage layout derives from the contract registry (core/contracts.py):
 # page-grain kinds live one-file-per-page under library/<doc_id>/<kind>/;
 # manuscript-grain kinds are single files at their `store` template.
 PAGE_KIND_SUFFIX: dict[str, str] = {
-    c.kind: FORMAT_SUFFIX[c.format]
-    for c in CONTRACTS.values() if c.grain == "page"
+    c.kind: FORMAT_SUFFIX[c.format] for c in CONTRACTS.values() if c.grain == "page"
 }
 DOC_KIND_FILENAME: dict[str, str] = {
     c.kind: c.store for c in CONTRACTS.values() if c.grain == "manuscript"

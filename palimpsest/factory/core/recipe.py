@@ -18,6 +18,7 @@ import yaml
 
 from palimpsest.factory import config
 from palimpsest.factory.core import registry
+from palimpsest.factory.core.contracts import SOURCE_KINDS
 from palimpsest.factory.core.station import Station
 from palimpsest.factory.workspace.layout import DOC_KIND_FILENAME, PAGE_KIND_SUFFIX
 
@@ -25,8 +26,6 @@ _VAR_RE = re.compile(r"\$\{([A-Z0-9_]+)\}")
 _CONFIG_VARS = {
     "PALIMPSEST_MODEL_VISION": config.MODEL_VISION,
     "PALIMPSEST_MODEL_READING": config.MODEL_READING,
-    "PALIMPSEST_MODEL_TRIAGE": config.MODEL_TRIAGE,
-    "PALIMPSEST_MODEL_RECON": config.MODEL_RECON,
 }
 _SPEC_KEYS = {"station", "model", "prompt", "params"}
 
@@ -48,8 +47,9 @@ class Recipe:
     manuscript_stations: tuple[StationSpec, ...] = field(default_factory=tuple)
 
 
-def load(name: str, recipes_dir: Path = config.RECIPES_DIR) -> Recipe:
-    path = recipes_dir / f"{name}.yaml"
+def load(name: str, recipes_dir: Path | None = None) -> Recipe:
+    root = recipes_dir if recipes_dir is not None else config.RECIPES_DIR
+    path = root / f"{name}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"Recipe not found: {path}")
     raw = yaml.safe_load(_interpolate(path.read_text(encoding="utf-8")))
@@ -58,9 +58,12 @@ def load(name: str, recipes_dir: Path = config.RECIPES_DIR) -> Recipe:
     recipe = Recipe(
         name=raw["name"],
         language=raw.get("language", ""),
-        page_stations=tuple(_spec(slot, expected_grain="page") for slot in line.get("page", [])),
+        page_stations=tuple(
+            _spec(slot, expected_grain="page") for slot in line.get("page", [])
+        ),
         manuscript_stations=tuple(
-            _spec(slot, expected_grain="manuscript") for slot in line.get("manuscript", [])
+            _spec(slot, expected_grain="manuscript")
+            for slot in line.get("manuscript", [])
         ),
     )
     _validate_chain(recipe)
@@ -87,12 +90,27 @@ def _spec(slot: dict, *, expected_grain: str) -> StationSpec:
         )
     if station.uses_model and not (slot.get("model") and slot.get("prompt")):
         raise ValueError(f"Station {station.name!r} requires 'model' and 'prompt'")
+
+    params = slot.get("params") or {}
+    options = {key: value for key, value in slot.items() if key not in _SPEC_KEYS}
+    unknown_params = sorted(set(params) - station.param_keys)
+    unknown_options = sorted(set(options) - station.option_keys)
+    if unknown_params or unknown_options:
+        details = []
+        if unknown_params:
+            details.append(f"params={unknown_params}")
+        if unknown_options:
+            details.append(f"options={unknown_options}")
+        raise ValueError(
+            f"Station {station.name!r} received unknown recipe keys: "
+            + ", ".join(details)
+        )
     return StationSpec(
         station=station,
         model=slot.get("model"),
         prompt_name=slot.get("prompt"),
-        params=slot.get("params") or {},
-        options={k: v for k, v in slot.items() if k not in _SPEC_KEYS},
+        params=params,
+        options=options,
     )
 
 
@@ -102,11 +120,11 @@ def _validate_chain(recipe: Recipe) -> None:
     if not specs:
         raise ValueError(f"Recipe {recipe.name!r} lists no stations")
 
-    producible = {"page_list"} | {spec.station.produces for spec in specs}
+    producible = set(SOURCE_KINDS) | {spec.station.produces for spec in specs}
     for spec in specs:
         station = spec.station
         for kind in (*station.consumes, station.produces):
-            if kind not in known_kinds and kind != "page_list":
+            if kind not in known_kinds:
                 raise ValueError(
                     f"Station {station.name!r} references unknown kind {kind!r}"
                 )
@@ -120,7 +138,7 @@ def _validate_chain(recipe: Recipe) -> None:
     # Page-line order: a page station's page-grain inputs must be produced
     # by an EARLIER page station (manuscript-grain jigs are gate-checked at
     # run time by the conductor instead).
-    available = {"page_list"}
+    available = set(SOURCE_KINDS)
     for spec in recipe.page_stations:
         for kind in spec.station.consumes:
             if kind in PAGE_KIND_SUFFIX and kind not in available:

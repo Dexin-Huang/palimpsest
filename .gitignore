@@ -1,72 +1,34 @@
-﻿# Environment
+﻿# Secrets
 .env
 .env.*
 !.env.example
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.egg-info/
+.pytest_cache/
 .venv/
+build/
+dist/
 
-# Scratch / temp
+# Local tooling
+.claude/
+.playwright-cli/
+.labyrinth/
+
+# Scratch work
 scratch/
 tmp/
-*.stackdump
-.claude/
 
-# Derived outputs
-**/exports/
+# Canonical library sources; all derived work stays local
+library/**
+!library/*/
+!library/*/metadata.json
+!library/*/page_list.json
 
-# Large binary assets (images stored locally, not in git)
-**/images/
-
-# Local databases
-**/*.db
-
-# Training artifacts
-training/data/
-training/checkpoints/
-training/logs/
-training/models/
-*.safetensors
-*.bin
-*.gguf
-
-# Discovery cache
-discovery/manifests/
-discovery/detail_*.html
-discovery/scouts/
-discovery/*_sample.jsonl
-discovery/registry/*.jsonl
-!discovery/registry/master.jsonl
-
-# Library derived artifacts
-library/**/images/
-library/**/runs/
-library/**/experiments/
-library/**/packet_site_proto/
-library/**/site_proto/
-library/**/site_*/
-library/**/reader_site/
-library/**/temp_docres_input/
-library/**/images_cleaned*/
-library/**/temp_binarization/
-library/**/transcription/
-library/**/site/
-
-# Tool test outputs
-tools/DocRes/
-tools/bleed-through-cleaner/
-tools/test_*.png
-test_narration.wav
+# Rendered static library
+site/
 
 # Windows device file
 nul
-_inbox/
-
-# Local tooling state
-.playwright-cli/
-.labyrinth/
-.venv/
-site/

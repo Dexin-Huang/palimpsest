@@ -27,6 +27,7 @@ from pathlib import Path
 from palimpsest.factory import prompt_store
 from palimpsest.factory.config import LIBRARY_ROOT
 from palimpsest.factory.core.cell import CellSpec
+from palimpsest.factory.core.contracts import validate_payload
 from palimpsest.factory.core.executors import make as make_executor
 from palimpsest.factory.core.ledger import Ledger, fingerprint
 from palimpsest.factory.core.recipe import Recipe, StationSpec, load as load_recipe
@@ -62,7 +63,7 @@ def _content_hash(path: Path) -> str:
 class CellReport:
     station: str
     page_id: str | None
-    action: str          # ran | fresh | outdated | failed
+    action: str  # ran | fresh | outdated | failed
     error: str | None = None
     cost_usd: float | None = None
 
@@ -103,26 +104,40 @@ class Conductor:
 
     def run(self, doc_id: str) -> RunReport:
         item = self._item(doc_id)
-        recipe = load_recipe(item["recipe"])
-        pages = self._pages(doc_id)
-        report = RunReport(doc_id=doc_id, recipe=recipe.name)
+        self._set_item_status(doc_id, "active")
+        try:
+            recipe = load_recipe(item["recipe"])
+            pages = self._pages(doc_id)
+            report = RunReport(doc_id=doc_id, recipe=recipe.name)
 
-        manuscript_pending = list(recipe.manuscript_stations)
-        segment: list[StationSpec] = []
-        for spec in recipe.page_stations:
-            jig_kinds = self._jig_kinds(spec, recipe)
-            if jig_kinds:
-                self._run_page_segment(doc_id, segment, pages, report)
-                segment = []
-                for jig_spec in [s for s in manuscript_pending
-                                 if s.station.produces in jig_kinds]:
-                    self._run_cell(doc_id, jig_spec, pages, page=None, report=report)
-                    manuscript_pending.remove(jig_spec)
-            segment.append(spec)
-        self._run_page_segment(doc_id, segment, pages, report)
+            manuscript_pending = list(recipe.manuscript_stations)
+            segment: list[StationSpec] = []
+            for spec in recipe.page_stations:
+                jig_kinds = self._jig_kinds(spec, recipe)
+                if jig_kinds:
+                    self._run_page_segment(doc_id, segment, pages, report)
+                    segment = []
+                    for jig_spec in [
+                        station_spec
+                        for station_spec in manuscript_pending
+                        if station_spec.station.produces in jig_kinds
+                    ]:
+                        self._run_cell(
+                            doc_id, jig_spec, pages, page=None, report=report
+                        )
+                        manuscript_pending.remove(jig_spec)
+                segment.append(spec)
+            self._run_page_segment(doc_id, segment, pages, report)
 
-        for spec in manuscript_pending:
-            self._run_cell(doc_id, spec, pages, page=None, report=report)
+            for spec in manuscript_pending:
+                self._run_cell(doc_id, spec, pages, page=None, report=report)
+        except Exception:
+            self._set_item_status(doc_id, "failed")
+            raise
+
+        self._set_item_status(
+            doc_id, "failed" if report.count("failed") else "complete"
+        )
         return report
 
     # -- planning -------------------------------------------------------------
@@ -133,8 +148,11 @@ class Conductor:
         return set(spec.station.consumes) & manuscript_kinds
 
     def _run_page_segment(
-        self, doc_id: str, segment: list[StationSpec],
-        pages: tuple[dict, ...], report: RunReport,
+        self,
+        doc_id: str,
+        segment: list[StationSpec],
+        pages: tuple[dict, ...],
+        report: RunReport,
     ) -> None:
         if not segment:
             return
@@ -150,13 +168,20 @@ class Conductor:
     # -- one cell -------------------------------------------------------------
 
     def _run_cell(
-        self, doc_id: str, spec: StationSpec, pages: tuple[dict, ...],
-        *, page: dict | None, report: RunReport,
+        self,
+        doc_id: str,
+        spec: StationSpec,
+        pages: tuple[dict, ...],
+        *,
+        page: dict | None,
+        report: RunReport,
     ) -> bool:
         """Execute (or skip) one cell. Returns False only on failure."""
         station = spec.station
         job = Job(
-            doc_id=doc_id, pages=pages, page=page,
+            doc_id=doc_id,
+            pages=pages,
+            page=page,
             library_root=self._library_root,
             config=self._config(spec),
         )
@@ -164,9 +189,15 @@ class Conductor:
 
         missing = [p for p in station.input_paths(job) if not p.exists()]
         if missing:
-            self._report(report, CellReport(
-                station.name, page_id, "failed",
-                error=f"missing inputs: {[str(p) for p in missing]}"))
+            self._report(
+                report,
+                CellReport(
+                    station.name,
+                    page_id,
+                    "failed",
+                    error=f"missing inputs: {[str(p) for p in missing]}",
+                ),
+            )
             return False
 
         config_fp, input_fp = self._fingerprints(spec, job)
@@ -182,20 +213,29 @@ class Conductor:
 
         with self._ledger_lock:
             run_id = self._ledger.begin_run(
-                doc_id, station.name, page_id=page_id,
-                station_version=station.version,
-                config_fingerprint=config_fp, input_fingerprint=input_fp,
-                model=spec.model, prompt_name=spec.prompt_name,
+                doc_id,
+                station.name,
+                page_id=page_id,
+                station_fingerprint=station.implementation_fingerprint,
+                config_fingerprint=config_fp,
+                input_fingerprint=input_fp,
+                model=spec.model,
+                prompt_name=spec.prompt_name,
                 prompt_hash=job.config.prompt.sha256 if job.config.prompt else None,
                 params_hash=self._params_hash(spec),
             )
         cell = CellSpec(
-            doc_id=doc_id, station=station.name, page_id=page_id,
+            doc_id=doc_id,
+            station=station.name,
+            page_id=page_id,
             library_root=str(self._library_root),
-            config_fingerprint=config_fp, input_fingerprint=input_fp,
-            model=spec.model, prompt_name=spec.prompt_name,
+            config_fingerprint=config_fp,
+            input_fingerprint=input_fp,
+            model=spec.model,
+            prompt_name=spec.prompt_name,
             prompt_sha256=job.config.prompt.sha256 if job.config.prompt else None,
-            params=dict(spec.params), options=dict(spec.options),
+            params=dict(spec.params),
+            options=dict(spec.options),
         )
         try:
             outcome = self._executor.execute(cell)
@@ -206,18 +246,22 @@ class Conductor:
                     run_id,
                     output_path=outcome.output_path,
                     output_fingerprint=output_fp,
-                    tokens_in=outcome.tokens_in, tokens_out=outcome.tokens_out,
+                    tokens_in=outcome.tokens_in,
+                    tokens_out=outcome.tokens_out,
                     cost_usd=outcome.cost_usd,
                 )
-            self._report(report, CellReport(
-                station.name, page_id, "ran", cost_usd=outcome.cost_usd))
+            self._report(
+                report,
+                CellReport(station.name, page_id, "ran", cost_usd=outcome.cost_usd),
+            )
             return True
         except Exception as error:  # one cell's failure never takes down the line
             kind = getattr(error, "kind", type(error).__name__.lower())
             with self._ledger_lock:
                 self._ledger.fail_run(run_id, kind=kind, detail=str(error))
-            self._report(report, CellReport(
-                station.name, page_id, "failed", error=str(error)))
+            self._report(
+                report, CellReport(station.name, page_id, "failed", error=str(error))
+            )
             return False
 
     # -- resolution helpers ----------------------------------------------------
@@ -229,25 +273,32 @@ class Conductor:
                 self._prompts[spec.prompt_name] = prompt_store.load(spec.prompt_name)
             prompt = self._prompts[spec.prompt_name]
         return StationConfig(
-            model=spec.model, prompt=prompt,
-            params=spec.params, options=spec.options,
+            model=spec.model,
+            prompt=prompt,
+            params=spec.params,
+            options=spec.options,
         )
 
     def _params_hash(self, spec: StationSpec) -> str:
-        return fingerprint(json.dumps(
-            {"params": dict(spec.params), "options": dict(spec.options)},
-            sort_keys=True, ensure_ascii=True,
-        ))
+        return fingerprint(
+            json.dumps(
+                {"params": dict(spec.params), "options": dict(spec.options)},
+                sort_keys=True,
+                ensure_ascii=True,
+            )
+        )
 
     def _fingerprints(self, spec: StationSpec, job: Job) -> tuple[str, str]:
         config_fp = fingerprint(
-            spec.station.version, spec.model or "",
+            spec.station.implementation_fingerprint,
+            spec.model or "",
             job.config.prompt.sha256 if job.config.prompt else "",
             self._params_hash(spec),
         )
         file_hashes = [
             _content_hash(path)
-            for path in spec.station.input_paths(job) if path.exists()
+            for path in spec.station.input_paths(job)
+            if path.exists()
         ]
         input_fp = fingerprint(*file_hashes, *spec.station.signature_extras(job))
         return config_fp, input_fp
@@ -262,17 +313,22 @@ class Conductor:
 
     def _item(self, doc_id: str):
         with self._ledger_lock:
-            items = [row for row in self._ledger.list_items() if row["doc_id"] == doc_id]
-        if not items:
+            item = self._ledger.item(doc_id)
+        if item is None:
             raise KeyError(
                 f"No work order for {doc_id!r} — run "
-                f"'palimpsest factory adopt --doc-id {doc_id} --recipe <name>' first"
+                f"'palimpsest adopt --doc-id {doc_id} --recipe <name>' first"
             )
-        return items[0]
+        return item
+
+    def _set_item_status(self, doc_id: str, status: str) -> None:
+        with self._ledger_lock:
+            self._ledger.set_item_status(doc_id, status)
 
     def _pages(self, doc_id: str) -> tuple[dict, ...]:
         page_list = read_json(page_list_path(doc_id, self._library_root))
-        return tuple(sorted(page_list["pages"], key=lambda p: p.get("order", 0)))
+        validate_payload("page_list", page_list)
+        return tuple(sorted(page_list["pages"], key=lambda page: page.get("order", 0)))
 
     def _report(self, report: RunReport, cell: CellReport) -> None:
         with self._ledger_lock:

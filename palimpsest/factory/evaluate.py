@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,8 +30,14 @@ from palimpsest.factory.workspace.layout import artifact_path
 
 # Vocabulary that can only come from the digitization, never from the page.
 CONTAMINATION_TERMS = (
-    "biblioteca apostolica", "all rights", "reserved", "copyright",
-    "amlad", "ntt data", "vaticana ©", "©",
+    "biblioteca apostolica",
+    "all rights",
+    "reserved",
+    "copyright",
+    "amlad",
+    "ntt data",
+    "vaticana ©",
+    "©",
 )
 
 JUDGE_SCHEMA = {
@@ -73,8 +78,8 @@ reasoning."""
 @dataclass
 class PageEval:
     page_id: str
-    metrics: dict[str, dict[str, float]]      # side -> metric -> value
-    judge_winner: str | None = None            # 'old' | 'new' | 'tie'
+    metrics: dict[str, dict[str, float]]  # side -> metric -> value
+    judge_winner: str | None = None  # 'old' | 'new' | 'tie'
     judge_confidence: str | None = None
     judge_reasoning: str | None = None
 
@@ -113,15 +118,22 @@ def evaluate(
     results = []
     for page_id in page_ids:
         new_text = read_json(
-            artifact_path(doc_id, "page_transcription", page_id, library_root))["text"]
+            artifact_path(doc_id, "page_transcription", page_id, library_root)
+        )["text"]
         old_text = reference.get(page_id, "")
-        evaluation = PageEval(page_id=page_id, metrics={
-            "old": text_metrics(old_text),
-            "new": text_metrics(new_text),
-        })
+        evaluation = PageEval(
+            page_id=page_id,
+            metrics={
+                "old": text_metrics(old_text),
+                "new": text_metrics(new_text),
+            },
+        )
         if judge_model:
             evaluation = _judge(
-                evaluation, old_text, new_text, page_id,
+                evaluation,
+                old_text,
+                new_text,
+                page_id,
                 judge_model=judge_model,
                 image_doc_id=image_doc_id or doc_id,
                 library_root=library_root,
@@ -131,23 +143,32 @@ def evaluate(
 
 
 def _judge(
-    evaluation: PageEval, old_text: str, new_text: str, page_id: str,
-    *, judge_model: str, image_doc_id: str, library_root: Path,
+    evaluation: PageEval,
+    old_text: str,
+    new_text: str,
+    page_id: str,
+    *,
+    judge_model: str,
+    image_doc_id: str,
+    library_root: Path,
 ) -> PageEval:
     image = _page_image(image_doc_id, page_id, library_root)
     # reproducible A/B assignment per page, decorrelated from side
     old_is_a = int(hashlib.sha256(page_id.encode()).hexdigest(), 16) % 2 == 0
     text_a, text_b = (old_text, new_text) if old_is_a else (new_text, old_text)
 
-    verdict, _ = generate_json(ModelRequest(
-        model=judge_model,
-        prompt=JUDGE_PROMPT.replace("{A}", text_a or "(empty)")
-                           .replace("{B}", text_b or "(empty)"),
-        images=(image,),
-        temperature=0.1,
-        json_output=True,
-        json_schema=JUDGE_SCHEMA,
-    ))
+    verdict, _ = generate_json(
+        ModelRequest(
+            model=judge_model,
+            prompt=JUDGE_PROMPT.replace("{A}", text_a or "(empty)").replace(
+                "{B}", text_b or "(empty)"
+            ),
+            images=(image,),
+            temperature=0.1,
+            json_output=True,
+            json_schema=JUDGE_SCHEMA,
+        )
+    )
     winner = verdict["winner"]
     if winner == "tie":
         evaluation.judge_winner = "tie"
@@ -160,13 +181,10 @@ def _judge(
 
 
 def _page_image(doc_id: str, page_id: str, library_root: Path) -> Path:
-    factory_image = artifact_path(doc_id, "page_image", page_id, library_root)
-    if factory_image.exists():
-        return factory_image
-    legacy_image = library_root / doc_id / "images" / f"{page_id}.jpg"
-    if legacy_image.exists():
-        return legacy_image
-    raise FileNotFoundError(f"No image for {doc_id}/{page_id}")
+    image = artifact_path(doc_id, "page_image", page_id, library_root)
+    if not image.exists():
+        raise FileNotFoundError(f"No page_image for {doc_id}/{page_id}")
+    return image
 
 
 def _int_or_float(value: float) -> str:

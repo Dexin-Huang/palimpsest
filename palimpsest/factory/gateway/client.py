@@ -32,11 +32,11 @@ class ModelRequest:
     temperature: float = 0.1
     max_output_tokens: int = 32768
     media_resolution: str | None = None  # "low" | "medium" | "high"
-    json_output: bool = False            # constrain the response to JSON
+    json_output: bool = False  # constrain the response to JSON
     json_schema: Mapping[str, Any] | None = None  # constrained decoding: the
-                                         # provider enforces this JSON Schema
-    thinking_budget: int | None = None   # 0 disables thinking; -1 automatic
-    allow_empty: bool = False            # empty text is a valid answer, not an error
+    # provider enforces this JSON Schema
+    thinking_budget: int | None = None  # 0 disables thinking; -1 automatic
+    allow_empty: bool = False  # empty text is a valid answer, not an error
 
 
 @dataclass(frozen=True)
@@ -114,10 +114,13 @@ def generate_json(request: ModelRequest, *, attempts: int = 3):
             last_error = error
             continue
         summed = ModelResponse(
-            text=response.text, model=response.model,
+            text=response.text,
+            model=response.model,
             finish_reason=response.finish_reason,
-            prompt_tokens=tokens_in, output_tokens=tokens_out,
-            total_tokens=total, cost_usd=cost or None,
+            prompt_tokens=tokens_in,
+            output_tokens=tokens_out,
+            total_tokens=total,
+            cost_usd=cost or None,
         )
         return value, summed
     raise GatewayError(

@@ -44,8 +44,9 @@ class AgentRun:
     log_path: Path
 
 
-def stage_workspace(root: Path, skill: str, evidence: dict[str, dict],
-                    images: list[Path]) -> Path:
+def stage_workspace(
+    root: Path, skill: str, evidence: dict[str, dict], images: list[Path]
+) -> Path:
     """Lay out the cell's airlock: AGENTS.md (the skill), evidence/*.json,
     images/, out/. ``root`` is recreated from scratch — a cell re-run must
     not inherit a previous attempt's state."""
@@ -56,42 +57,70 @@ def stage_workspace(root: Path, skill: str, evidence: dict[str, dict],
     (root / "AGENTS.md").write_text(skill, encoding="utf-8")
     for name, payload in evidence.items():
         (root / "evidence" / f"{name}.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
     for image in images:
         shutil.copy(image, root / "images" / image.name)
     return root
 
 
-def run(workspace: Path, task: str, model: str,
-        timeout_s: int = DEFAULT_TIMEOUT_S, executor: str = "codex") -> AgentRun:
+def run(
+    workspace: Path,
+    task: str,
+    model: str,
+    timeout_s: int = DEFAULT_TIMEOUT_S,
+    executor: str = "codex",
+) -> AgentRun:
     if executor == "omp":
-        return _omp(workspace, ["--model", model], task, timeout_s,
-                    "agent_run.log")
+        return _omp(workspace, ["--model", model], task, timeout_s, "agent_run.log")
     images = sorted((workspace / "images").glob("*"))
-    args = ["exec", "-m", model, "-s", "workspace-write",
-            "--skip-git-repo-check", "-C", str(workspace),
-            "-o", str(workspace / "out" / "last_message.txt")]
+    args = [
+        "exec",
+        "-m",
+        model,
+        "-s",
+        "workspace-write",
+        "--skip-git-repo-check",
+        "-C",
+        str(workspace),
+        "-o",
+        str(workspace / "out" / "last_message.txt"),
+    ]
     for image in images:
         args += ["-i", str(image)]
     return _codex(workspace, args, task, timeout_s, "agent_run.log")
 
 
-def resume(workspace: Path, session_id: str, message: str,
-           timeout_s: int = DEFAULT_TIMEOUT_S, executor: str = "codex") -> AgentRun:
+def resume(
+    workspace: Path,
+    session_id: str,
+    message: str,
+    timeout_s: int = DEFAULT_TIMEOUT_S,
+    executor: str = "codex",
+) -> AgentRun:
     if executor == "omp":
-        return _omp(workspace, ["-r", session_id], message, timeout_s,
-                    "agent_resume.log")
-    args = ["exec", "-s", "workspace-write", "--skip-git-repo-check",
-            "-C", str(workspace),
-            "-o", str(workspace / "out" / "last_message.txt"),
-            "resume", session_id]
+        return _omp(
+            workspace, ["-r", session_id], message, timeout_s, "agent_resume.log"
+        )
+    args = [
+        "exec",
+        "-s",
+        "workspace-write",
+        "--skip-git-repo-check",
+        "-C",
+        str(workspace),
+        "-o",
+        str(workspace / "out" / "last_message.txt"),
+        "resume",
+        session_id,
+    ]
     return _codex(workspace, args, message, timeout_s, "agent_resume.log")
 
 
-def _codex(workspace: Path, args: list[str], stdin_text: str,
-           timeout_s: int, log_name: str) -> AgentRun:
-    log_path = _run_process("codex", args, workspace, stdin_text,
-                            timeout_s, log_name)
+def _codex(
+    workspace: Path, args: list[str], stdin_text: str, timeout_s: int, log_name: str
+) -> AgentRun:
+    log_path = _run_process("codex", args, workspace, stdin_text, timeout_s, log_name)
     text = log_path.read_text(encoding="utf-8", errors="replace")
     session = _SESSION_RE.search(text)
     tokens = _TOKENS_RE.search(text)
@@ -104,8 +133,9 @@ def _codex(workspace: Path, args: list[str], stdin_text: str,
     )
 
 
-def _omp(workspace: Path, extra_args: list[str], prompt: str,
-         timeout_s: int, log_name: str) -> AgentRun:
+def _omp(
+    workspace: Path, extra_args: list[str], prompt: str, timeout_s: int, log_name: str
+) -> AgentRun:
     """omp keeps sessions as JSONL under --session-dir; pinning that inside
     the workspace makes the session id and usage readable in place. Images
     need no attaching — the agent views files from images/ directly."""
@@ -114,11 +144,17 @@ def _omp(workspace: Path, extra_args: list[str], prompt: str,
     # session files carry cumulative usage; report the delta so run+repair
     # totals add up the same way they do for codex
     before = sum(_omp_tokens(f) for f in session_dir.rglob("*.jsonl"))
-    args = ["-p", "--cwd", str(workspace),
-            "--session-dir", str(session_dir), *extra_args, prompt]
+    args = [
+        "-p",
+        "--cwd",
+        str(workspace),
+        "--session-dir",
+        str(session_dir),
+        *extra_args,
+        prompt,
+    ]
     log_path = _run_process("omp", args, workspace, "", timeout_s, log_name)
-    sessions = sorted(session_dir.rglob("*.jsonl"),
-                      key=lambda p: p.stat().st_mtime)
+    sessions = sorted(session_dir.rglob("*.jsonl"), key=lambda p: p.stat().st_mtime)
     if not sessions:
         raise AgentCellError(f"omp left no session under {session_dir}")
     return AgentRun(
@@ -135,8 +171,7 @@ def _omp_session_id(session_file: Path) -> str:
 
 def _omp_tokens(session_file: Path) -> int:
     total = 0
-    for line in session_file.read_text(encoding="utf-8",
-                                       errors="replace").splitlines():
+    for line in session_file.read_text(encoding="utf-8", errors="replace").splitlines():
         try:
             record = json.loads(line)
         except json.JSONDecodeError:
@@ -148,8 +183,14 @@ def _omp_tokens(session_file: Path) -> int:
     return total
 
 
-def _run_process(binary: str, args: list[str], workspace: Path,
-                 stdin_text: str, timeout_s: int, log_name: str) -> Path:
+def _run_process(
+    binary: str,
+    args: list[str],
+    workspace: Path,
+    stdin_text: str,
+    timeout_s: int,
+    log_name: str,
+) -> Path:
     exe = shutil.which(binary)
     if not exe:
         raise AgentCellError(f"{binary} CLI not found on PATH")
@@ -157,16 +198,24 @@ def _run_process(binary: str, args: list[str], workspace: Path,
     with log_path.open("w", encoding="utf-8", errors="replace") as log:
         try:
             subprocess.run(
-                [exe, *args], input=stdin_text, stdout=log,
-                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                errors="replace", timeout=timeout_s, check=True,
+                [exe, *args],
+                input=stdin_text,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_s,
+                check=True,
             )
         except subprocess.TimeoutExpired as error:
             raise AgentCellError(
-                f"agent exceeded {timeout_s}s — log: {log_path}") from error
+                f"agent exceeded {timeout_s}s — log: {log_path}"
+            ) from error
         except subprocess.CalledProcessError as error:
             raise AgentCellError(
-                f"{binary} exited {error.returncode} — log: {log_path}") from error
+                f"{binary} exited {error.returncode} — log: {log_path}"
+            ) from error
     return log_path
 
 

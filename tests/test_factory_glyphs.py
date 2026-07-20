@@ -1,11 +1,11 @@
-"""Forced alignment (GLYPHS.md M1) on synthetic pages with known geometry."""
+"""Forced alignment on synthetic pages with known geometry."""
 
 import numpy as np
 
 from palimpsest.factory.glyphs import align_page
 
-GLYPH = 40   # px, synthetic character size
-PITCH = 70   # vertical pitch between characters
+GLYPH = 40  # px, synthetic character size
+PITCH = 70  # vertical pitch between characters
 COL_PITCH = 90
 
 
@@ -18,7 +18,7 @@ def _page(columns: list[int]) -> np.ndarray:
         x = width - 60 - COL_PITCH * c - GLYPH
         for r in range(count):
             y = 40 + PITCH * r
-            img[y:y + GLYPH, x:x + GLYPH] = 0
+            img[y : y + GLYPH, x : x + GLYPH] = 0
     return img
 
 
@@ -42,9 +42,9 @@ def test_multistroke_characters_fuse_into_one_box():
     x = img.shape[1] - 60 - GLYPH
     for r in range(3):
         y = 40 + PITCH * r
-        img[y:y + GLYPH, x:x + GLYPH] = 255
-        img[y:y + 14, x:x + GLYPH] = 0
-        img[y + GLYPH - 14:y + GLYPH, x:x + GLYPH] = 0
+        img[y : y + GLYPH, x : x + GLYPH] = 255
+        img[y : y + 14, x : x + GLYPH] = 0
+        img[y + GLYPH - 14 : y + GLYPH, x : x + GLYPH] = 0
     lines = ["一二三"] + ["甲乙丙"] * 7
     result = align_page(img, lines)
     striped = result["columns"][0]["chars"]

@@ -1,18 +1,9 @@
-"""The factory ledger: inventory + append-only production log (FACTORY.md §2.5).
+"""Factory inventory and append-only production history.
 
-One SQLite database with three tables:
-
-- ``prospects`` — everything the scout heads find, promoted or not
-- ``items`` — work orders: prospects promoted onto the line
-- ``stage_runs`` — append-only log of every station execution, page-grained
-
-Current line state is the ``stage_state`` view (latest successful run per
-doc/page/station), never a mutable column — history is the audit trail and
-is never overwritten (design rule §6.7).
-
-The database is an index, not the archive: artifacts on disk carry their own
-provenance stamps, and this file must remain rebuildable from the workspace
-(design rule §6.4).
+The SQLite ledger contains work orders and station runs. ``stage_state`` is the
+latest successful run for each document, page, and station; prior runs remain
+the audit trail. Artifacts carry independent provenance, so the ledger remains
+an index rather than the archive.
 """
 
 from __future__ import annotations
@@ -25,28 +16,11 @@ from palimpsest.factory.config import FACTORY_DB_PATH
 from palimpsest.factory.workspace.io import utc_now
 
 _SCHEMA = """
-CREATE TABLE IF NOT EXISTS prospects (
-  prospect_id   TEXT PRIMARY KEY,
-  head          TEXT NOT NULL,
-  archive_ref   TEXT NOT NULL,
-  manifest_url  TEXT,
-  title         TEXT,
-  language      TEXT,
-  date_range    TEXT,
-  triage_score  INTEGER,
-  triage_json   TEXT,
-  found_at      TEXT NOT NULL,
-  status        TEXT NOT NULL DEFAULT 'found'
-    CHECK (status IN ('found', 'triaged', 'promoted', 'rejected'))
-);
-
 CREATE TABLE IF NOT EXISTS items (
-  doc_id       TEXT PRIMARY KEY,
-  prospect_id  TEXT REFERENCES prospects(prospect_id),
-  recipe       TEXT NOT NULL,
-  mode         TEXT NOT NULL CHECK (mode IN ('source', 'opportunity')),
-  promoted_at  TEXT NOT NULL,
-  status       TEXT NOT NULL DEFAULT 'active'
+  doc_id      TEXT PRIMARY KEY,
+  recipe      TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'complete', 'parked', 'failed'))
 );
 
@@ -56,7 +30,7 @@ CREATE TABLE IF NOT EXISTS stage_runs (
   page_id            TEXT,
   station            TEXT NOT NULL,
   status             TEXT NOT NULL,
-  station_version    TEXT NOT NULL,
+  station_fingerprint TEXT NOT NULL,
   model              TEXT,
   prompt_name        TEXT,
   prompt_hash        TEXT,
@@ -75,8 +49,6 @@ CREATE TABLE IF NOT EXISTS stage_runs (
 
 CREATE INDEX IF NOT EXISTS idx_stage_runs_doc
   ON stage_runs (doc_id, station, page_id);
-CREATE INDEX IF NOT EXISTS idx_prospects_status ON prospects (status);
-CREATE INDEX IF NOT EXISTS idx_prospects_head ON prospects (head);
 
 CREATE VIEW IF NOT EXISTS stage_state AS
 SELECT runs.*
@@ -116,88 +88,42 @@ class Ledger:
     def __exit__(self, *exc_info: object) -> None:
         self.close()
 
-    # -- inventory: prospects ------------------------------------------------
+    # -- work orders ----------------------------------------------------------
 
-    def add_prospect(
-        self,
-        prospect_id: str,
-        *,
-        head: str,
-        archive_ref: str,
-        manifest_url: str | None = None,
-        title: str | None = None,
-        language: str | None = None,
-        date_range: str | None = None,
-    ) -> None:
+    def adopt(self, doc_id: str, *, recipe: str) -> None:
         with self._conn:
             self._conn.execute(
                 """
-                INSERT INTO prospects
-                  (prospect_id, head, archive_ref, manifest_url, title,
-                   language, date_range, found_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (prospect_id) DO UPDATE SET
-                  manifest_url = excluded.manifest_url,
-                  title = excluded.title,
-                  language = excluded.language,
-                  date_range = excluded.date_range
+                INSERT INTO items (doc_id, recipe, created_at)
+                VALUES (?, ?, ?)
                 """,
-                (prospect_id, head, archive_ref, manifest_url, title,
-                 language, date_range, utc_now()),
+                (doc_id, recipe, utc_now()),
             )
 
-    def record_triage(self, prospect_id: str, *, score: int, triage_json: str) -> None:
+    def item(self, doc_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM items WHERE doc_id = ?",
+            (doc_id,),
+        ).fetchone()
+
+    def set_item_status(self, doc_id: str, status: str) -> None:
+        if status not in {"active", "complete", "parked", "failed"}:
+            raise ValueError(f"Unknown item status: {status!r}")
         with self._conn:
             updated = self._conn.execute(
-                """
-                UPDATE prospects
-                SET triage_score = ?, triage_json = ?, status = 'triaged'
-                WHERE prospect_id = ? AND status IN ('found', 'triaged')
-                """,
-                (score, triage_json, prospect_id),
+                "UPDATE items SET status = ? WHERE doc_id = ?",
+                (status, doc_id),
             ).rowcount
         if updated == 0:
-            raise KeyError(f"No triageable prospect: {prospect_id}")
-
-    # -- work orders: items --------------------------------------------------
-
-    def promote(self, prospect_id: str, *, doc_id: str, recipe: str, mode: str) -> None:
-        with self._conn:
-            self._conn.execute(
-                """
-                INSERT INTO items (doc_id, prospect_id, recipe, mode, promoted_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (doc_id, prospect_id, recipe, mode, utc_now()),
-            )
-            self._conn.execute(
-                "UPDATE prospects SET status = 'promoted' WHERE prospect_id = ?",
-                (prospect_id,),
-            )
-
-    def adopt(self, doc_id: str, *, recipe: str, mode: str = "source") -> None:
-        """Put an existing library document on the line without a prospect —
-        the seam for documents that predate the scouts."""
-        with self._conn:
-            self._conn.execute(
-                """
-                INSERT INTO items (doc_id, prospect_id, recipe, mode, promoted_at)
-                VALUES (?, NULL, ?, ?, ?)
-                """,
-                (doc_id, recipe, mode, utc_now()),
-            )
+            raise KeyError(f"No work order for {doc_id!r}")
 
     def list_items(self, *, status: str | None = None) -> list[sqlite3.Row]:
-        query = """
-            SELECT items.*, prospects.head, prospects.archive_ref,
-                   prospects.title, prospects.triage_score
-            FROM items LEFT JOIN prospects USING (prospect_id)
-        """
+        query = "SELECT * FROM items"
         params: tuple = ()
         if status is not None:
             query += " WHERE items.status = ?"
             params = (status,)
-        return self._conn.execute(query + " ORDER BY promoted_at", params).fetchall()
+        return self._conn.execute(query + " ORDER BY created_at", params).fetchall()
 
     # -- production log: stage_runs -------------------------------------------
 
@@ -207,7 +133,7 @@ class Ledger:
         station: str,
         *,
         page_id: str | None = None,
-        station_version: str,
+        station_fingerprint: str,
         config_fingerprint: str,
         input_fingerprint: str,
         model: str | None = None,
@@ -219,14 +145,24 @@ class Ledger:
             cursor = self._conn.execute(
                 """
                 INSERT INTO stage_runs
-                  (doc_id, page_id, station, status, station_version, model,
+                  (doc_id, page_id, station, status, station_fingerprint, model,
                    prompt_name, prompt_hash, params_hash, config_fingerprint,
                    input_fingerprint, started_at)
                 VALUES (?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (doc_id, page_id, station, station_version, model, prompt_name,
-                 prompt_hash, params_hash, config_fingerprint, input_fingerprint,
-                 utc_now()),
+                (
+                    doc_id,
+                    page_id,
+                    station,
+                    station_fingerprint,
+                    model,
+                    prompt_name,
+                    prompt_hash,
+                    params_hash,
+                    config_fingerprint,
+                    input_fingerprint,
+                    utc_now(),
+                ),
             )
         return cursor.lastrowid
 
@@ -241,9 +177,13 @@ class Ledger:
         cost_usd: float | None = None,
     ) -> None:
         self._finish_run(
-            run_id, status="done",
-            output_path=output_path, output_fingerprint=output_fingerprint,
-            tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost_usd,
+            run_id,
+            status="done",
+            output_path=output_path,
+            output_fingerprint=output_fingerprint,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost_usd=cost_usd,
         )
 
     def fail_run(self, run_id: int, *, kind: str, detail: str | None = None) -> None:
@@ -272,8 +212,17 @@ class Ledger:
                     finished_at = ?, error = ?
                 WHERE run_id = ? AND status = 'running'
                 """,
-                (status, output_path, output_fingerprint, tokens_in, tokens_out,
-                 cost_usd, utc_now(), error, run_id),
+                (
+                    status,
+                    output_path,
+                    output_fingerprint,
+                    tokens_in,
+                    tokens_out,
+                    cost_usd,
+                    utc_now(),
+                    error,
+                    run_id,
+                ),
             ).rowcount
         if updated == 0:
             raise KeyError(f"No running stage_run with id {run_id}")

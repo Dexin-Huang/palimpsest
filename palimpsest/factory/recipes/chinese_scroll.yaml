@@ -49,6 +49,5 @@ line:
       model: gpt-5.6-luna
       prompt: emend/generic/agent
     - station: publish
-      use_emendations: true
       original_language: zh
     - station: render_epub

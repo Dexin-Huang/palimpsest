@@ -4,29 +4,32 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "palimpsest-cli"
-version = "0.1.0"
-description = "Local CLI and worker wrapper for the Palimpsest workspace"
+version = "0.2.0"
+description = "A provenance-first factory for recovering readable books from manuscripts"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "google-genai>=1.0.0",
-  "claude-agent-sdk>=0.1",
   "requests>=2.28.0",
-  "pydantic>=2.0.0",
   "python-dotenv>=1.0.0",
-  "aiohttp>=3.9.0",
-  "lxml>=5.0.0",
-  "reportlab>=4.0.0",
-  "Pillow>=10.0.0",
   "PyYAML>=6.0",
   "EbookLib>=0.18",
   "numpy>=2.0",
   "opencv-python-headless>=4.10",
-  "genai-prices>=0.1",
+  "genai-prices>=0.0.71,<0.1",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 palimpsest = "palimpsest.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["palimpsest*"]
+
+[tool.setuptools.package-data]
+"palimpsest.factory" = ["recipes/*.yaml", "prompts/**/*.txt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

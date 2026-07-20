@@ -1,188 +1,75 @@
-# Agent Workers
+# Agent Cells
 
-Purpose: give future sessions a simple, reliable way to offload narrow local
-repo tasks to Claude SDK "grunt workers" without losing sight of Palimpsest's
-actual job.
+Palimpsest uses coding-agent harnesses for bounded editorial stations whose work
+requires inspecting evidence, zooming page images, and revising a structured
+artifact after validation feedback. Agents are executors inside the factory;
+they do not plan the product, choose recipe order, or mutate production state.
 
-North star reminder:
-- Palimpsest exists to recover neglected knowledge traditions from archival
-  corpora.
-- These workers are support tools.
-- Use them to reduce local mechanical work, not to replace the main session's
-  judgment about manuscripts, research direction, or product strategy.
+## Execution contract
 
-## When To Use Them
+An agent executor receives one resolved cell specification and returns one cell
+outcome. The conductor remains responsible for scheduling, freshness, and the
+ledger.
 
-Good uses:
-- inspect a code path
-- find a symbol or config value
-- apply a narrow patch
-- summarize a local note or output file
-- run several independent local tasks in parallel
-- do a bounded web lookup when `--with-web-search` is explicitly enabled
+For each attempt, `palimpsest/factory/agent_cell.py` recreates an airlocked
+workspace under the document's `runs/` directory:
 
-Bad uses:
-- broad product planning
-- open-ended research synthesis
-- manuscript interpretation that needs sustained judgment
-- anything that requires shell access
-
-Rule of thumb:
-- main session handles strategy, review, and research interpretation
-- workers handle bounded local grunt work
-
-## Commands
-
-Single worker commands:
-
-```bash
-python -m palimpsest agent "General local helper task"
-python -m palimpsest agent-edit "Apply the requested patch"
-python -m palimpsest agent-inspect "Find the file containing DEFAULT_MODEL_AGENT"
-python -m palimpsest agent-summarize "Summarize the local notes in two sentences"
-python -m palimpsest agent-inspect --with-web-search "Find the current manuscript viewer URL"
+```text
+AGENTS.md          station instruction and output contract
+evidence/          declared JSON inputs only
+images/            declared page images only
+out/               required artifact, logs, and session records
 ```
 
-Concurrent batch runner:
+The agent may read and crop files inside this workspace. It writes exactly the
+artifact named by the station contract into `out/`. It does not receive the
+repository, factory database, unrelated documents, or credentials through the
+workspace.
 
-```bash
-python -m palimpsest agent-batch --input jobs.json --concurrency 3 --json
-```
+## Production loop
 
-All worker commands support:
-- `--workspace`
-- `--model`
-- `--max-turns`
-- `--max-budget-usd`
-- `--max-thinking-tokens`
-- `--permission-mode`
-- `--with-web-search`
-- `--json`
+1. The station stages declared evidence and images.
+2. The configured harness runs the station instruction.
+3. Palimpsest reads and parses the required output artifact.
+4. The station validates schema and domain invariants.
+5. If validation fails and repair capacity remains, Palimpsest sends the exact
+   rejection into the same agent session.
+6. A valid artifact returns to the cell runner; exhausted repairs return a
+   structured failure.
 
-## Profiles
+Repair is bounded by station options. A missing or invalid artifact never turns
+into an empty success.
 
-`agent`
-- General helper.
-- Can read and edit local files.
-- Use when the task is small but does not fit a stricter lane.
+## Harnesses
 
-`agent-edit`
-- Editing worker.
-- Use for isolated file changes.
-- Best when you already know roughly what needs to change.
+Configured executors may invoke OMP, Codex CLI, or Claude Code. Harness-specific
+code owns process invocation and session accounting. Station code owns the
+instruction, staged evidence, artifact parsing, and domain validation. The
+common executor contract keeps the conductor independent of any harness.
 
-`agent-inspect`
-- Read-only inspection worker.
-- Use for finding symbols, tracing code paths, or extracting exact lines.
+Models are recipe settings. Provider authentication comes from the operator's
+normal harness login or environment rather than from files staged for the
+agent.
 
-`agent-summarize`
-- Read-only summarizer.
-- Use for compressing local notes, outputs, or docs into a short answer.
+## Editorial use
 
-`agent-batch`
-- Runs multiple independent jobs concurrently.
-- Best when tasks do not depend on each other.
+Agent cells are appropriate when the task benefits from an inspect-revise loop,
+for example:
 
-## Safety Model
+- identifying bounded reference evidence for reconstructed sections;
+- emending a difficult reading while checking page crops;
+- repairing a structured editorial artifact after apparatus validation.
 
-The worker wrapper is intentionally constrained:
-- workspace-scoped file access
-- no default `Bash`
-- no default `WebSearch` unless `--with-web-search` is passed
-- read-only profiles cannot edit files
-- out-of-workspace file reads are denied
+A normal model-gateway call is preferable when one prompt plus declared inputs
+can produce and validate the artifact directly. Deterministic image processing,
+path resolution, scheduling, and publication never need an agent cell.
 
-This means the workers are suitable for local repo help, not general computer
-control.
+## Invariants
 
-## Prompting Guidance
-
-Write prompts like work tickets, not conversations.
-
-Good:
-- `Find the file containing X and reply with the filename and exact line.`
-- `Update config.py so DEFAULT_FOO uses BAR. Reply with one sentence.`
-- `Summarize notes.md in two sentences.`
-- `With web search enabled, find the current official viewer URL and reply with one link.`
-
-Bad:
-- `Look around and see what seems important.`
-- `Figure out the architecture and propose improvements.`
-- `Research the best approach on the internet.`
-
-Prefer:
-- one concrete task
-- one workspace
-- one expected output shape
-
-## Batch Format
-
-Input may be `json` or `jsonl`.
-
-Example:
-
-```json
-[
-  {
-    "id": "inspect-1",
-    "profile": "inspect",
-    "workspace": "D:/Projects/palimpsest",
-    "prompt": "Find the file containing DEFAULT_MODEL_AGENT."
-  },
-  {
-    "id": "edit-1",
-    "profile": "edit",
-    "workspace": "D:/Projects/palimpsest",
-    "prompt": "Update the requested file and reply with one sentence."
-  },
-  {
-    "id": "summ-1",
-    "profile": "summarize",
-    "workspace": "D:/Projects/palimpsest/docs",
-    "prompt": "Summarize the main idea of knowledge_recovery_vision.md in two sentences."
-  }
-]
-```
-
-Recognized per-job fields:
-- `id`
-- `profile`
-- `workspace`
-- `prompt`
-- `with_web_search`
-- `model`
-- `max_turns`
-- `max_budget_usd`
-- `max_thinking_tokens`
-- `permission_mode`
-
-Batch behavior:
-- jobs run concurrently up to `--concurrency`
-- results are returned in input order
-- exit code is non-zero if any job errors
-
-## New Session Playbook
-
-If you are a new session and need to use these tools:
-
-1. Read this file.
-2. Identify which parts of the task are mechanical and independent.
-3. Keep the main session focused on Palimpsest's core task.
-4. Use `agent-inspect` to gather exact local facts.
-5. Use `agent-edit` for isolated changes.
-6. Use `agent-summarize` to compress outputs or notes.
-7. Use `agent-batch` only for truly independent jobs.
-8. Return to the main thread with the worker outputs and continue the real task.
-
-## Core Task Reminder
-
-These workers exist to help the main session do more of the following:
-- discover under-studied manuscripts
-- process page images into reliable evidence
-- interpret interesting transcriptions
-- extract claims, recipes, stories, places, and technical knowledge
-- build Palimpsest into a knowledge-recovery system
-
-If you are choosing between "spawn a worker" and "think about the manuscripts,"
-default to thinking about the manuscripts unless the subtask is obviously
-mechanical.
+- One agent cell corresponds to one station execution.
+- Staged evidence matches the station's declared inputs.
+- The workspace is recreated for every production attempt.
+- Sessions and usage are recorded beneath the cell workspace.
+- Validation happens before the artifact enters the canonical library.
+- Agents never write the ledger or schedule follow-up stations.
+- Repair turns are bounded and preserve the same session context.

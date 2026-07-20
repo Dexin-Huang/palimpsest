@@ -15,13 +15,13 @@ def test_every_registered_station_references_known_kinds():
     for station in registry.all_stations():
         for kind in (*station.consumes, station.produces):
             assert kind in CONTRACTS or kind in SOURCE_KINDS, (
-                f"{station.name} references unknown kind {kind}")
+                f"{station.name} references unknown kind {kind}"
+            )
 
 
 def test_registering_station_with_unknown_kind_fails():
     class Bogus(Station):
         name = "bogus"
-        version = "bogus/v1"
         grain = "page"
         consumes = ("nonexistent_kind",)
         produces = "page_transcription"
@@ -31,8 +31,10 @@ def test_registering_station_with_unknown_kind_fails():
 
 
 def test_validate_payload_enforces_required_fields():
-    validate_payload("page_translation", {
-        "doc_id": "d", "page_id": "p", "translation": "t", "flags": {}})
+    validate_payload(
+        "page_translation",
+        {"doc_id": "d", "page_id": "p", "translation": "t", "flags": {}},
+    )
     with pytest.raises(ValueError, match="missing required fields.*translation"):
         validate_payload("page_translation", {"doc_id": "d", "page_id": "p"})
 
@@ -45,30 +47,46 @@ def test_validate_payload_rejects_binary_kinds():
 def test_graph_reflects_live_registries():
     data = graph.build()
     station_names = {s["station"] for s in data["stations"]}
-    assert {"acquire", "deframe", "dewatermark", "flatten", "segment", "read",
-            "translate", "assemble_page", "survey", "reconstruct", "publish",
-            "render_epub"} <= station_names
+    assert {
+        "acquire",
+        "deframe",
+        "dewatermark",
+        "flatten",
+        "segment",
+        "read",
+        "translate",
+        "assemble_page",
+        "survey",
+        "reconstruct",
+        "publish",
+        "render_epub",
+    } <= station_names
     assert {k["kind"] for k in data["kinds"]} == set(CONTRACTS)
 
     mermaid = graph.to_mermaid()
-    assert "page_image_clean --> segment" in mermaid
-    assert "read --> page_transcription" in mermaid
-    assert "translation_brief --> translate" in mermaid
+    assert "kind_page_image_clean --> station_segment" in mermaid
+    assert "station_read --> kind_page_transcription" in mermaid
+    assert "kind_translation_brief --> station_translate" in mermaid
+    assert "kind_reference --> station_emend" in mermaid
+    assert "station_reference --> kind_reference" in mermaid
 
 
 def test_contracts_doc_is_current(tmp_path):
     """docs/CONTRACTS.md must match the live registries — regenerate with
-    `palimpsest factory graph --write-docs` after changing any station or
-    contract."""
-    regenerated = graph.write_docs(tmp_path / "CONTRACTS.md").read_text(encoding="utf-8")
+    `palimpsest graph --write-docs` after changing any station or contract."""
+    regenerated = graph.write_docs(tmp_path / "CONTRACTS.md").read_text(
+        encoding="utf-8"
+    )
     committed = graph.DEFAULT_DOC_PATH.read_text(encoding="utf-8")
     assert committed == regenerated, (
-        "docs/CONTRACTS.md is stale — run: palimpsest factory graph --write-docs")
+        "docs/CONTRACTS.md is stale — run: palimpsest graph --write-docs"
+    )
 
 
 def test_json_kinds_used_by_stations_have_required_fields():
     json_produced = {
-        s.produces for s in registry.all_stations()
+        s.produces
+        for s in registry.all_stations()
         if CONTRACTS[s.produces].format == "json"
     }
     for kind in json_produced:

@@ -1,0 +1,62 @@
+{
+  "manifest_url": "https://digi.vatlib.it/iiif/MSS_Pal.lat.1199/manifest.json",
+  "manifest_label": "Pal.lat.1199",
+  "manifest_summary": {
+    "label": "Pal.lat.1199",
+    "title": "Codice miscellaneo (medicina)",
+    "title_is_shelfmark": false,
+    "shelfmark": "Pal.lat.1199",
+    "author": "Cancellarius Montispessulani",
+    "contributor": null,
+    "date": "1350-1400",
+    "language": "Latino",
+    "place": null,
+    "description": null,
+    "metadata_field_count": 5,
+    "metadata_entries": [
+      {
+        "label": "Shelfmark",
+        "value": "Pal.lat.1199"
+      },
+      {
+        "label": "Author",
+        "value": "Cancellarius Montispessulani"
+      },
+      {
+        "label": "Title",
+        "value": "Codice miscellaneo (medicina)"
+      },
+      {
+        "label": "Date",
+        "value": "1350-1400"
+      },
+      {
+        "label": "Language",
+        "value": "Latino"
+      }
+    ],
+    "canvas_count": 110
+  },
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "f001r",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1199/Pal.lat.1199_0003_cy_0001r.jp2/full/max/0/default.jpg",
+      "filename": "f001r.jpg",
+      "order": 3,
+      "width": 2632,
+      "height": 4054,
+      "label": "1r"
+    },
+    {
+      "page_id": "f001v",
+      "url": "https://digi.vatlib.it/iiifimage/MSS_Pal.lat.1199/Pal.lat.1199_0004_cy_0001v.jp2/full/max/0/default.jpg",
+      "filename": "f001v.jpg",
+      "order": 4,
+      "width": 2659,
+      "height": 4056,
+      "label": "1v"
+    }
+  ],
+  "doc_id": "vat_pal_lat_1199_sample2"
+}

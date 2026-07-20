@@ -33,18 +33,26 @@ BRIEF_SCHEMA = {
         "flags": {"type": "array", "items": _entry("page_id", "issue")},
         "style_notes": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["terms", "sections", "abbreviations", "entities", "flags",
-                 "style_notes"],
+    "required": [
+        "terms",
+        "sections",
+        "abbreviations",
+        "entities",
+        "flags",
+        "style_notes",
+    ],
 }
 
 
 class Survey(Station):
     name = "survey"
-    version = "survey/v1"
+
     grain = "manuscript"
     consumes = ("page_transcription",)
     produces = "translation_brief"
     uses_model = True
+    param_keys = frozenset({"temperature", "max_output_tokens"})
+    option_keys = frozenset({"max_tokens_per_chunk"})
 
     def run(self, job: Job) -> StationResult:
         records = [
@@ -54,19 +62,23 @@ class Survey(Station):
         partials: list[dict] = []
         tokens_in = tokens_out = 0
         cost = 0.0
-        for chunk in _chunk(records, int(job.config.options.get(
-                "max_tokens_per_chunk", MAX_TOKENS_PER_CHUNK))):
+        for chunk in _chunk(
+            records,
+            int(job.config.options.get("max_tokens_per_chunk", MAX_TOKENS_PER_CHUNK)),
+        ):
             chunk_text = "\n\n".join(
                 f"[{r['page_id']}]\n{r['text']}" for r in chunk if r["text"].strip()
             )
-            partial, response = generate_json(ModelRequest(
-                model=job.config.model,
-                prompt=job.config.prompt.text + "\n\n" + chunk_text,
-                temperature=job.config.params.get("temperature", 0.1),
-                max_output_tokens=job.config.params.get("max_output_tokens", 32768),
-                json_output=True,
-                json_schema=BRIEF_SCHEMA,
-            ))
+            partial, response = generate_json(
+                ModelRequest(
+                    model=job.config.model,
+                    prompt=job.config.prompt.text + "\n\n" + chunk_text,
+                    temperature=job.config.params.get("temperature", 0.1),
+                    max_output_tokens=job.config.params.get("max_output_tokens", 32768),
+                    json_output=True,
+                    json_schema=BRIEF_SCHEMA,
+                )
+            )
             partials.append(partial)
             tokens_in += response.prompt_tokens
             tokens_out += response.output_tokens
@@ -84,7 +96,7 @@ def _chunk(records: list[dict], max_tokens: int) -> list[list[dict]]:
     total_tokens = int(sum(len(r["text"]) * TOKENS_PER_CHAR for r in records))
     num_chunks = max(1, math.ceil(total_tokens / max_tokens))
     chunk_size = math.ceil(len(records) / num_chunks)
-    return [records[i:i + chunk_size] for i in range(0, len(records), chunk_size)]
+    return [records[i : i + chunk_size] for i in range(0, len(records), chunk_size)]
 
 
 def _dedupe(partials: list[dict], list_key: str, id_key: str) -> list[dict]:
@@ -104,7 +116,6 @@ def _merge(partials: list[dict], *, doc_id: str, total_pages: int) -> dict:
             if note not in style_notes:
                 style_notes.append(note)
     return {
-        "version": 1,
         "document": {"doc_id": doc_id, "total_pages": total_pages},
         "glossary": _dedupe(partials, "terms", "term"),
         "outline": [s for p in partials for s in p.get("sections", [])],

@@ -1,5 +1,8 @@
-"""Factory CLI, wired as ``palimpsest factory ...`` during the greenfield
-build. Promoted to the top-level command surface at cutover (FACTORY.md §5.6).
+"""The Palimpsest command surface.
+
+Factory commands live at the top level: ``palimpsest run``, not behind a
+transitional namespace. Command handlers import heavyweight stations lazily so
+basic inventory operations remain fast.
 """
 
 from __future__ import annotations
@@ -11,92 +14,114 @@ from palimpsest.factory.config import FACTORY_DB_PATH, LIBRARY_ROOT
 from palimpsest.factory.core.ledger import Ledger
 
 
-def add_factory_subparser(subparsers) -> None:
-    parser = subparsers.add_parser("factory", help="Factory line (docs/FACTORY.md)")
-    factory_subparsers = parser.add_subparsers(dest="factory_command", required=True)
+def add_commands(subparsers) -> None:
 
-    init_db = factory_subparsers.add_parser(
+    init_db = subparsers.add_parser(
         "init-db", help="Create the factory ledger database"
     )
     init_db.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
     init_db.set_defaults(func=cmd_init_db)
 
-    status = factory_subparsers.add_parser(
+    status = subparsers.add_parser(
         "status", help="Show items on the line, or one item's stage state"
     )
     status.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
     status.add_argument("--doc-id", default=None)
     status.set_defaults(func=cmd_status)
+    intake = subparsers.add_parser(
+        "intake", help="Create a work order from an IIIF manifest"
+    )
+    intake.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    intake.add_argument("--doc-id", required=True)
+    intake.add_argument("--manifest", required=True)
+    intake.add_argument("--recipe", required=True)
+    intake.add_argument("--image-size", default="max")
+    intake.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    intake.set_defaults(func=cmd_intake)
 
-    adopt = factory_subparsers.add_parser(
+    adopt = subparsers.add_parser(
         "adopt", help="Put an existing library document on the line"
     )
     adopt.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
     adopt.add_argument("--doc-id", required=True)
     adopt.add_argument("--recipe", required=True)
-    adopt.add_argument("--mode", choices=["source", "opportunity"], default="source")
+    adopt.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     adopt.set_defaults(func=cmd_adopt)
 
-    run = factory_subparsers.add_parser(
-        "run", help="Drive a work order through its recipe"
-    )
+    run = subparsers.add_parser("run", help="Drive a work order through its recipe")
     run.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
     run.add_argument("--doc-id", required=True)
     run.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     run.add_argument("--workers", type=int, default=None)
     run.add_argument(
-        "--refresh", action="append", default=[], metavar="STATION",
+        "--refresh",
+        action="append",
+        default=[],
+        metavar="STATION",
         help="Force re-run of a station even if fresh/outdated (repeatable)",
     )
     run.add_argument(
-        "--executor", choices=["inline", "subprocess"], default="inline",
+        "--executor",
+        choices=["inline", "subprocess"],
+        default="inline",
         help="How cells execute: in-thread, or one isolated process per cell",
     )
     run.set_defaults(func=cmd_run)
 
-    graph = factory_subparsers.add_parser(
+    graph = subparsers.add_parser(
         "graph", help="The contract graph (input → transformation → output)"
     )
     graph.add_argument("--format", choices=["mermaid", "json"], default="mermaid")
-    graph.add_argument("--write-docs", action="store_true",
-                       help="Regenerate docs/CONTRACTS.md")
+    graph.add_argument(
+        "--write-docs", action="store_true", help="Regenerate docs/CONTRACTS.md"
+    )
     graph.set_defaults(func=cmd_graph)
 
-    preview = factory_subparsers.add_parser(
+    preview = subparsers.add_parser(
         "preview", help="Render preprocessing stages + lassos for given pages"
     )
     preview.add_argument("--doc-id", required=True)
-    preview.add_argument("--pages", required=True,
-                         help="Comma-separated page ids, e.g. f001r,f002v")
+    preview.add_argument(
+        "--pages", required=True, help="Comma-separated page ids, e.g. f001r,f002v"
+    )
     preview.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     preview.set_defaults(func=cmd_preview)
 
-    tune = factory_subparsers.add_parser(
-        "tune", help="Offline lasso tuning: compute the CV chain in memory, "
-                     "render strips, score routing (no ledger, no network)"
+    tune = subparsers.add_parser(
+        "tune",
+        help="Offline lasso tuning: compute the CV chain in memory, "
+        "render strips, score routing (no ledger, no network)",
     )
     tune.add_argument("--doc-id", required=True)
     tune.add_argument("--pages", required=True)
     tune.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
-    tune.add_argument("--reference", type=Path, default=None,
-                      help="transcriptions.jsonl for routing sanity checks")
+    tune.add_argument(
+        "--reference",
+        type=Path,
+        default=None,
+        help="transcriptions.jsonl for routing sanity checks",
+    )
     tune.set_defaults(func=cmd_tune)
 
-    evaluate = factory_subparsers.add_parser(
-        "evaluate", help="Compare factory transcriptions against a reference "
-                         "JSONL: contamination/repetition metrics + optional "
-                         "blind pairwise image judge"
+    evaluate = subparsers.add_parser(
+        "evaluate",
+        help="Compare factory transcriptions against a reference "
+        "JSONL: contamination/repetition metrics + optional "
+        "blind pairwise image judge",
     )
     evaluate.add_argument("--doc-id", required=True)
     evaluate.add_argument("--reference", type=Path, required=True)
     evaluate.add_argument("--pages", required=True)
     evaluate.add_argument("--judge-model", default=None)
-    evaluate.add_argument("--image-doc-id", default=None,
-                          help="Doc holding the page images (defaults to --doc-id)")
+    evaluate.add_argument(
+        "--image-doc-id",
+        default=None,
+        help="Doc holding the page images (defaults to --doc-id)",
+    )
     evaluate.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     evaluate.set_defaults(func=cmd_evaluate)
 
-    site = factory_subparsers.add_parser(
+    site = subparsers.add_parser(
         "site", help="Rebuild the hosted library from all published books"
     )
     site.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
@@ -110,10 +135,47 @@ def cmd_init_db(args: argparse.Namespace) -> None:
     print(f"Factory ledger ready: {args.db}")
 
 
-def cmd_adopt(args: argparse.Namespace) -> None:
+def cmd_intake(args: argparse.Namespace) -> None:
+    from palimpsest.factory.core.recipe import load as load_recipe
+    from palimpsest.factory.intake import build_records, fetch_manifest, write_records
+
+    recipe = load_recipe(args.recipe)
+    image_size = (
+        int(args.image_size) if str(args.image_size).isdigit() else args.image_size
+    )
+    manifest = fetch_manifest(args.manifest)
+    metadata, page_list = build_records(
+        args.doc_id, args.manifest, manifest, image_size=image_size
+    )
     with Ledger(args.db) as ledger:
-        ledger.adopt(args.doc_id, recipe=args.recipe, mode=args.mode)
-    print(f"{args.doc_id} is on the line (recipe={args.recipe}, mode={args.mode})")
+        if ledger.item(args.doc_id) is not None:
+            raise ValueError(f"Work order already exists: {args.doc_id}")
+        write_records(args.doc_id, metadata, page_list, library_root=args.library_root)
+        ledger.adopt(args.doc_id, recipe=recipe.name)
+    print(
+        f"{args.doc_id} is on the line "
+        f"(recipe={recipe.name}, pages={len(page_list['pages'])})"
+    )
+
+
+def cmd_adopt(args: argparse.Namespace) -> None:
+    from palimpsest.factory.core.contracts import validate_payload
+    from palimpsest.factory.core.recipe import load as load_recipe
+    from palimpsest.factory.workspace.io import read_json
+    from palimpsest.factory.workspace.layout import metadata_path, page_list_path
+
+    recipe = load_recipe(args.recipe)
+    validate_payload(
+        "metadata", read_json(metadata_path(args.doc_id, args.library_root))
+    )
+    validate_payload(
+        "page_list", read_json(page_list_path(args.doc_id, args.library_root))
+    )
+    with Ledger(args.db) as ledger:
+        if ledger.item(args.doc_id) is not None:
+            raise ValueError(f"Work order already exists: {args.doc_id}")
+        ledger.adopt(args.doc_id, recipe=recipe.name)
+    print(f"{args.doc_id} is on the line (recipe={recipe.name})")
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -129,16 +191,22 @@ def cmd_run(args: argparse.Namespace) -> None:
         )
         report = conductor.run(args.doc_id)
 
-    print(f"{report.doc_id} [{report.recipe}]  "
-          f"ran={report.count('ran')} fresh={report.count('fresh')} "
-          f"outdated={report.count('outdated')} failed={report.count('failed')}  "
-          f"cost=${report.cost_usd:.4f}")
+    print(
+        f"{report.doc_id} [{report.recipe}]  "
+        f"ran={report.count('ran')} fresh={report.count('fresh')} "
+        f"outdated={report.count('outdated')} failed={report.count('failed')}  "
+        f"cost=${report.cost_usd:.4f}"
+    )
     for cell in report.cells:
         if cell.action == "failed":
-            print(f"  FAILED {cell.station} {cell.page_id or '(manuscript)'}: {cell.error}")
+            print(
+                f"  FAILED {cell.station} {cell.page_id or '(manuscript)'}: {cell.error}"
+            )
         elif cell.action == "outdated":
-            print(f"  outdated {cell.station} {cell.page_id or '(manuscript)'} "
-                  f"— re-run with --refresh {cell.station}")
+            print(
+                f"  outdated {cell.station} {cell.page_id or '(manuscript)'} "
+                f"— re-run with --refresh {cell.station}"
+            )
 
 
 def cmd_graph(args: argparse.Namespace) -> None:
@@ -153,8 +221,7 @@ def cmd_graph(args: argparse.Namespace) -> None:
 def cmd_preview(args: argparse.Namespace) -> None:
     from palimpsest.factory.preview import build
 
-    written = build(args.doc_id, args.pages.split(","),
-                    library_root=args.library_root)
+    written = build(args.doc_id, args.pages.split(","), library_root=args.library_root)
     for path in written:
         print(path)
     if not written:
@@ -164,8 +231,12 @@ def cmd_preview(args: argparse.Namespace) -> None:
 def cmd_tune(args: argparse.Namespace) -> None:
     from palimpsest.factory.preview import DEFAULT_OUT_DIR, tune
 
-    rows = tune(args.doc_id, args.pages.split(","),
-                library_root=args.library_root, reference=args.reference)
+    rows = tune(
+        args.doc_id,
+        args.pages.split(","),
+        library_root=args.library_root,
+        reference=args.reference,
+    )
     header = ["page_id", "route", "regions", "main", "margin", "glyph", "lines"]
     if args.reference:
         header += ["ref_chars", "verdict"]
@@ -184,7 +255,9 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
     sys.stdout.reconfigure(errors="replace")
 
     results = evaluate(
-        args.doc_id, args.reference, args.pages.split(","),
+        args.doc_id,
+        args.reference,
+        args.pages.split(","),
         library_root=args.library_root,
         judge_model=args.judge_model,
         image_doc_id=args.image_doc_id,
@@ -192,8 +265,10 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
     print(render_table(results))
     for result in results:
         if result.judge_reasoning:
-            print(f"\n[{result.page_id}] judge ({result.judge_winner}, "
-                  f"{result.judge_confidence}): {result.judge_reasoning}")
+            print(
+                f"\n[{result.page_id}] judge ({result.judge_winner}, "
+                f"{result.judge_confidence}): {result.judge_reasoning}"
+            )
 
 
 def cmd_site(args: argparse.Namespace) -> None:
@@ -213,12 +288,7 @@ def cmd_status(args: argparse.Namespace) -> None:
                 print("No items on the line.")
                 return
             for item in items:
-                score = item["triage_score"]
-                print(
-                    f"{item['doc_id']}  [{item['status']}]  recipe={item['recipe']}"
-                    f"  mode={item['mode']}  head={item['head'] or '-'}"
-                    f"  triage={score if score is not None else '-'}"
-                )
+                print(f"{item['doc_id']}  [{item['status']}]  recipe={item['recipe']}")
             return
 
         rows = ledger.state(args.doc_id)
@@ -230,6 +300,6 @@ def cmd_status(args: argparse.Namespace) -> None:
             cost = f"  ${row['cost_usd']:.4f}" if row["cost_usd"] is not None else ""
             model = f"  {row['model']}" if row["model"] else ""
             print(
-                f"{row['station']:<14} {page:<12} {row['station_version']}"
+                f"{row['station']:<14} {page:<12} {row['station_fingerprint']}"
                 f"{model}{cost}  {row['finished_at']}"
             )

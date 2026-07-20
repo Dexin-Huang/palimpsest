@@ -11,13 +11,13 @@ import requests
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 
-REQUEST_HEADERS = {"User-Agent": "palimpsest/1.0 (manuscript research pipeline)"}
+REQUEST_HEADERS = {"User-Agent": "palimpsest manuscript recovery factory"}
 TIMEOUT_SECONDS = 60.0
 
 
 class Acquire(Station):
     name = "acquire"
-    version = "acquire/v1"
+
     grain = "page"
     consumes = ("page_list",)
     produces = "page_image"
@@ -35,7 +35,10 @@ class Acquire(Station):
         out_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
         with requests.get(
-            job.page["url"], stream=True, timeout=TIMEOUT_SECONDS, headers=REQUEST_HEADERS
+            job.page["url"],
+            stream=True,
+            timeout=TIMEOUT_SECONDS,
+            headers=REQUEST_HEADERS,
         ) as response:
             response.raise_for_status()
             with tmp_path.open("wb") as handle:

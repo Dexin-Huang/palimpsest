@@ -40,9 +40,15 @@ PLAN_SCHEMA = {
                 "properties": {
                     "from_page": {"type": "string"},
                     "to_page": {"type": "string"},
-                    "kind": {"type": "string", "enum": [
-                        "hyphenation_repair", "sentence_continuation",
-                        "paragraph_break", "section_break"]},
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "hyphenation_repair",
+                            "sentence_continuation",
+                            "paragraph_break",
+                            "section_break",
+                        ],
+                    },
                     "rationale": {"type": "string"},
                 },
                 "required": ["from_page", "to_page", "kind"],
@@ -56,11 +62,12 @@ PLAN_SCHEMA = {
 
 class Reconstruct(Station):
     name = "reconstruct"
-    version = "reconstruct/v1"
+
     grain = "manuscript"
     consumes = ("page_assembled",)
     produces = "manuscript"
     uses_model = True
+    param_keys = frozenset({"temperature", "max_output_tokens"})
 
     def run(self, job: Job) -> StationResult:
         pages = [
@@ -68,14 +75,16 @@ class Reconstruct(Station):
             for page in job.pages
         ]
         plan_text = "\n\n".join(_page_block(page) for page in pages)
-        plan, response = generate_json(ModelRequest(
-            model=job.config.model,
-            prompt=job.config.prompt.text + "\n\n" + plan_text,
-            temperature=job.config.params.get("temperature", 0.1),
-            max_output_tokens=job.config.params.get("max_output_tokens", 32768),
-            json_output=True,
-            json_schema=PLAN_SCHEMA,
-        ))
+        plan, response = generate_json(
+            ModelRequest(
+                model=job.config.model,
+                prompt=job.config.prompt.text + "\n\n" + plan_text,
+                temperature=job.config.params.get("temperature", 0.1),
+                max_output_tokens=job.config.params.get("max_output_tokens", 32768),
+                json_output=True,
+                json_schema=PLAN_SCHEMA,
+            )
+        )
 
         by_id = {page["page_id"]: page for page in pages}
         order = [page["page_id"] for page in pages]
@@ -85,14 +94,17 @@ class Reconstruct(Station):
         for section in plan.get("sections", []) or [
             {"heading": "Text", "from_page": order[0], "to_page": order[-1]}
         ]:
-            span = order[order.index(section["from_page"]):
-                         order.index(section["to_page"]) + 1]
-            sections.append({
-                "heading": section["heading"],
-                "pages": {"from": section["from_page"], "to": section["to_page"]},
-                "original": _assemble(span, by_id, joins, "original"),
-                "translation": _assemble(span, by_id, joins, "translation"),
-            })
+            span = order[
+                order.index(section["from_page"]) : order.index(section["to_page"]) + 1
+            ]
+            sections.append(
+                {
+                    "heading": section["heading"],
+                    "pages": {"from": section["from_page"], "to": section["to_page"]},
+                    "original": _assemble(span, by_id, joins, "original"),
+                    "translation": _assemble(span, by_id, joins, "translation"),
+                }
+            )
 
         return StationResult(
             payload={
@@ -116,9 +128,7 @@ def _page_block(page: dict) -> str:
     )
 
 
-def _assemble(
-    span: list[str], by_id: dict, joins: dict, side: str
-) -> str:
+def _assemble(span: list[str], by_id: dict, joins: dict, side: str) -> str:
     parts: list[str] = []
     for index, page_id in enumerate(span):
         text = by_id[page_id][side]["text"].strip()

@@ -1,9 +1,7 @@
 """Gemini provider for the gateway.
 
-Owns everything Gemini-specific: client lifecycle, content assembly,
-response-part walking, usage extraction, and transient-error
-classification. The legacy pipeline had five copies of this logic; this is
-the only one.
+Owns Gemini client lifecycle, content assembly, response-part walking, usage
+extraction, and transient-error classification.
 """
 
 from __future__ import annotations
@@ -73,10 +71,14 @@ def generate(request: ModelRequest) -> ModelResponse:
     contents: list = [request.prompt]
     for image in request.images:
         if isinstance(image, ImageContent):
-            contents.append(types.Part.from_bytes(data=image.data, mime_type=image.mime))
+            contents.append(
+                types.Part.from_bytes(data=image.data, mime_type=image.mime)
+            )
         else:
             contents.append(
-                types.Part.from_bytes(data=image.read_bytes(), mime_type=_mime_type(image))
+                types.Part.from_bytes(
+                    data=image.read_bytes(), mime_type=_mime_type(image)
+                )
             )
 
     config_kwargs = _config_kwargs(request)
@@ -89,11 +91,15 @@ def generate(request: ModelRequest) -> ModelResponse:
         )
     except errors.APIError as error:
         transient = getattr(error, "code", None) in _TRANSIENT_STATUS_CODES
-        raise GatewayError(f"Gemini call failed: {error}", transient=transient) from error
+        raise GatewayError(
+            f"Gemini call failed: {error}", transient=transient
+        ) from error
     except RuntimeError as error:
         if "client has been closed" in str(error):
             _reset_client()  # next attempt builds a fresh client
-            raise GatewayError(f"Gemini client closed: {error}", transient=True) from error
+            raise GatewayError(
+                f"Gemini client closed: {error}", transient=True
+            ) from error
         raise
 
     text, finish_reason = _response_text(response, allow_empty=request.allow_empty)
@@ -125,16 +131,21 @@ def _config_kwargs(request: ModelRequest) -> dict:
         config_kwargs["response_mime_type"] = "application/json"
     if request.media_resolution is not None:
         try:
-            config_kwargs["media_resolution"] = _MEDIA_RESOLUTIONS[request.media_resolution]
+            config_kwargs["media_resolution"] = _MEDIA_RESOLUTIONS[
+                request.media_resolution
+            ]
         except KeyError:
             raise GatewayError(f"Unknown media resolution: {request.media_resolution}")
     if request.thinking_budget is not None:
         config_kwargs["thinking_config"] = types.ThinkingConfig(
-            thinking_budget=request.thinking_budget)
+            thinking_budget=request.thinking_budget
+        )
     return config_kwargs
 
 
-def _response_text(response: object, *, allow_empty: bool = False) -> tuple[str, str | None]:
+def _response_text(
+    response: object, *, allow_empty: bool = False
+) -> tuple[str, str | None]:
     finish_reason = None
     text_parts: list[str] = []
     for index, candidate in enumerate(getattr(response, "candidates", None) or []):
