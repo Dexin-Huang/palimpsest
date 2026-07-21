@@ -21,11 +21,17 @@ PAD_FRAC = 0.08
 CANVAS = 64
 
 
-def harvest() -> dict[str, list[dict]]:
+def harvest(alignments: dict[str, dict] | None = None) -> dict[str, list[dict]]:
+    """Harvest from the library's align artifacts, or from alignments
+    computed in memory by a challenger implementation."""
     instances: dict[str, list[dict]] = defaultdict(list)
-    for artifact_path in sorted((DOC / "page_alignment").glob("*.json")):
-        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
-        image = cv2.imread(str(DOC / "page_image_clean" / f"{artifact['page_id']}.jpg"))
+    artifacts = (
+        alignments.values() if alignments is not None else
+        (json.loads(f.read_text(encoding="utf-8"))
+         for f in sorted((DOC / "page_alignment").glob("*.json")))
+    )
+    for artifact in artifacts:
+        image = cv2.imread(str(DOC / "page_image_clean" / f"{artifact['page_id']}.jpg"))  # noqa: E501
         for column in artifact["columns"]:
             for char in column["chars"]:
                 if not char["bbox"] or char["confidence"] < CONFIDENCE_FLOOR:
