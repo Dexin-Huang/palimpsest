@@ -59,3 +59,13 @@ Losers are deleted from the tree; this file is what remains of them.
   approach. Next rungs: higher-res/HOG features, then hierarchical
   re-cluster inside attractors; then cluster-level labeling + document-
   level assignment (cryptogram matching vs transcription).  (open)
+
+- 2026-07-20  separation_sweep  cycle 1: champion swept over 79 folios
+  from all 15 zh docs (raw images, deliberately). Median health 0.25 —
+  the P.3477-tuned champion collapses in the wild. Failure taxonomy from
+  the audit gallery: (1) blank pages segmenting their Vatican watermark
+  (worst folio = watermark ring, health 0.01), (2) Gallica frames/color
+  charts breaking pitch lock, (3) sparse fragments defeating
+  autocorrelation. None are separation defects proper — all are imaging
+  prep. Cycle 2: put the factory's imaging bench (blank gate, deframe,
+  dewatermark) in front of the sweep and re-measure.  (open)
