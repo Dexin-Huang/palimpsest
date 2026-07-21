@@ -35,3 +35,10 @@ Losers are deleted from the tree; this file is what remains of them.
   -> 689 kept vs ~607 real chars after tuning split depth 0.35->0.18 and
   recovery gates. Residual: ~13%% over-segmentation, a few wide recovered
   boxes crossing columns. Before/after in out/refine_report.html.  (open)
+
+- 2026-07-20  char_inventory/lasso  boxes -> ink outlines: per-character
+  polygons from the components clean_crop already keeps (the box was the
+  mask's shadow). 689/689 refined cells outlined on page_0001; polygons
+  stored in out/page_0001_lassos.json; boxes-vs-lassos side-by-side in
+  out/lasso_report.html. SAM refine staged as next challenger — needs
+  torch (not installed; ~2.5GB CPU wheel) + SAM2 weights.  (open)
