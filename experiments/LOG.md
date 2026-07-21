@@ -69,3 +69,14 @@ Losers are deleted from the tree; this file is what remains of them.
   autocorrelation. None are separation defects proper — all are imaging
   prep. Cycle 2: put the factory's imaging bench (blank gate, deframe,
   dewatermark) in front of the sweep and re-measure.  (open)
+
+- 2026-07-20  shape_prior  the language prior: match blobs against all
+  20,992 CJK glyphs (Kai font) + Latin negative model, likelihood-ratio
+  gate. Raw score: no separation (everything matches something in 21k).
+  Margin (CJK minus Latin): watermark kill 8%->40% at 95% manuscript
+  retention — real but not clean. Weak labels ~3/16 correct (雨, 在 —
+  distinctive silhouettes; dense chars miss but preserve radical
+  structure: 陽->漢, 浮->溝). CONVERGENT FINDING: clustering attractors,
+  gate overlap, and label misses all share one root cause — the blurred
+  32px density feature. One upgrade (gradient/HOG features or tiny
+  self-supervised embedding), three scoreboards to prove it on.  (open)
