@@ -22,3 +22,9 @@ Losers are deleted from the tree; this file is what remains of them.
   clean; purity 1.9% — binding, not hygiene, remains the blocker.
   Ground-truth page regenerated with raw+cleaned columns.  (folded into
   m2 candidate)
+
+- 2026-07-20  char_inventory  segmentation-first: emit every geometry
+  cell as an unlabeled crop, no transcription involved. 1,959 locations
+  (347 junk-gated); pages 0000/0001 clean, page_0002 over-segments
+  (glosses/damage). Locations and labels are now decoupled — labeling
+  becomes its own swappable step.  (open)
