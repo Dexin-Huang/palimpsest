@@ -28,3 +28,10 @@ Losers are deleted from the tree; this file is what remains of them.
   (347 junk-gated); pages 0000/0001 clean, page_0002 over-segments
   (glosses/damage). Locations and labels are now decoupled — labeling
   becomes its own swappable step.  (open)
+
+- 2026-07-20  char_inventory/refine  three segmentation fixes on one page
+  (page_0001, judged on full-page overlay): valley-split tall cells,
+  recover glyph-tall inky gaps, drop margin ghosts. 589 -> 766 (greedy)
+  -> 689 kept vs ~607 real chars after tuning split depth 0.35->0.18 and
+  recovery gates. Residual: ~13%% over-segmentation, a few wide recovered
+  boxes crossing columns. Before/after in out/refine_report.html.  (open)
