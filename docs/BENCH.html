@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Bench — Palimpsest's experiment loop</title>
+<style>
+  :root {
+    --paper: #faf7f0; --card: #ffffff; --ink: #2b2620; --faded: #6b6257;
+    --line: #d9d2c4; --accent: #8a4b2d; --accent-soft: #f3e6dd;
+    --good: #3d6b35; --mono: "Consolas", "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font: 17px/1.65 Charter, Georgia, "Times New Roman", serif;
+    padding: 3.5rem 1.5rem 5rem;
+  }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { font-size: 2.1rem; font-weight: 600; letter-spacing: -0.01em; }
+  .kicker {
+    font: 600 0.78rem/1 var(--mono); letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 0.8rem;
+  }
+  .lede { font-size: 1.12rem; color: var(--faded); margin: 1rem 0 0; }
+  h2 {
+    font-size: 1.35rem; font-weight: 600; margin: 3rem 0 0.9rem;
+    padding-top: 2.2rem; border-top: 1px solid var(--line);
+  }
+  h3 { font-size: 1.02rem; font-weight: 600; margin: 1.6rem 0 0.4rem; }
+  p { margin: 0.8rem 0; }
+  code {
+    font: 0.86em var(--mono); background: var(--accent-soft);
+    padding: 0.1em 0.35em; border-radius: 4px;
+  }
+  pre {
+    background: var(--ink); color: #efe9dd; border-radius: 10px;
+    padding: 1rem 1.2rem; overflow-x: auto; margin: 1.1rem 0;
+    font: 0.82rem/1.6 var(--mono);
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 1.2rem 0;
+    font-size: 0.92rem; background: var(--card); border-radius: 10px;
+  }
+  th, td { text-align: left; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 0.75rem/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faded); }
+  tr:last-child td { border-bottom: none; }
+  .rule {
+    background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0; padding: 0.9rem 1.2rem; margin: 1rem 0;
+  }
+  .rule b { font-variant: small-caps; letter-spacing: 0.03em; }
+  figure { margin: 1.6rem 0; }
+  figcaption { font-size: 0.85rem; color: var(--faded); margin-top: 0.5rem; text-align: center; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.9rem; margin: 1.2rem 0; }
+  .col {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem;
+  }
+  .col .n {
+    display: inline-block; font: 600 0.72rem/1.6 var(--mono); color: var(--accent);
+    letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.3rem;
+  }
+  .col p { font-size: 0.92rem; margin: 0.3rem 0 0; color: var(--faded); }
+  .col b { color: var(--ink); }
+  footer { margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--faded); }
+  em { font-style: italic; }
+  .ok { color: var(--good); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <div class="kicker">Palimpsest · design note</div>
+  <h1>The Bench</h1>
+  <p class="lede">How a module leaves the production line, gets experimented on,
+  proves itself against a number, and is bolted back in — or deleted.
+  The lab is not a place; it is a loop with a gate.</p>
+
+  <h2>The premise</h2>
+  <p>The factory's production line is deliberately rigid: stations communicate
+  only through fingerprinted artifacts, every artifact declares its contract,
+  and the conductor re-runs exactly what a change makes stale. That rigidity is
+  what makes experimentation <em>safe</em> — a module boundary is a socket, and
+  anything that honors the contract can sit in it. Swapping the emendation
+  executor from one agent harness to another changed zero lines of
+  architecture; that was the proof.</p>
+  <p>The bench turns that property into a workflow. Three pieces: the
+  <b>socket</b>, the <b>fixtures</b>, and the <b>promotion gate</b>.</p>
+
+  <figure>
+  <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The bench loop: a module is unplugged from the production line, candidates run against fixtures, the scoreboard decides, winner promoted or candidate deleted." style="width:100%;height:auto">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+      <path d="M1.5 1L8.5 5L1.5 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round"/></marker></defs>
+    <rect x="20" y="22" width="640" height="64" rx="10" fill="#ffffff" stroke="#d9d2c4"/>
+    <text x="40" y="45" font-family="Consolas,monospace" font-size="11" fill="#8a4b2d" letter-spacing="2">PRODUCTION LINE</text>
+    <text x="40" y="68" font-family="Charter,Georgia,serif" font-size="15" fill="#2b2620">… → read → <tspan font-weight="700">align</tspan> → translate → …   each boundary a contracted artifact</text>
+    <path d="M340 86 V128" fill="none" stroke="#8a4b2d" stroke-width="1.6" marker-end="url(#a)"/>
+    <text x="352" y="112" font-family="Charter,Georgia,serif" font-size="13" fill="#6b6257" font-style="italic">unplug: the contract stays behind</text>
+    <rect x="60" y="132" width="270" height="118" rx="10" fill="#ffffff" stroke="#d9d2c4"/>
+    <text x="80" y="156" font-family="Consolas,monospace" font-size="11" fill="#8a4b2d" letter-spacing="2">BENCH</text>
+    <text x="80" y="180" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">frozen fixtures · incumbent</text>
+    <text x="80" y="202" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">+ candidates loaded by path</text>
+    <text x="80" y="230" font-family="Consolas,monospace" font-size="12" fill="#6b6257">experiments/&lt;idea&gt;/candidate.py</text>
+    <path d="M330 190 H388" fill="none" stroke="#8a4b2d" stroke-width="1.6" marker-end="url(#a)"/>
+    <rect x="392" y="132" width="228" height="118" rx="10" fill="#ffffff" stroke="#d9d2c4"/>
+    <text x="412" y="156" font-family="Consolas,monospace" font-size="11" fill="#8a4b2d" letter-spacing="2">SCOREBOARD</text>
+    <text x="412" y="182" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">the module's own metric,</text>
+    <text x="412" y="203" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">same fixtures, no debate</text>
+    <text x="412" y="230" font-family="Charter,Georgia,serif" font-size="13" fill="#3d6b35" font-weight="600">wins → promote in place</text>
+    <path d="M506 250 V282 H340" fill="none" stroke="#6b6257" stroke-width="1.4" stroke-dasharray="4 3"/>
+    <path d="M340 282 H180 V254" fill="none" stroke="#6b6257" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a)"/>
+    <text x="252" y="274" font-family="Charter,Georgia,serif" font-size="13" fill="#6b6257" font-style="italic">loses → deleted; one line in the log</text>
+  </svg>
+  <figcaption>The loop. The production line never sees a candidate that
+  hasn't beaten the incumbent on the scoreboard.</figcaption>
+  </figure>
+
+  <h2>1 · The socket</h2>
+  <p>A module's interface is <em>one callable and one artifact contract</em> —
+  nothing more. <code>align</code> is anything that maps
+  <code>(image, lines) → page_alignment</code>. An emendation executor is
+  anything that satisfies the <code>AgentRun</code> contract. A future glyph
+  generator is anything that maps <code>exemplars → glyph images</code>, tier-stamped.
+  There is no plugin framework, no strategy registry, no abstract base
+  hierarchy: the artifact contract <em>is</em> the abstraction, and it already
+  exists because stations only talk through artifacts.</p>
+  <div class="rule"><b>house rule.</b> One implementation in the tree at a
+  time. An interface with one implementation is scaffolding, not architecture —
+  the socket earns a second implementation only for the duration of an
+  experiment, and the experiment ends with one implementation again.</div>
+
+  <h2>2 · The fixtures and the scoreboard</h2>
+  <p>Every module owns a frozen fixture set — real inputs snapshotted from the
+  library — and a deterministic metric. Experiments run incumbent and
+  candidates against the <em>same</em> fixtures and render one table. For
+  model-backed modules the scoreboard adds the blind pairwise judge; for pure
+  code it is numbers alone, and costs nothing.</p>
+  <pre><code># the shape of every experiment
+factory bench align \
+    --candidate experiments/hough_columns/candidate.py
+# → scoreboard: incumbent vs candidate, per fixture, one metric</code></pre>
+  <p>Candidates are loaded <em>by path</em>. They live in
+  <code>experiments/</code>, outside the package; the production tree is never
+  touched until promotion. Three rival ideas are three directories, all
+  runnable in one command, none of them contaminating the line.</p>
+
+  <table>
+    <tr><th>module</th><th>fixture</th><th>metric at the gate</th></tr>
+    <tr><td><code>align</code></td><td>P.3477, three pages + transcriptions</td>
+        <td>characters boxed %, count-mismatch columns — visually audited once, defended by CI after</td></tr>
+    <tr><td><code>read</code> decoding</td><td>pilot pages per lane</td>
+        <td>contamination, repetition, volume + blind judge</td></tr>
+    <tr><td><code>seams</code></td><td>the recorded seam variant pairs</td>
+        <td>golden trims: exact lines dropped, none lost</td></tr>
+    <tr><td>emend executor / skill</td><td>staged evidence workspaces</td>
+        <td>apparatus coverage (hard gate) + reference-point scorecard</td></tr>
+    <tr><td>glyph generation <em>(future)</em></td><td>exemplar library, held-out characters</td>
+        <td>generate held-out chars, score against the real ink</td></tr>
+  </table>
+
+  <div class="rule"><b>boundary.</b> The bench measures <em>modules against
+  fixtures</em>; <code>evaluate</code> measures <em>whole-line output against
+  references</em>. Keep them separate — a module-level win that does not
+  survive line-level evaluation is how an over-fitted part sneaks onto a
+  production line.</div>
+
+  <h2>3 · The promotion gate</h2>
+  <p>A candidate that beats the incumbent is promoted <em>in place</em>: its
+  code replaces the incumbent's, the suite and golden fixtures run, and one
+  commit carries the scoreboard in its message. Then the experiment directory
+  is deleted. Losers are deleted too, immediately.</p>
+  <p>Git is the only version store. There are no <code>_v2</code> files, no
+  commented-out alternatives, no "old approach kept just in case" — a worse
+  implementation held in the tree contaminates every future reading of the
+  code. What survives a losing experiment is one line in
+  <code>experiments/LOG.md</code>:</p>
+  <pre><code>2026-07-20  align/columns   Hough-transform column detection
+            lost to projection profile: 61% vs 86% boxed. Deleted.</code></pre>
+  <p>That line is the lab notebook. "We tried that in July and it lost by 25
+  points" is knowledge worth one sentence — and no more than one sentence.</p>
+
+  <h2>The loop, proven before it was named</h2>
+  <p>The bench codifies a practice, not a plan. Each of these ran the full
+  loop by hand before the harness existed:</p>
+  <table>
+    <tr><th>experiment</th><th>gate</th><th>verdict</th></tr>
+    <tr><td>read decoding: temp 0.7/no-thinking vs 0.1/thinking (zh)</td>
+        <td>deterministic metrics + blind judge</td>
+        <td class="ok">promoted — per-lane decoding, seam variance gone</td></tr>
+    <tr><td>emend executor ladder: five models, two harnesses</td>
+        <td>12-point reference scorecard</td>
+        <td class="ok">promoted — frontier dossier + light emender</td></tr>
+    <tr><td>reference dossier vs solo emender</td>
+        <td>same scorecard, A/B</td>
+        <td class="ok">promoted — dossier doubled the light model's score</td></tr>
+    <tr><td>ink-primacy rule</td>
+        <td>re-run on the contaminated fixture</td>
+        <td class="ok">promoted — one surgical ink-cited emendation</td></tr>
+    <tr><td>align glyph scale: blob heights vs column-pitch autocorrelation</td>
+        <td>boxed % + visual audit</td>
+        <td class="ok">promoted — and the "100% boxed" mirage retired</td></tr>
+  </table>
+  <p>The mirage in the last row is the reason the bench insists on audited
+  metrics: the first align prototype scored perfectly by matching stroke
+  fragments. A metric is only a gate after it has been checked against the
+  ink once. Fixtures make that check permanent.</p>
+
+  <h2>Changing a tire, end to end</h2>
+  <p>The glyph-generation module, walked through the whole cycle:</p>
+  <div class="cols">
+    <div class="col"><span class="n">unplug</span>
+      <p><b>Socket:</b> <code>generate(char, exemplars) → glyph</code>.
+      Fixture: the exemplar library; hold out attested characters.</p></div>
+    <div class="col"><span class="n">experiment</span>
+      <p><b>Candidates:</b> few-shot image-model call vs a fine-tuned
+      font-generation model — each a directory under
+      <code>experiments/</code>.</p></div>
+    <div class="col"><span class="n">measure</span>
+      <p><b>Scoreboard:</b> generate the held-out characters, score against
+      the scribe's real ink. One number per candidate, per manuscript.</p></div>
+    <div class="col"><span class="n">send it back</span>
+      <p><b>Promote</b> the winner into the recipe slot; scoreboard in the
+      commit; delete the rest. The line never noticed.</p></div>
+  </div>
+
+  <footer>Palimpsest · The Bench · design note, July 2026. Companion to
+  <code>docs/FACTORY.md</code> (the line), <code>docs/CONTRACTS.md</code>
+  (the sockets, generated from code), and <code>docs/GLYPHS.md</code>
+  (the first module built bench-first).</footer>
+</main>
+</body>
+</html>
