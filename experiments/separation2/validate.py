@@ -47,8 +47,10 @@ def corpus_of(doc: str) -> str:
 def health(metrics: dict) -> float:
     if metrics.get("blank"):
         return 1.0
-    found = metrics["kept"] + metrics.get("junked", 0) + metrics.get("prior_killed", 0)
-    junk_share = (metrics.get("junked", 0) + metrics.get("prior_killed", 0)) / max(1, found)
+    # gate rejections are the pipeline working, not defects: penalize only
+    # clean_crop junk (same semantics as the baseline's junk_rate)
+    junk_share = metrics.get("junked", 0) / max(
+        1, metrics["kept"] + metrics.get("junked", 0))
     pitch = 1.0 if metrics.get("pitch_found") else 0.6
     return metrics["size_consistency"] * (1 - junk_share) * pitch
 

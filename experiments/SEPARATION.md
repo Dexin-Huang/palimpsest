@@ -48,8 +48,10 @@ visual audit on worst folio → promote in place or delete → LOG entry.
 
 | Rung | Cost | Status |
 |---|---|---|
-| CV incumbent (projection + DTW + refine + lasso) | zero | champion; 689 cells vs ~607 on p1 |
-| GrabCut, mask-seeded hybrid | zero | next challenger — faint-char recovery |
+| separation2: prep + geometry + v2 features + language-prior gate | zero | CHAMPION — 0.14->0.23 median on frozen set, all corpora up |
+| CV incumbent (projection + DTW + refine + lasso) | zero | superseded baseline |
+| light-backdrop frame detection (Gallica/IDP) | zero | next challenger — biggest named lever |
+| GrabCut, mask-seeded hybrid | zero | staged — faint-char recovery |
 | Marker watershed for touching chars | zero | staged |
 | MobileSAM/EdgeSAM via onnxruntime | ~50MB | only if zero-byte rungs stall |
 | Tiny trained detector (synthetic hand-font data + gold set) | training | end state at corpus scale |

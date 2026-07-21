@@ -80,3 +80,16 @@ Losers are deleted from the tree; this file is what remains of them.
   gate overlap, and label misses all share one root cause — the blurred
   32px density feature. One upgrade (gradient/HOG features or tiny
   self-supervised embedding), three scoreboards to prove it on.  (open)
+
+- 2026-07-20  separation2  the integrated approach, validated on the
+  frozen 28-folio test set (manifest v1, 16 docs, 4 corpora): imaging
+  prep (factory bench + blank gate) + champion geometry + v2 gradient
+  features (75.1->79.7% retrieval self-test) + CJK-vs-Latin ratio gate
+  (40->62% watermark kill @ 95% retention). Median health per corpus:
+  borg_cin 0.31->0.34, estr_or 0.22->0.48, gallica 0.10->0.12, idp
+  0.10->0.12, ALL 0.14->0.23. Validation exposed two named defects for
+  the next cycle: (1) health metric initially punished the prior gate's
+  own rejections (fixed — gate rejections are the pipeline working);
+  (2) parchment_frame assumes dark backdrop, so Gallica/IDP light-gray
+  frames evade prep — the single biggest remaining lever.  (promoted to
+  lab champion; external-SOTA claim awaits M5HisDoc benchmark run)
