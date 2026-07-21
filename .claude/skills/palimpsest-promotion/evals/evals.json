@@ -1,0 +1,17 @@
+{
+  "skill_name": "palimpsest-promotion",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "The read development report says my challenger is better. Promote it to latin_manuscript and rerun production.",
+      "expected_output": "Checks the canonical report and suite authorization, blocks promotion from the checked-in non-authorizing development suite, does not invent qualification or approval, leaves the recipe and production unchanged, and identifies the exact next evidence gate.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "A qualified candidate was promoted yesterday, but today's books regress. Roll it back safely.",
+      "expected_output": "Resolves the exact promotion, current candidate, prior candidate, recipe hash, history root, and explicit human approval; appends an inverse rollback through compare-and-swap; preserves original history; explicitly refreshes only intended manuscripts; verifies book, EPUB, and site outputs.",
+      "files": []
+    }
+  ]
+}

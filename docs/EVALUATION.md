@@ -14,6 +14,11 @@ runtime. [`CONTRACTS.md`](CONTRACTS.md) remains the generated source of truth
 for live artifact and logical station shapes. This document is the normative
 design and operator contract for the implemented improvement plane.
 
+For step-by-step manuscript, experiment, recovery, promotion, rollback, and
+release procedures, use the canonical
+[`OPERATIONS.md`](OPERATIONS.md) runbook. This document defines why those gates
+exist and the records they enforce.
+
 ## 1. Purpose
 
 The factory must answer two different questions:

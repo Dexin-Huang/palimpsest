@@ -140,6 +140,30 @@ site/index.html
 
 Run `python -m palimpsest <command> --help` for command-specific options.
 
+## Operating protocols
+
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md) is the canonical runbook for
+day-to-day work: manuscript operations, new experiments, candidate and suite
+versioning, interrupted-run recovery, promotion, production refresh, rollback,
+benchmark governance, and release verification. Use it when deciding what
+record to create and which gate comes next; use
+[`docs/EVALUATION.md`](docs/EVALUATION.md) for the underlying evaluation
+contracts.
+
+Repository-aware coding sessions should use the source-controlled project
+skills under `.claude/skills/`:
+
+| Skill | Use it for |
+|---|---|
+| `palimpsest-experiment` | Design, initialize, run, resume, or review one bounded station experiment |
+| `palimpsest-production-ops` | Intake, adopt, run, refresh, recover, publish, and inspect manuscripts |
+| `palimpsest-promotion` | Qualification, proposal, canary, promotion, explicit production refresh, and rollback |
+| `palimpsest-station-development` | Station variants, new transformations, artifact contracts, and implementation fingerprints |
+
+The skills encode procedure and safety boundaries; the runbook and live
+contracts remain the sources of truth. Invoke a skill explicitly when intent
+could span experiment, production, and promotion boundaries.
+
 ## Swappable seams
 
 ### Recipes
@@ -240,7 +264,8 @@ docs/
   FACTORY.md                architecture and invariants
   CONTRACTS.md              generated live graph
   GLYPHS.md                 alignment and glyph-system design
-  EVALUATION.md             evaluation, candidate, promotion, and rollback blueprint
+  EVALUATION.md             evaluation and promotion contracts
+  OPERATIONS.md             canonical operator and experiment runbook
 ```
 
 Generated images, model artifacts, books, runs, the ledger, and the static site

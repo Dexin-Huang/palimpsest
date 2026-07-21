@@ -1,0 +1,17 @@
+{
+  "skill_name": "palimpsest-production-ops",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I changed the read model in the Latin manuscript recipe. Make all existing manuscripts use it now.",
+      "expected_output": "Inspects whether the recipe change was authorized, refuses silent or bulk paid reruns, routes unqualified behavior through experiment and promotion, and only after authorization uses explicit per-document --refresh read followed by status and terminal-product checks.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "The workspace for vat_pal_lat_1199 already has metadata.json and page_list.json. Put it on the line, run it, and tell me where the EPUB is.",
+      "expected_output": "Uses adopt rather than intake, resolves the intended recipe instead of overwriting source records, runs or resumes through the conductor, inspects status, and reports the canonical book and EPUB paths without deleting existing artifacts or editing ledger state.",
+      "files": []
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "skill_name": "palimpsest-experiment",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want a new engineering agent to test a revised Chinese read prompt on the Vatican Borg. cin. 361 f004r case. Set up the experiment, but do not spend more than $1 and do not touch production.",
+      "expected_output": "Resolves the actual read baseline, suite, case, and prompt paths; creates an isolated engineer worktree launch and bounded brief; preserves existing records; verifies before a paid development run; sets a finite $1 ceiling; prohibits recipe edits, promotion, refresh, commit, and push; returns the report-oriented handoff.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "My Palimpsest benchmark process died after two cases. I edited the challenger prompt afterward. Can the agent resume the same run and continue?",
+      "expected_output": "Explains that changed prompt content changes candidate/run identity, preserves the partial run, refuses resume and checkpoint deletion, requires a new candidate version and run ID, and distinguishes this from a valid identical-identity resume.",
+      "files": []
+    }
+  ]
+}

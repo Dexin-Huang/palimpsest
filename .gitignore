@@ -13,7 +13,17 @@ build/
 dist/
 
 # Local tooling
-.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/palimpsest-experiment/
+!.claude/skills/palimpsest-experiment/**
+!.claude/skills/palimpsest-production-ops/
+!.claude/skills/palimpsest-production-ops/**
+!.claude/skills/palimpsest-promotion/
+!.claude/skills/palimpsest-promotion/**
+!.claude/skills/palimpsest-station-development/
+!.claude/skills/palimpsest-station-development/**
 .playwright-cli/
 .labyrinth/
 
