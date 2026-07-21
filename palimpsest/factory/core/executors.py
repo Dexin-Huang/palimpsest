@@ -26,9 +26,20 @@ DEFAULT_TIMEOUT_SECONDS = 1800.0
 class CellExecutionError(RuntimeError):
     """A cell failed in a worker; ``kind`` is the original exception type."""
 
-    def __init__(self, kind: str, message: str) -> None:
+    def __init__(
+        self,
+        kind: str,
+        message: str,
+        *,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        cost_usd: float | None = None,
+    ) -> None:
         super().__init__(message)
         self.kind = kind
+        self.tokens_in = tokens_in
+        self.tokens_out = tokens_out
+        self.cost_usd = cost_usd
 
 
 class InlineExecutor:
@@ -59,6 +70,9 @@ class SubprocessExecutor:
                 message=error.get("message")
                 or completed.stderr.strip()
                 or f"cell worker exited {completed.returncode}",
+                tokens_in=error.get("tokens_in"),
+                tokens_out=error.get("tokens_out"),
+                cost_usd=error.get("cost_usd"),
             )
         return CellOutcome.from_json(completed.stdout)
 

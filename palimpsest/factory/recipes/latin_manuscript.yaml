@@ -1,45 +1,43 @@
 name: latin_manuscript
 language: la
 line:
-  page:
-    - station: acquire
-    - station: deframe
-    - station: dewatermark
-    - station: flatten
-      mode: attenuate
-    - station: segment
-      # full-page-first: continuous reads preserve the context that makes
-      # dense transcription accurate (blind-judge finding, 2026-07-10);
-      # tiles remain the automatic escalation for truncated reads and the
-      # blank/figure machinery stays
-      full_page_max_lines: 999
-      full_page_max_regions: 99
-    - station: read
-      model: ${PALIMPSEST_MODEL_VISION}
-      prompt: read/la/diplomatic
-      # temperature 0.7: dense abbreviated script traps low-temperature
-      # decoding in placeholder loops; thinking off keeps deliberation out
-      # of the transcription channel
-      params: { temperature: 0.7, media_resolution: high,
-                max_output_tokens: 32768, thinking_budget: 0 }
-    - station: translate
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: translate/la/with_brief
-      overlap: 1
-    - station: assemble_page
-  manuscript:
-    - station: survey
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: survey/generic/brief
-    - station: reconstruct
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: reconstruct/generic/structure
-    - station: reference
-      model: gpt-5.6-sol
-      prompt: reference/generic/identify
-    - station: emend
-      model: gpt-5.6-luna
-      prompt: emend/generic/agent
-    - station: publish
-      original_language: la
-    - station: render_epub
+  - station: acquire
+  - station: deframe
+  - station: dewatermark
+  - station: flatten
+    mode: attenuate
+  - station: segment
+    # full-page-first: continuous reads preserve the context that makes
+    # dense transcription accurate (blind-judge finding, 2026-07-10);
+    # tiles remain the automatic escalation for truncated reads and the
+    # blank/figure machinery stays
+    full_page_max_lines: 999
+    full_page_max_regions: 99
+  - station: read
+    model: ${PALIMPSEST_MODEL_VISION}
+    prompt: read/la/diplomatic
+    # temperature 0.7: dense abbreviated script traps low-temperature
+    # decoding in placeholder loops; low thinking minimizes reasoning cost
+    # without asking Gemini 3 Pro to perform an unsupported full disable
+    params: { temperature: 0.7, media_resolution: low,
+              max_output_tokens: 32768, thinking_level: low }
+  - station: survey
+    model: ${PALIMPSEST_MODEL_READING}
+    prompt: survey/generic/brief
+  - station: translate
+    model: ${PALIMPSEST_MODEL_READING}
+    prompt: translate/la/with_brief
+    overlap: 1
+  - station: assemble_page
+  - station: reconstruct
+    model: ${PALIMPSEST_MODEL_READING}
+    prompt: reconstruct/generic/structure
+  - station: reference
+    model: gpt-5.6-sol
+    prompt: reference/generic/identify
+  - station: emend
+    model: gpt-5.6-luna
+    prompt: emend/generic/agent
+  - station: publish
+    original_language: la
+  - station: render_epub

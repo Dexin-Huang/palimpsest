@@ -73,12 +73,12 @@ def ink_masks(gray: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     # parchment texture/JPEG speckle: too small to be writing at this scale
     min_area = max(6, int((min(h, w) * 0.002) ** 2))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(light)
-    faint = np.zeros_like(light)
+    keep = np.zeros(n, dtype=np.uint8)
     for i in range(1, n):
-        _, _, bw, bh, area = stats[i]
+        _, _, _, bh, area = stats[i]
         if bh <= max_height and area >= min_area:
-            faint[labels == i] = 255
-    return dark, faint
+            keep[i] = 255
+    return dark, keep[labels]
 
 
 def remove_overlay_marks(
@@ -166,7 +166,7 @@ def attenuate_light_marks(
     Show-through and residue fade; ink is untouched; nothing is thresholded
     away — a faint-but-real stroke dims instead of disappearing.
     """
-    gray = to_gray(image).astype(np.float32)
+    gray = to_gray(image)
     cut = background_level(gray) - ink_offset
     lighter = gray > cut  # 2-D mask broadcasts over color channels
     result = image.astype(np.float32)

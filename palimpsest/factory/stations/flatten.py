@@ -11,8 +11,6 @@ Modes (recipe option ``mode``):
 
 from __future__ import annotations
 
-import cv2
-
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.imaging import (
@@ -20,6 +18,7 @@ from palimpsest.factory.imaging import (
     encode_jpeg,
     flatten_illumination,
 )
+from palimpsest.factory.stations.image_input import load_image
 from palimpsest.factory.workspace.io import atomic_write_bytes
 
 MODES = ("none", "flatten", "attenuate")
@@ -43,9 +42,7 @@ class Flatten(Station):
             atomic_write_bytes(self.output_path(job), source.read_bytes())
             return StationResult()
 
-        image = cv2.imread(str(source))
-        if image is None:
-            raise ValueError(f"Unreadable image: {source}")
+        image = load_image(job, "page_image_unmarked")
         result = flatten_illumination(image)
         if mode == "attenuate":
             result = attenuate_light_marks(

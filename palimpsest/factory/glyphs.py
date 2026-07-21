@@ -56,9 +56,16 @@ def align_page(image: np.ndarray, lines: list[str]) -> dict:
     """Bind transcription lines (columns, right-to-left) to ink. Returns the
     page_alignment payload body: columns + stats."""
     mask = binarize(image)
+    char_lines = [_ink_chars(line) for line in lines]
+    if not char_lines:
+        return {"columns": [], "stats": _stats([], [], 0)}
     rough = ink_blobs(mask)
-    if not rough or not lines:
-        return {"columns": [], "stats": _stats(lines, [], 0)}
+    if not rough:
+        out_columns = [
+            _column_payload([(ch, None, 0.0, "none") for ch in chars])
+            for chars in char_lines
+        ]
+        return {"columns": out_columns, "stats": _stats(char_lines, out_columns, 0)}
     # glyph scale from the page's strongest periodic signal — the column
     # pitch — not from blob heights (strokes masquerade as tiny glyphs)
     pitch = _column_pitch(mask)
@@ -77,7 +84,6 @@ def align_page(image: np.ndarray, lines: list[str]) -> dict:
 
     # image columns right-to-left; transcription lines in reading order
     columns.sort(key=lambda col: -max(c.x1 for c in col))
-    char_lines = [_ink_chars(line) for line in lines]
     paired = list(zip(columns, char_lines))
 
     out_columns = []
@@ -214,50 +220,57 @@ def align_column(
     char may be skipped (damage), a cell may be skipped (noise/unread ink)."""
     n, m = len(cells), len(chars)
     skip_char, skip_cell = 1.0, 0.9
-    INF = float("inf")
-    cost = np.full((n + 1, m + 1), INF)
-    move: dict[tuple[int, int], tuple[int, int, str]] = {}
+    infinity = float("inf")
+    cost = np.full((n + 1, m + 1), infinity)
+    # consumed cells identify the three moves without stringly operation names:
+    # -1 skips ink, 0 marks a missing character, 1..MERGE_MAX match ink.
+    previous: dict[tuple[int, int], tuple[int, int, int]] = {}
     cost[0][0] = 0.0
+
+    def advance(
+        i: int, j: int, next_i: int, next_j: int, candidate: float, consumed: int
+    ) -> None:
+        if candidate < cost[next_i][next_j]:
+            cost[next_i][next_j] = candidate
+            previous[(next_i, next_j)] = (i, j, consumed)
+
     for i in range(n + 1):
         for j in range(m + 1):
             here = cost[i][j]
-            if here == INF:
+            if here == infinity:
                 continue
-            if j < m and here + skip_char < cost[i][j + 1]:
-                cost[i][j + 1] = here + skip_char
-                move[(i, j + 1)] = (i, j, "skip_char")
-            if i < n and here + skip_cell < cost[i + 1][j]:
-                cost[i + 1][j] = here + skip_cell
-                move[(i + 1, j)] = (i, j, "skip_cell")
             if j < m:
-                fused = None
-                for k in range(1, _MERGE_MAX + 1):
-                    if i + k > n:
-                        break
-                    fused = fused.fuse(cells[i + k - 1]) if fused else cells[i]
-                    c = here + _match_cost(fused, glyph_h) + (0.15 * (k - 1))
-                    if c < cost[i + k][j + 1]:
-                        cost[i + k][j + 1] = c
-                        move[(i + k, j + 1)] = (i, j, f"match{k}")
-    # walk back
-    out: list[tuple[str, list[int] | None, float, str]] = []
+                advance(i, j, i, j + 1, here + skip_char, 0)
+            if i < n:
+                advance(i, j, i + 1, j, here + skip_cell, -1)
+            if j == m:
+                continue
+
+            fused = None
+            for consumed in range(1, min(_MERGE_MAX, n - i) + 1):
+                fused = fused.fuse(cells[i + consumed - 1]) if fused else cells[i]
+                candidate = here + _match_cost(fused, glyph_h) + 0.15 * (consumed - 1)
+                advance(i, j, i + consumed, j + 1, candidate, consumed)
+
+    aligned: list[tuple[str, list[int] | None, float, str]] = []
     i, j = n, m
     while (i, j) != (0, 0):
-        pi, pj, op = move[(i, j)]
-        if op == "skip_char":
-            out.append((chars[pj], None, 0.0, "none"))
-        elif op.startswith("match"):
-            k = int(op[5:])
-            fused = cells[pi]
-            for extra in range(1, k):
-                fused = fused.fuse(cells[pi + extra])
+        previous_i, previous_j, consumed = previous[(i, j)]
+        if consumed == 0:
+            aligned.append((chars[previous_j], None, 0.0, "none"))
+        elif consumed > 0:
+            fused = cells[previous_i]
+            for extra in range(previous_i + 1, i):
+                fused = fused.fuse(cells[extra])
             fit = _match_cost(fused, glyph_h)
             confidence = max(0.05, 1.0 - fit)
-            method = "blob" if k == 1 else "merged"
-            out.append((chars[pj], fused.bbox(), round(confidence, 3), method))
-        i, j = pi, pj
-    out.reverse()
-    return out
+            method = "blob" if consumed == 1 else "merged"
+            aligned.append(
+                (chars[previous_j], fused.bbox(), round(confidence, 3), method)
+            )
+        i, j = previous_i, previous_j
+    aligned.reverse()
+    return aligned
 
 
 def _match_cost(cell: Cell, glyph_h: float) -> float:

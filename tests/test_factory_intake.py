@@ -92,14 +92,113 @@ def test_v3_manifest_uses_image_body_when_service_is_absent():
     assert page_list["pages"][0]["url"] == "https://archive.test/page-2.jpg"
 
 
+def test_info_json_service_builds_image_request_and_preserves_query():
+    manifest = {
+        "type": "Manifest",
+        "items": [
+            {
+                "id": "canvas-3",
+                "type": "Canvas",
+                "items": [
+                    {
+                        "items": [
+                            {
+                                "body": {
+                                    "type": "Image",
+                                    "service": [
+                                        {
+                                            "id": "https://archive.test/iiif/3/info.json?token=x"
+                                        }
+                                    ],
+                                }
+                            }
+                        ]
+                    }
+                ],
+            }
+        ],
+    }
+
+    _, page_list = build_records(
+        "test_codex",
+        "https://archive.test/manifest",
+        manifest,
+        image_size=1200,
+    )
+
+    assert (
+        page_list["pages"][0]["url"]
+        == "https://archive.test/iiif/3/full/1200,/0/default.jpg?token=x"
+    )
+
+
+def test_write_records_rejects_cross_document_payloads(tmp_path):
+    manifest = {
+        "sequences": [
+            {
+                "canvases": [
+                    {
+                        "images": [
+                            {
+                                "resource": {
+                                    "@id": "https://archive.test/page.jpg",
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+    metadata, page_list = build_records(
+        "test_codex", "https://archive.test/manifest", manifest
+    )
+    page_list["doc_id"] = "other_codex"
+
+    with pytest.raises(ValueError, match="page_list doc_id"):
+        write_records("test_codex", metadata, page_list, library_root=tmp_path)
+    assert not (tmp_path / "test_codex").exists()
+
+
+def test_invalid_doc_id_is_rejected_before_manifest_parsing():
+    with pytest.raises(ValueError, match="lowercase ASCII"):
+        build_records("Bad/Id", "https://archive.test/manifest", {})
+
+
+def test_atomic_write_failure_leaves_no_partial_source_record(tmp_path, monkeypatch):
+    manifest = {
+        "items": [
+            {
+                "type": "Canvas",
+                "items": [
+                    {"items": [{"body": {"id": "https://archive.test/page.jpg"}}]}
+                ],
+            }
+        ]
+    }
+    metadata, page_list = build_records(
+        "test_codex", "https://archive.test/manifest", manifest
+    )
+
+    def fail_replace(source, destination):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr("palimpsest.factory.workspace.io.os.replace", fail_replace)
+    with pytest.raises(OSError, match="disk unavailable"):
+        write_records("test_codex", metadata, page_list, library_root=tmp_path)
+
+    doc_root = tmp_path / "test_codex"
+    assert doc_root.exists()
+    assert list(doc_root.iterdir()) == []
+
+
 def test_recipe_rejects_unknown_station_options(tmp_path):
     (tmp_path / "bad.yaml").write_text(
         """name: bad
 language: la
 line:
-  page:
-    - station: acquire
-      misspelled_option: true
+  - station: acquire
+    misspelled_option: true
 """,
         encoding="utf-8",
     )

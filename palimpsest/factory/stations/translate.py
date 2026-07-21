@@ -45,16 +45,13 @@ class Translate(Station):
     option_keys = frozenset({"overlap", "trim_seam_overlap"})
 
     def input_paths(self, job: Job) -> list[Path]:
-        own_and_neighbors = [
-            job.path_of("page_transcription", page["page_id"])
-            for page in self._context_window(job)
-        ]
+        window = self._context_window(job)
+        paths = [job.path_of("page_transcription", page["page_id"]) for page in window]
         previous = self._seam_neighbor(job)
-        if previous:
-            own_and_neighbors.append(job.path_of("page_transcription", previous))
-        return list(dict.fromkeys(own_and_neighbors)) + [
-            job.path_of("translation_brief")
-        ]
+        if previous and all(page["page_id"] != previous for page in window):
+            paths.append(job.path_of("page_transcription", previous))
+        paths.append(job.path_of("translation_brief"))
+        return paths
 
     def run(self, job: Job) -> StationResult:
         window = self._context_window(job)
@@ -111,7 +108,7 @@ class Translate(Station):
                 "seam": seam,
             },
             tokens_in=response.prompt_tokens,
-            tokens_out=response.output_tokens,
+            tokens_out=response.billable_output_tokens,
             cost_usd=response.cost_usd,
         )
 
@@ -122,19 +119,22 @@ class Translate(Station):
             return None
         return prev_page_id(job.pages, job.page_id)
 
-    def _context_window(self, job: Job) -> list[dict]:
+    def _context_window(self, job: Job) -> tuple[dict, ...]:
         overlap = int(job.config.options.get("overlap", DEFAULT_OVERLAP))
         index = next(
             i for i, page in enumerate(job.pages) if page["page_id"] == job.page_id
         )
-        return list(job.pages[max(0, index - overlap) : index + 1 + overlap])
+        return job.pages[max(0, index - overlap) : index + 1 + overlap]
 
     @staticmethod
-    def _format_context(pages: list[dict], texts: dict[str, dict]) -> str:
-        blocks = [
-            f"[{page['page_id']}]\n{texts[page['page_id']]['text']}" for page in pages
-        ]
-        return "\n\n".join(blocks) or "(none)"
+    def _format_context(pages: tuple[dict, ...], texts: dict[str, dict]) -> str:
+        return (
+            "\n\n".join(
+                f"[{page['page_id']}]\n{texts[page['page_id']]['text']}"
+                for page in pages
+            )
+            or "(none)"
+        )
 
 
 register(Translate())

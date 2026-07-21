@@ -6,6 +6,8 @@ damage), so detection must be fuzzy — but positionally strict enough that
 formulaic pulse-manual lines never trigger a false trim.
 """
 
+import pytest
+
 from palimpsest.factory.seams import find_overlap, prev_page_id, trim_overlap
 
 # gallica_pelliot_chinois_3477 seam page_0000 → page_0001: same physical
@@ -43,6 +45,19 @@ def test_trim_drops_only_the_rephotographed_columns():
     assert report["dropped_text"].startswith("遲聞前爲易")
 
 
+def test_trim_counts_content_lines_but_preserves_the_raw_audit_prefix():
+    current = "\n alpha \n\n beta \nkept"
+
+    trimmed, report = trim_overlap("earlier\nalpha\nbeta", current)
+
+    assert trimmed == "kept"
+    assert report == {
+        "lines": 2,
+        "similarity": 1.0,
+        "dropped_text": "\n alpha \n\n beta ",
+    }
+
+
 def test_formulaic_lines_do_not_false_positive():
     assert find_overlap(FORMULAIC_PREV, FORMULAIC_NEXT) is None
     text, report = trim_overlap(FORMULAIC_PREV, FORMULAIC_NEXT)
@@ -64,3 +79,5 @@ def test_blank_and_first_pages_are_safe():
     pages = ({"page_id": "page_0000"}, {"page_id": "page_0001"})
     assert prev_page_id(pages, "page_0000") is None
     assert prev_page_id(pages, "page_0001") == "page_0000"
+    with pytest.raises(ValueError, match="missing"):
+        prev_page_id(pages, "missing")

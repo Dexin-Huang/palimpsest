@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -20,7 +20,6 @@ from palimpsest.factory import config
 from palimpsest.factory.core import registry
 from palimpsest.factory.core.contracts import SOURCE_KINDS
 from palimpsest.factory.core.station import Station
-from palimpsest.factory.workspace.layout import DOC_KIND_FILENAME, PAGE_KIND_SUFFIX
 
 _VAR_RE = re.compile(r"\$\{([A-Z0-9_]+)\}")
 _CONFIG_VARS = {
@@ -43,8 +42,7 @@ class StationSpec:
 class Recipe:
     name: str
     language: str
-    page_stations: tuple[StationSpec, ...] = field(default_factory=tuple)
-    manuscript_stations: tuple[StationSpec, ...] = field(default_factory=tuple)
+    steps: tuple[StationSpec, ...]
 
 
 def load(name: str, recipes_dir: Path | None = None) -> Recipe:
@@ -54,17 +52,13 @@ def load(name: str, recipes_dir: Path | None = None) -> Recipe:
         raise FileNotFoundError(f"Recipe not found: {path}")
     raw = yaml.safe_load(_interpolate(path.read_text(encoding="utf-8")))
 
-    line = raw.get("line") or {}
+    line = raw.get("line") or []
+    if not isinstance(line, list):
+        raise ValueError(f"Recipe {name!r} line must be an ordered list")
     recipe = Recipe(
         name=raw["name"],
         language=raw.get("language", ""),
-        page_stations=tuple(
-            _spec(slot, expected_grain="page") for slot in line.get("page", [])
-        ),
-        manuscript_stations=tuple(
-            _spec(slot, expected_grain="manuscript")
-            for slot in line.get("manuscript", [])
-        ),
+        steps=tuple(_spec(slot) for slot in line),
     )
     _validate_chain(recipe)
     return recipe
@@ -81,13 +75,8 @@ def _interpolate(text: str) -> str:
     return _VAR_RE.sub(resolve, text)
 
 
-def _spec(slot: dict, *, expected_grain: str) -> StationSpec:
+def _spec(slot: dict) -> StationSpec:
     station = registry.get(slot["station"])
-    if station.grain != expected_grain:
-        raise ValueError(
-            f"Station {station.name!r} is {station.grain}-grain but listed "
-            f"under line.{expected_grain}"
-        )
     if station.uses_model and not (slot.get("model") and slot.get("prompt")):
         raise ValueError(f"Station {station.name!r} requires 'model' and 'prompt'")
 
@@ -115,35 +104,23 @@ def _spec(slot: dict, *, expected_grain: str) -> StationSpec:
 
 
 def _validate_chain(recipe: Recipe) -> None:
-    known_kinds = set(PAGE_KIND_SUFFIX) | set(DOC_KIND_FILENAME)
-    specs = list(recipe.page_stations) + list(recipe.manuscript_stations)
-    if not specs:
+    if not recipe.steps:
         raise ValueError(f"Recipe {recipe.name!r} lists no stations")
 
-    producible = set(SOURCE_KINDS) | {spec.station.produces for spec in specs}
-    for spec in specs:
-        station = spec.station
-        for kind in (*station.consumes, station.produces):
-            if kind not in known_kinds:
-                raise ValueError(
-                    f"Station {station.name!r} references unknown kind {kind!r}"
-                )
-        missing = [kind for kind in station.consumes if kind not in producible]
+    producers: dict[str, str] = {}
+    available = set(SOURCE_KINDS)
+    for spec in recipe.steps:
+        kind = spec.station.produces
+        if kind in producers:
+            raise ValueError(
+                f"Recipe {recipe.name!r} produces {kind!r} twice: "
+                f"{producers[kind]!r} and {spec.station.name!r}"
+            )
+        missing = [kind for kind in spec.station.consumes if kind not in available]
         if missing:
             raise ValueError(
-                f"Station {station.name!r} consumes {missing} which nothing "
-                f"in recipe {recipe.name!r} produces"
+                f"Station {spec.station.name!r} consumes {missing} before "
+                "any earlier station produces them"
             )
-
-    # Page-line order: a page station's page-grain inputs must be produced
-    # by an EARLIER page station (manuscript-grain jigs are gate-checked at
-    # run time by the conductor instead).
-    available = set(SOURCE_KINDS)
-    for spec in recipe.page_stations:
-        for kind in spec.station.consumes:
-            if kind in PAGE_KIND_SUFFIX and kind not in available:
-                raise ValueError(
-                    f"Page station {spec.station.name!r} consumes {kind!r} "
-                    f"before any earlier station produces it"
-                )
-        available.add(spec.station.produces)
+        producers[kind] = spec.station.name
+        available.add(kind)

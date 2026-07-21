@@ -11,9 +11,15 @@ import html
 import shutil
 from pathlib import Path
 
+from palimpsest.factory.core.artifact import content_fingerprint, read_provenance
+from palimpsest.factory.core.ledger import fingerprint
 from palimpsest.factory.config import LIBRARY_ROOT, PROJECT_ROOT
-from palimpsest.factory.workspace.io import atomic_write_text, read_json
-from palimpsest.factory.workspace.layout import doc_artifact
+from palimpsest.factory.workspace.io import (
+    atomic_write_json,
+    atomic_write_text,
+    read_json,
+)
+from palimpsest.factory.workspace.layout import artifact_path
 
 DEFAULT_SITE_ROOT = PROJECT_ROOT / "site"
 
@@ -33,6 +39,8 @@ a { color:var(--accent); }
 body.show-original .original { display:block; }
 .toggle { font:inherit; font-size:.85rem; padding:.3rem .8rem; border:1px solid var(--rule); border-radius:99px; background:var(--card); cursor:pointer; }
 .colophon { font-size:.88rem; color:var(--muted); border-top:2px solid var(--rule); margin-top:3rem; padding-top:1rem; }
+.sources { margin-top:1rem; padding:.8rem 1rem; border-left:3px solid var(--rule); background:var(--card); }
+.source-image { display:block; width:100%; height:auto; margin:1rem 0; }
 """
 
 _TOGGLE_JS = (
@@ -45,23 +53,46 @@ def build(
 ) -> list[str]:
     """Render the site from every doc that has a published book model.
     Returns the doc_ids shelved."""
-    models = []
-    for book_path in sorted(library_root.glob("*/book/book.json")):
-        models.append(read_json(book_path))
+    books = [
+        (read_json(book_path), book_path)
+        for book_path in sorted(library_root.glob("*/book/book.json"))
+    ]
+    models = [model for model, _ in books]
 
     site_root.mkdir(parents=True, exist_ok=True)
     atomic_write_text(site_root / "style.css", _CSS)
     atomic_write_text(site_root / "index.html", _shelf_html(models))
 
-    for model in models:
+    for model, book_path in books:
         doc_id = model["doc_id"]
         book_dir = site_root / doc_id
         book_dir.mkdir(exist_ok=True)
-        atomic_write_text(book_dir / "index.html", _reader_html(model))
-        epub_path = doc_artifact(doc_id, "book_epub", library_root)
-        if epub_path.exists():
-            shutil.copyfile(epub_path, book_dir / epub_path.name)
+        atomic_write_json(book_dir / "book.json", model)
+        _publish_evidence(model, library_root, book_dir)
+        epub_path = artifact_path(doc_id, "book_epub", None, library_root)
+        epub_available = _epub_is_current(book_path, epub_path)
+        published_epub = book_dir / epub_path.name
+        atomic_write_text(
+            book_dir / "index.html",
+            _reader_html(model, epub_available=epub_available),
+        )
+        if epub_available:
+            shutil.copyfile(epub_path, published_epub)
+        else:
+            published_epub.unlink(missing_ok=True)
     return [model["doc_id"] for model in models]
+
+
+def _epub_is_current(book_path: Path, epub_path: Path) -> bool:
+    if not epub_path.is_file():
+        return False
+    stamp = read_provenance(epub_path)
+    return bool(
+        stamp
+        and stamp.get("station") == "render_epub"
+        and stamp.get("input_fingerprint")
+        == fingerprint(content_fingerprint(book_path))
+    )
 
 
 def _page(title: str, body: str, *, css_prefix: str = "") -> str:
@@ -102,7 +133,7 @@ def _shelf_html(models: list[dict]) -> str:
     return _page("The Palimpsest Library", body)
 
 
-def _reader_html(model: dict) -> str:
+def _reader_html(model: dict, *, epub_available: bool = True) -> str:
     source = model.get("source", {})
     colophon = model.get("colophon", {})
     parts = [
@@ -116,10 +147,11 @@ def _reader_html(model: dict) -> str:
     )
     if detail:
         parts.append(f"<p class='folios'>{detail}</p>")
-    parts.append(
-        f"<p><a href='{model['doc_id']}.epub'>Download EPUB</a> &nbsp; "
-        "<button class='toggle' onclick='tgl()'>Show original text</button></p>"
-    )
+    actions = []
+    if epub_available:
+        actions.append(f"<a href='{model['doc_id']}.epub'>Download EPUB</a>")
+    actions.append("<button class='toggle' onclick='tgl()'>Show original text</button>")
+    parts.append(f"<p>{' &nbsp; '.join(actions)}</p>")
     if model.get("readers_note"):
         parts.append(f"<p class='muted'>{html.escape(model['readers_note'])}</p>")
     for chapter in model["chapters"]:
@@ -139,6 +171,14 @@ def _reader_html(model: dict) -> str:
             + _paragraphs(original_text)
             + "</div>"
         )
+        source_pages = chapter.get("source_pages", [])
+        if source_pages:
+            links = " · ".join(
+                f"<a href='evidence/{html.escape(page_id)}.html'>"
+                f"source {html.escape(page_id)}</a>"
+                for page_id in source_pages
+            )
+            parts.append(f"<div class='sources'>Source evidence: {links}</div>")
     if model.get("apparatus"):
         parts.append("<h2>Apparatus</h2>")
         for entry in model["apparatus"]:
@@ -149,12 +189,96 @@ def _reader_html(model: dict) -> str:
             )
     parts.append(
         "<div class='colophon'>"
-        f"<p>Transcribed by {html.escape(str(colophon.get('transcribed_by')))} · "
-        f"translated by {html.escape(str(colophon.get('translated_by')))} · "
-        f"{colophon.get('pages', 0)} pages · "
-        f"cost ${colophon.get('cost_usd_total', 0):.4f}.</p></div>"
+        f"<p>{_production_credit(colophon)} · "
+        f"{colophon.get('pages', 0)} pages · {_cost_text(colophon)}.</p></div>"
     )
     return _page(model["title"], "".join(parts), css_prefix="../")
+
+
+def _publish_evidence(model: dict, library_root: Path, book_dir: Path) -> None:
+    evidence_dir = book_dir / "evidence"
+    shutil.rmtree(evidence_dir, ignore_errors=True)
+    evidence_dir.mkdir()
+    for page in model.get("evidence", {}).get("pages", []):
+        page_id = page["page_id"]
+        image_path = artifact_path(
+            model["doc_id"], "page_image_clean", page_id, library_root
+        )
+        published_image = evidence_dir / f"{page_id}{image_path.suffix}"
+        shutil.copyfile(image_path, published_image)
+        alignment = page.get("alignment")
+        if alignment:
+            atomic_write_json(
+                evidence_dir / f"{page_id}.alignment.json",
+                {
+                    "doc_id": model["doc_id"],
+                    "page_id": page_id,
+                    **alignment,
+                },
+            )
+        atomic_write_text(
+            evidence_dir / f"{page_id}.html",
+            _evidence_page_html(
+                model,
+                page,
+                image_name=published_image.name,
+                has_alignment=bool(alignment),
+            ),
+        )
+
+
+def _evidence_page_html(
+    model: dict, page: dict, *, image_name: str, has_alignment: bool
+) -> str:
+    page_id = page["page_id"]
+    alignment = page.get("alignment") or {}
+    stats = alignment.get("stats") or {}
+    links = [f"<a href='{html.escape(page['source_image_url'])}'>Archive image</a>"]
+    if has_alignment:
+        links.append(
+            f"<a href='{html.escape(page_id)}.alignment.json'>Alignment JSON</a>"
+        )
+    coverage = ""
+    if stats:
+        coverage = (
+            f"<p class='folios'>{stats.get('boxed', 0)} of "
+            f"{stats.get('transcribed', 0)} ink characters mapped to image coordinates.</p>"
+        )
+    body = (
+        "<p><a href='../'>← book</a></p>"
+        f"<h1>{html.escape(model['title'])}: {html.escape(page_id)}</h1>"
+        f"<p>{' · '.join(links)}</p>"
+        f"<img class='source-image' src='{html.escape(image_name)}' "
+        f"alt='Cleaned manuscript page {html.escape(page_id)}'>"
+        f"{coverage}<h2>Diplomatic transcription</h2>"
+        f"{_paragraphs(page['diplomatic'])}"
+    )
+    return _page(
+        f"{model['title']}: {page_id}",
+        body,
+        css_prefix="../../",
+    )
+
+
+def _production_credit(colophon: dict) -> str:
+    credits = [
+        ("Transcribed", colophon.get("transcribed_by")),
+        ("translated", colophon.get("translated_by")),
+        ("referenced", colophon.get("referenced_by")),
+        ("emended", colophon.get("emended_by")),
+    ]
+    return " · ".join(
+        f"{label} by {html.escape(str(model))}" for label, model in credits if model
+    )
+
+
+def _cost_text(colophon: dict) -> str:
+    if colophon.get("cost_complete"):
+        return f"production cost ${colophon.get('cost_usd_total', 0):.4f}"
+    return (
+        f"known production cost ${colophon.get('cost_usd_known', 0):.4f}; "
+        "unpriced agent work excluded"
+    )
 
 
 def _paragraphs(text: str) -> str:

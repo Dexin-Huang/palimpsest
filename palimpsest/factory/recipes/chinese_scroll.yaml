@@ -1,53 +1,50 @@
 name: chinese_scroll
 language: zh
 line:
-  page:
-    - station: acquire
-    - station: deframe
-    - station: dewatermark
-    - station: flatten
-      mode: attenuate
-    - station: segment
-      full_page_max_lines: 999
-      full_page_max_regions: 99
-    - station: read
-      model: ${PALIMPSEST_MODEL_VISION}
-      prompt: read/zh/diplomatic
-      # temperature 0.1 + dynamic thinking, unlike the Latin lane's 0.7/0:
-      # regular kaishu columns don't trap low-temperature decoding the way
-      # abbreviated Latin script does, and 0.7 made the twice-photographed
-      # seam columns diverge between reads (P.3477, 2026-07-10). The read
-      # schema keeps thinking out of the transcription channel.
-      params: { temperature: 0.1, media_resolution: high,
-                max_output_tokens: 32768, thinking_budget: -1 }
-    - station: align
-    - station: translate
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: translate/zh/with_brief
-      overlap: 1
-      # Gallica photographs a scroll as overlapping segments (~2 columns
-      # repeat at every cut); trim the re-photographed columns before they
-      # are translated twice
-      trim_seam_overlap: true
-    - station: assemble_page
-      trim_seam_overlap: true
-  manuscript:
-    - station: survey
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: survey/generic/brief
-    - station: reconstruct
-      model: ${PALIMPSEST_MODEL_READING}
-      prompt: reconstruct/generic/structure
-    # two-pass editorial head: a frontier identification agent builds the
-    # reference dossier (bounded web verification lives there), then a
-    # cheaper emendation agent works web-free inside it. Ladder evidence
-    # (P.3477, 2026-07-11): dossier doubled the light model's score.
-    - station: reference
-      model: gpt-5.6-sol
-      prompt: reference/generic/identify
-    - station: emend
-      model: gpt-5.6-luna
-      prompt: emend/generic/agent
-    - station: publish
-      original_language: zh
-    - station: render_epub
+  - station: acquire
+  - station: deframe
+  - station: dewatermark
+  - station: flatten
+    mode: attenuate
+  - station: segment
+    full_page_max_lines: 999
+    full_page_max_regions: 99
+  - station: read
+    model: ${PALIMPSEST_MODEL_VISION}
+    prompt: read/zh/diplomatic
+    # temperature 0.1 + deep thinking, unlike the Latin lane's 0.7/low:
+    # regular kaishu columns don't trap low-temperature decoding the way
+    # abbreviated Latin script does, and 0.7 made the twice-photographed
+    # seam columns diverge between reads (P.3477, 2026-07-10). The read
+    # schema keeps thinking out of the transcription channel.
+    params: { temperature: 0.1, media_resolution: high,
+              max_output_tokens: 32768, thinking_level: high }
+  - station: align
+  - station: survey
+    model: ${PALIMPSEST_MODEL_READING}
+    prompt: survey/generic/brief
+  - station: translate
+    model: ${PALIMPSEST_MODEL_READING}
+    prompt: translate/zh/with_brief
+    overlap: 1
+    # Gallica photographs a scroll as overlapping segments (~2 columns
+    # repeat at every cut); trim the re-photographed columns before they
+    # are translated twice
+    trim_seam_overlap: true
+  - station: assemble_page
+  - station: reconstruct
+    model: ${PALIMPSEST_MODEL_READING}
+    prompt: reconstruct/generic/structure
+  # two-pass editorial head: a frontier identification agent builds the
+  # reference dossier (bounded web verification lives there), then a
+  # cheaper emendation agent works web-free inside it. Ladder evidence
+  # (P.3477, 2026-07-11): dossier doubled the light model's score.
+  - station: reference
+    model: gpt-5.6-sol
+    prompt: reference/generic/identify
+  - station: emend
+    model: gpt-5.6-luna
+    prompt: emend/generic/agent
+  - station: publish
+    original_language: zh
+  - station: render_epub

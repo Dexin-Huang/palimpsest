@@ -24,6 +24,7 @@ h1, h2 { font-weight: normal; }
 .original { margin-top: 2em; padding-top: 1em; border-top: 1px solid #ccc; }
 .original h3 { font-size: 1em; color: #666; }
 .colophon { font-size: .9em; color: #444; }
+.sources { margin-top: 2em; padding-top: 1em; border-top: 1px dotted #ccc; }
 """
 
 
@@ -63,6 +64,10 @@ class RenderEpub(Station):
                     _paragraphs(book_model["readers_note"]),
                 )
             )
+        evidence_by_id = {
+            page["page_id"]: page
+            for page in book_model.get("evidence", {}).get("pages", [])
+        }
         for chapter in book_model["chapters"]:
             original_heading = "Original text"
             original_text = chapter["original"]
@@ -77,7 +82,8 @@ class RenderEpub(Station):
                     f"{chapter['pages']['to']}</p>"
                     + _paragraphs(chapter["translation"])
                     + f'<div class="original"><h3>{original_heading}</h3>'
-                    f"{_paragraphs(original_text)}</div>",
+                    f"{_paragraphs(original_text)}</div>"
+                    + _source_evidence_html(chapter, evidence_by_id),
                 )
             )
         if book_model.get("apparatus"):
@@ -146,16 +152,66 @@ def _apparatus_html(apparatus: list[dict]) -> str:
     )
 
 
+def _source_evidence_html(chapter: dict, evidence_by_id: dict[str, dict]) -> str:
+    pages = [
+        evidence_by_id[page_id]
+        for page_id in chapter.get("source_pages", [])
+        if page_id in evidence_by_id
+    ]
+    if not pages:
+        return ""
+    entries = []
+    for page in pages:
+        stats = (page.get("alignment") or {}).get("stats") or {}
+        coverage = ""
+        if stats:
+            coverage = (
+                f"<p class='folios'>{stats.get('boxed', 0)} of "
+                f"{stats.get('transcribed', 0)} ink characters aligned.</p>"
+            )
+        entries.append(
+            f"<h4>Folio {html.escape(page['page_id'])}</h4>"
+            f"<p><a href='{html.escape(page['source_image_url'])}'>"
+            "View archive image</a></p>"
+            f"{coverage}{_paragraphs(page['diplomatic'])}"
+        )
+    return (
+        '<div class="sources"><h3>Source evidence</h3>'
+        "<p>The diplomatic readings below are tied to the cited folio images; "
+        "coordinate alignment data is preserved in the book model.</p>"
+        f"{''.join(entries)}</div>"
+    )
+
+
+def _production_credit(colophon: dict) -> str:
+    credits = [
+        ("Transcribed", colophon.get("transcribed_by")),
+        ("translated", colophon.get("translated_by")),
+        ("referenced", colophon.get("referenced_by")),
+        ("emended", colophon.get("emended_by")),
+    ]
+    return " · ".join(
+        f"{label} by {html.escape(str(model))}" for label, model in credits if model
+    )
+
+
+def _cost_text(colophon: dict) -> str:
+    if colophon.get("cost_complete"):
+        return f"production cost ${colophon.get('cost_usd_total', 0):.4f}"
+    return (
+        f"known production cost ${colophon.get('cost_usd_known', 0):.4f}; "
+        "unpriced agent work excluded"
+    )
+
+
 def _colophon_html(model: dict) -> str:
     colophon = model.get("colophon", {})
     rows = [
-        f"<p>Transcribed by {html.escape(str(colophon.get('transcribed_by')))} · "
-        f"translated by {html.escape(str(colophon.get('translated_by')))}.</p>",
-        f"<p>{colophon.get('pages', 0)} pages · "
-        f"production cost ${colophon.get('cost_usd_total', 0):.4f}.</p>",
+        f"<p>{_production_credit(colophon)}.</p>",
+        f"<p>{colophon.get('pages', 0)} pages · {_cost_text(colophon)}.</p>",
         "<p>Produced by the Palimpsest factory. Every stage of this book — "
-        "transcription, translation, reconstruction — is recorded with full "
-        "provenance in its library workspace.</p>",
+        "transcription, alignment, translation, reconstruction, reference, "
+        "and emendation — is recorded with full provenance in the book model.</p>",
     ]
     return f'<div class="colophon">{"".join(rows)}</div>'
 

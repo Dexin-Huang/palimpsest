@@ -3,6 +3,8 @@ executor evaluation: silent orthographic normalization (caught on terra),
 unanchored entries, missing citations, and the systematic-substitution
 sweep that no model performed reliably (候/焦)."""
 
+from copy import deepcopy
+
 from palimpsest.factory.apparatus import coverage_failures, systematic_sweeps
 
 SECTIONS = [{"heading": "one", "original": "甲乙丙丁\n戊己庚辛"}]
@@ -37,6 +39,30 @@ def test_covered_change_passes():
     assert coverage_failures(SECTIONS, art) == []
 
 
+def test_insertions_and_deletions_use_the_changed_side_without_mutation():
+    cases = [
+        ("甲乙丙丁", "甲乙新丙丁", {"original": "", "emended": "乙新丙"}),
+        ("甲乙丙丁", "甲乙丁", {"original": "乙丙丁", "emended": ""}),
+    ]
+    for original, reading, snippets in cases:
+        sections = [{"heading": "one", "original": original}]
+        artifact = _artifact(
+            reading,
+            [
+                {
+                    "section": "one",
+                    **snippets,
+                    "reason": "x",
+                    "evidence": "ink",
+                }
+            ],
+        )
+        before = deepcopy((sections, artifact))
+
+        assert coverage_failures(sections, artifact) == []
+        assert (sections, artifact) == before
+
+
 def test_silent_change_rejected():
     art = _artifact("甲乙丙戌\n戊己庚辛", [])
     failures = coverage_failures(SECTIONS, art)
@@ -59,6 +85,39 @@ def test_unanchored_entry_rejected():
     assert any("not found in text" in f for f in coverage_failures(SECTIONS, art))
 
 
+def test_entry_for_unknown_section_is_rejected():
+    art = _artifact(
+        "甲乙丙丁\n戊己庚辛",
+        [
+            {
+                "section": "missing",
+                "original": "甲",
+                "emended": "甲",
+                "reason": "x",
+                "evidence": "ink",
+            }
+        ],
+    )
+    assert any("unknown section" in f for f in coverage_failures(SECTIONS, art))
+
+
+def test_repeated_snippet_can_anchor_later_occurrence():
+    sections = [{"heading": "one", "original": "甲乙天地玄黃甲乙"}]
+    art = _artifact(
+        "甲乙天地玄黃甲丙",
+        [
+            {
+                "section": "one",
+                "original": "甲乙",
+                "emended": "甲丙",
+                "reason": "x",
+                "evidence": "ink",
+            }
+        ],
+    )
+    assert coverage_failures(sections, art) == []
+
+
 def test_parallel_without_citation_rejected():
     art = _artifact(
         "甲乙丙丁\n戊己庚辛",
@@ -68,7 +127,7 @@ def test_parallel_without_citation_rejected():
                 "original": "甲",
                 "emended": "甲",
                 "reason": "x",
-                "evidence": "parallel: somewhere",
+                "evidence": " Parallel: somewhere",
             }
         ],
     )

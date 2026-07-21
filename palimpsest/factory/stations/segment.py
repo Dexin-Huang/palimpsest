@@ -23,6 +23,7 @@ import numpy as np
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.imaging import glyph_height, ink_masks, to_gray
+from palimpsest.factory.stations.image_input import load_image
 
 ANALYSIS_MAX_SIDE = 1600
 MIN_REGION_INK_PX = 60
@@ -65,9 +66,7 @@ class Segment(Station):
     )
 
     def run(self, job: Job) -> StationResult:
-        image = cv2.imread(str(job.path_of("page_image_clean")))
-        if image is None:
-            raise ValueError(f"Unreadable image: {job.path_of('page_image_clean')}")
+        image = load_image(job, "page_image_clean")
         payload = analyze(image, dict(job.config.options))
         return StationResult(
             payload={
@@ -106,13 +105,13 @@ def analyze(image: np.ndarray, options: dict) -> dict:
     # or show-through-heavy scans it is dominated by noise. When enabled,
     # a density guard still drops it if it lights up broadly relative to
     # real ink — sparse annotations, not surface texture.
-    if options.get("include_faint", False):
-        dark_px = cv2.countNonZero(dark)
-        if cv2.countNonZero(faint) > max(3 * dark_px, gray.size * 0.005):
-            faint = np.zeros_like(faint)
+    include_faint = options.get("include_faint", False)
+    if include_faint and cv2.countNonZero(faint) <= max(
+        3 * cv2.countNonZero(dark), gray.size * 0.005
+    ):
+        ink = cv2.bitwise_or(dark, faint)
     else:
-        faint = np.zeros_like(faint)
-    ink = cv2.bitwise_or(dark, faint)
+        ink = dark
     ink = cv2.morphologyEx(ink, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
     glyph = glyph_height(dark)
 
@@ -121,8 +120,9 @@ def analyze(image: np.ndarray, options: dict) -> dict:
     blobs = _merge_overlaps(blobs)
     blobs = [split for blob in blobs for split in _split_tall(writing, blob, glyph)]
     regions = _classify(blobs, writing, gray, glyph, scale)
+    writing_pixels = writing > 0
     page_depth = (
-        float(np.median(gray[writing > 0])) if cv2.countNonZero(writing) else None
+        float(np.median(gray[writing_pixels])) if writing_pixels.any() else None
     )
     regions = _drop_bleed_through(regions, page_depth, options)
     regions = _add_figures(regions, figure_boxes, ink, scale)

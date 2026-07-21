@@ -33,9 +33,12 @@ def coverage_failures(sections: list[dict], emended: dict) -> list[str]:
 
     entries: dict[str, list[dict]] = {}
     for entry in emended.get("apparatus", []):
-        entries.setdefault(entry.get("section", ""), []).append(entry)
+        section = entry.get("section", "")
+        entries.setdefault(section, []).append(entry)
+        if section not in originals:
+            failures.append(f"apparatus references unknown section: {section!r}")
         evidence = entry.get("evidence", "")
-        if evidence.startswith("parallel") and "·" not in evidence:
+        if evidence.lstrip().casefold().startswith("parallel") and "·" not in evidence:
             failures.append(
                 f"parallel evidence without work·section citation: {evidence!r}"
             )
@@ -45,48 +48,50 @@ def coverage_failures(sections: list[dict], emended: dict) -> list[str]:
         original = originals.get(heading, "")
         reading = section["reading"]
 
-        anchored = []
+        # Flatten every apparatus entry into the candidate spans it anchors on
+        # each side of the reading.  Coverage cares about spans, not which
+        # entry supplied them.
+        anchors: tuple[list[tuple[int, int]], list[tuple[int, int]]] = ([], [])
         for entry in entries.get(heading, []):
-            o_at = original.find(entry["original"]) if entry.get("original") else -1
-            r_at = reading.find(entry["emended"]) if entry.get("emended") else -1
-            if entry.get("original") and o_at < 0:
-                failures.append(
-                    f"[{heading}] apparatus original not found in text: "
-                    f"{entry['original'][:30]!r}"
-                )
-            if entry.get("emended") and r_at < 0:
-                failures.append(
-                    f"[{heading}] apparatus emended not found in reading: "
-                    f"{entry['emended'][:30]!r}"
-                )
-            anchored.append(
-                (
-                    o_at,
-                    o_at + len(entry.get("original", "")) if o_at >= 0 else -1,
-                    r_at,
-                    r_at + len(entry.get("emended", "")) if r_at >= 0 else -1,
-                )
-            )
-
-        def covered(side: int, lo: int, hi: int) -> bool:
-            return any(
-                a[side] >= 0
-                and a[side] - _ANCHOR_SLACK <= lo
-                and hi <= a[side + 1] + _ANCHOR_SLACK
-                for a in anchored
-            )
+            for side, (label, text) in enumerate(
+                (("original", original), ("emended", reading))
+            ):
+                snippet = entry.get(label, "")
+                spans = _occurrences(text, snippet)
+                anchors[side].extend(spans)
+                if snippet and not spans:
+                    failures.append(
+                        f"[{heading}] apparatus {label} not found in "
+                        f"{'text' if side == 0 else 'reading'}: {snippet[:30]!r}"
+                    )
 
         for tag, i1, i2, j1, j2 in SequenceMatcher(
             None, original, reading
         ).get_opcodes():
             if tag == "equal":
                 continue
-            if not (covered(0, i1, i2) if i2 > i1 else covered(2, j1, j2)):
+            side, lo, hi = (0, i1, i2) if i2 > i1 else (1, j1, j2)
+            if not any(
+                start - _ANCHOR_SLACK <= lo and hi <= end + _ANCHOR_SLACK
+                for start, end in anchors[side]
+            ):
                 failures.append(
                     f"[{heading}] UNCOVERED change: {original[i1:i2]!r} -> "
                     f"{reading[j1:j2]!r} (chars {i1}-{i2})"
                 )
     return failures
+
+
+def _occurrences(text: str, snippet: str) -> list[tuple[int, int]]:
+    """All candidate anchors, including overlapping repeated readings."""
+    if not snippet:
+        return []
+    spans = []
+    start = 0
+    while (index := text.find(snippet, start)) >= 0:
+        spans.append((index, index + len(snippet)))
+        start = index + 1
+    return spans
 
 
 def systematic_sweeps(

@@ -15,7 +15,9 @@ import palimpsest.factory.stations.acquire as acquire_module
 from palimpsest.factory.core.conductor import Conductor
 from palimpsest.factory.core.ledger import Ledger
 from palimpsest.factory.core.recipe import load as load_recipe
+from palimpsest.factory.core.station import Job, StationConfig
 from palimpsest.factory.gateway import ModelResponse
+from palimpsest.factory.stations.assemble_page import AssemblePage
 from palimpsest.factory.workspace.io import atomic_write_json, read_json
 from palimpsest.factory.workspace.layout import artifact_path
 
@@ -228,25 +230,131 @@ def run_line(ledger, library, **kw):
 
 def test_recipe_loads_and_validates():
     recipe = load_recipe("latin_manuscript")
-    assert [s.station.name for s in recipe.page_stations] == [
+    assert [spec.station.name for spec in recipe.steps] == [
         "acquire",
         "deframe",
         "dewatermark",
         "flatten",
         "segment",
         "read",
+        "survey",
         "translate",
         "assemble_page",
-    ]
-    assert [s.station.name for s in recipe.manuscript_stations] == [
-        "survey",
         "reconstruct",
         "reference",
         "emend",
         "publish",
         "render_epub",
     ]
-    assert recipe.page_stations[5].model  # ${VAR} interpolated
+    assert recipe.steps[5].model  # ${VAR} interpolated
+
+
+def test_recipe_rejects_duplicate_artifact_producers(tmp_path):
+    (tmp_path / "duplicate.yaml").write_text(
+        """
+name: duplicate
+line:
+  - station: acquire
+  - station: acquire
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="produces 'page_image' twice"):
+        load_recipe("duplicate", recipes_dir=tmp_path)
+
+
+def test_recipe_rejects_consumers_before_their_producers(tmp_path):
+    (tmp_path / "out_of_order.yaml").write_text(
+        """
+name: out_of_order
+line:
+  - station: survey
+    model: test-model
+    prompt: survey/generic/brief
+  - station: read
+    model: test-model
+    prompt: read/la/diplomatic
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="before any earlier station produces"):
+        load_recipe("out_of_order", recipes_dir=tmp_path)
+
+
+def test_chinese_recipe_loads_and_validates():
+    recipe = load_recipe("chinese_scroll")
+    assert [spec.station.name for spec in recipe.steps] == [
+        "acquire",
+        "deframe",
+        "dewatermark",
+        "flatten",
+        "segment",
+        "read",
+        "align",
+        "survey",
+        "translate",
+        "assemble_page",
+        "reconstruct",
+        "reference",
+        "emend",
+        "publish",
+        "render_epub",
+    ]
+
+
+def test_assemble_page_applies_the_translation_seam(tmp_path):
+    library_root = tmp_path / "library"
+    transcription_path = artifact_path(DOC, "page_transcription", "p2", library_root)
+    translation_path = artifact_path(DOC, "page_translation", "p2", library_root)
+    atomic_write_json(
+        transcription_path,
+        {
+            "text": "duplicate one\nduplicate two\nkept text",
+            "page_seq": 2,
+            "regions": [],
+        },
+    )
+    atomic_write_json(
+        translation_path,
+        {
+            "translation": "kept translation",
+            "seam": {
+                "lines": 2,
+                "similarity": 0.9,
+                "dropped_text": "duplicate one\nduplicate two",
+            },
+        },
+    )
+    pages = (
+        {"page_id": "p1", "order": 1},
+        {"page_id": "p2", "order": 2},
+    )
+    job = Job(
+        doc_id=DOC,
+        pages=pages,
+        page=pages[1],
+        library_root=library_root,
+        config=StationConfig(),
+    )
+
+    station = AssemblePage()
+    result = station.run(job)
+
+    assert result.payload["original"]["text"] == "kept text"
+    assert result.payload["original"]["seam"]["lines"] == 2
+    assert station.input_paths(job) == [transcription_path, translation_path]
+
+    atomic_write_json(
+        translation_path,
+        {
+            "translation": "invalid translation",
+            "seam": {"lines": 1, "dropped_text": "not the transcription"},
+        },
+    )
+    with pytest.raises(ValueError, match="seam does not match"):
+        station.run(job)
 
 
 def test_end_to_end_line(ledger, library, gateway, fetch):
@@ -354,7 +462,9 @@ def test_config_drift_is_outdated_not_rerun(
     }
 
 
-def test_failed_page_does_not_stop_line(ledger, library, gateway, fetch, monkeypatch):
+def test_failed_page_stops_at_batch_barrier(
+    ledger, library, gateway, fetch, monkeypatch
+):
     scripted = ScriptedGateway()
 
     def flaky(request, **kwargs):
@@ -367,10 +477,33 @@ def test_failed_page_does_not_stop_line(ledger, library, gateway, fetch, monkeyp
     report = run_line(ledger, library)
 
     failed = [(c.station, c.page_id) for c in report.cells if c.action == "failed"]
-    # f001r's read failed → its chain stops (translate needs the brief which
-    # needs ALL reads, so survey fails on missing input too) — but f001v's
-    # read still ran
-    assert ("read", "f001r") in failed
+    assert failed == [("read", "f001r")]
     ran = {(c.station, c.page_id) for c in report.cells if c.action == "ran"}
     assert ("read", "f001v") in ran
+    assert not {"survey", "translate", "assemble_page"} & {
+        cell.station for cell in report.cells
+    }
     assert ledger.item(DOC)["status"] == "failed"
+
+
+def test_failed_refresh_cannot_feed_old_artifacts_downstream(
+    ledger, library, gateway, fetch, monkeypatch
+):
+    run_line(ledger, library)
+    scripted = ScriptedGateway()
+
+    def flaky(request, **kwargs):
+        if request.images and getattr(request.images[0], "stem", "") == "f001r":
+            raise RuntimeError("boom")
+        response = scripted(request)
+        return json.loads(response.text), response
+
+    monkeypatch.setattr("palimpsest.factory.stations.read.generate_json", flaky)
+    report = run_line(ledger, library, refresh=frozenset({"read"}))
+
+    assert ("read", "f001r") in {
+        (cell.station, cell.page_id) for cell in report.cells if cell.action == "failed"
+    }
+    assert not {"survey", "translate", "assemble_page"} & {
+        cell.station for cell in report.cells
+    }

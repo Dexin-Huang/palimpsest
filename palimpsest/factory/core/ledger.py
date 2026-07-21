@@ -24,6 +24,21 @@ CREATE TABLE IF NOT EXISTS items (
     CHECK (status IN ('active', 'complete', 'parked', 'failed'))
 );
 
+CREATE TABLE IF NOT EXISTS work_runs (
+  work_run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_id      TEXT NOT NULL REFERENCES items(doc_id),
+  owner       TEXT NOT NULL,
+  status      TEXT NOT NULL
+    CHECK (status IN ('running', 'done', 'failed', 'abandoned')),
+  started_at  TEXT NOT NULL,
+  heartbeat_at TEXT NOT NULL,
+  finished_at TEXT,
+  error       TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_work_runs_active_doc
+  ON work_runs (doc_id) WHERE status = 'running';
+
 CREATE TABLE IF NOT EXISTS stage_runs (
   run_id             INTEGER PRIMARY KEY AUTOINCREMENT,
   doc_id             TEXT NOT NULL REFERENCES items(doc_id),
@@ -125,6 +140,103 @@ class Ledger:
             params = (status,)
         return self._conn.execute(query + " ORDER BY created_at", params).fetchall()
 
+    # -- durable work-order ownership ----------------------------------------
+
+    def claim_work(self, doc_id: str, *, owner: str) -> int:
+        now = utc_now()
+        try:
+            with self._conn:
+                cursor = self._conn.execute(
+                    """
+                    INSERT INTO work_runs
+                      (doc_id, owner, status, started_at, heartbeat_at)
+                    VALUES (?, ?, 'running', ?, ?)
+                    """,
+                    (doc_id, owner, now, now),
+                )
+                self._conn.execute(
+                    """
+                    UPDATE stage_runs
+                    SET status = 'failed:abandoned', finished_at = ?,
+                        error = 'orphaned before a new work run claimed the document'
+                    WHERE doc_id = ? AND status = 'running'
+                    """,
+                    (now, doc_id),
+                )
+        except sqlite3.IntegrityError as error:
+            active = self._conn.execute(
+                """
+                SELECT owner, heartbeat_at FROM work_runs
+                WHERE doc_id = ? AND status = 'running'
+                """,
+                (doc_id,),
+            ).fetchone()
+            if active is not None:
+                raise RuntimeError(
+                    f"Work order {doc_id!r} is already running under "
+                    f"{active['owner']} (heartbeat {active['heartbeat_at']})"
+                ) from error
+            raise
+        return cursor.lastrowid
+
+    def heartbeat_work(self, work_run_id: int) -> None:
+        with self._conn:
+            updated = self._conn.execute(
+                """
+                UPDATE work_runs SET heartbeat_at = ?
+                WHERE work_run_id = ? AND status = 'running'
+                """,
+                (utc_now(), work_run_id),
+            ).rowcount
+        if updated == 0:
+            raise KeyError(f"No running work_run with id {work_run_id}")
+
+    def finish_work(
+        self,
+        work_run_id: int,
+        *,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        if status not in {"done", "failed"}:
+            raise ValueError(f"Invalid terminal work status: {status!r}")
+        with self._conn:
+            updated = self._conn.execute(
+                """
+                UPDATE work_runs
+                SET status = ?, finished_at = ?, heartbeat_at = ?, error = ?
+                WHERE work_run_id = ? AND status = 'running'
+                """,
+                (status, utc_now(), utc_now(), error, work_run_id),
+            ).rowcount
+        if updated == 0:
+            raise KeyError(f"No running work_run with id {work_run_id}")
+
+    def reconcile_abandoned(self, doc_id: str, *, stale_before: str) -> int:
+        """Close expired work claims and their unfinished cell attempts."""
+        now = utc_now()
+        with self._conn:
+            abandoned = self._conn.execute(
+                """
+                UPDATE work_runs
+                SET status = 'abandoned', finished_at = ?,
+                    error = 'heartbeat expired'
+                WHERE doc_id = ? AND status = 'running' AND heartbeat_at < ?
+                """,
+                (now, doc_id, stale_before),
+            ).rowcount
+            if abandoned:
+                self._conn.execute(
+                    """
+                    UPDATE stage_runs
+                    SET status = 'failed:abandoned', finished_at = ?,
+                        error = 'owning work run was abandoned'
+                    WHERE doc_id = ? AND status = 'running'
+                    """,
+                    (now, doc_id),
+                )
+        return abandoned
+
     # -- production log: stage_runs -------------------------------------------
 
     def begin_run(
@@ -186,10 +298,25 @@ class Ledger:
             cost_usd=cost_usd,
         )
 
-    def fail_run(self, run_id: int, *, kind: str, detail: str | None = None) -> None:
-        """``kind`` is a short machine-matchable slug (``rate_limit``,
-        ``empty_response``); ``detail`` is the full human-readable error."""
-        self._finish_run(run_id, status=f"failed:{kind}", error=detail)
+    def fail_run(
+        self,
+        run_id: int,
+        *,
+        kind: str,
+        detail: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        cost_usd: float | None = None,
+    ) -> None:
+        """Finish a failed attempt while retaining any known billed usage."""
+        self._finish_run(
+            run_id,
+            status=f"failed:{kind}",
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost_usd=cost_usd,
+            error=detail,
+        )
 
     def _finish_run(
         self,

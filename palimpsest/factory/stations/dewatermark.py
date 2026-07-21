@@ -8,11 +8,10 @@ recipe options, tunable per digitization campaign.
 
 from __future__ import annotations
 
-import cv2
-
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.imaging import encode_jpeg, remove_overlay_marks
+from palimpsest.factory.stations.image_input import load_image
 from palimpsest.factory.workspace.io import atomic_write_bytes
 
 
@@ -25,9 +24,7 @@ class Dewatermark(Station):
     option_keys = frozenset({"height_fraction", "max_std"})
 
     def run(self, job: Job) -> StationResult:
-        image = cv2.imread(str(job.path_of("page_image_framed")))
-        if image is None:
-            raise ValueError(f"Unreadable image: {job.path_of('page_image_framed')}")
+        image = load_image(job, "page_image_framed")
         cleaned = remove_overlay_marks(
             image,
             height_fraction=float(job.config.options.get("height_fraction", 0.01)),

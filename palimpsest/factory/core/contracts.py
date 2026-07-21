@@ -2,7 +2,7 @@
 
 This is the factory's type system. A station's ``consumes``/``produces``
 must name kinds defined here (checked at registration), a JSON artifact must
-carry its kind's required fields (checked by the conductor at write time),
+carry its kind's required fields (checked by the cell runtime at write time),
 and the workspace path layout derives from the ``store`` templates — one
 concept, one place.
 
@@ -14,8 +14,10 @@ code and cannot drift.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Mapping
 
+DOC_ID_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 FORMAT_SUFFIX = {"json": ".json", "jpeg": ".jpg", "epub": ".epub"}
 
 # Source contracts enter through intake rather than a station. They still live
@@ -105,7 +107,7 @@ _ALL = (
         "page_assembled",
         "page",
         "json",
-        "The small loop's finished part: original ∥ translation, aligned.",
+        "Deterministic page pair: diplomatic original and its translation.",
         required=("doc_id", "page_id", "original", "translation", "inputs"),
     ),
     ArtifactContract(
@@ -148,8 +150,9 @@ _ALL = (
         "book",
         "manuscript",
         "json",
-        "The book model: bilingual chapters + provenance colophon.",
-        required=("doc_id", "title", "language", "chapters", "colophon"),
+        "The book model: bilingual chapters, page-level source evidence, "
+        "alignment geometry when available, and a provenance colophon.",
+        required=("doc_id", "title", "language", "chapters", "evidence", "colophon"),
         store="book/book.json",
     ),
     ArtifactContract(
@@ -173,14 +176,58 @@ def contract(kind: str) -> ArtifactContract:
         ) from None
 
 
-def validate_payload(kind: str, payload: Mapping[str, Any]) -> None:
+def validate_doc_id(doc_id: object) -> str:
+    if not isinstance(doc_id, str) or not DOC_ID_RE.fullmatch(doc_id):
+        raise ValueError(
+            "doc_id must contain lowercase ASCII letters, digits, and single underscores"
+        )
+    return doc_id
+
+
+def validate_payload(
+    kind: str,
+    payload: Mapping[str, Any],
+    *,
+    expected_doc_id: str | None = None,
+) -> None:
     """Raise if a JSON artifact violates its kind's output contract."""
     spec = contract(kind)
     if spec.format != "json":
         raise ValueError(f"Kind {kind!r} is {spec.format}, not a JSON payload")
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"Artifact of kind {kind!r} must be a JSON object")
     missing = [field for field in spec.required if field not in payload]
     if missing:
         raise ValueError(
             f"Artifact of kind {kind!r} violates its contract: "
             f"missing required fields {missing}"
         )
+    if kind not in SOURCE_KINDS:
+        return
+
+    doc_id = validate_doc_id(payload["doc_id"])
+    if expected_doc_id is not None and doc_id != expected_doc_id:
+        raise ValueError(f"{kind} doc_id {doc_id!r} does not match {expected_doc_id!r}")
+    if kind == "page_list":
+        _validate_pages(payload["pages"])
+
+
+def _validate_pages(value: object) -> None:
+    if not isinstance(value, list) or not value:
+        raise ValueError("page_list pages must be a nonempty list")
+    seen: set[str] = set()
+    for index, page in enumerate(value):
+        if not isinstance(page, Mapping):
+            raise ValueError(f"page_list page {index} must be a JSON object")
+        page_id = page.get("page_id")
+        if not isinstance(page_id, str) or not page_id.strip():
+            raise ValueError(f"page_list page {index} has an invalid page_id")
+        if page_id in seen:
+            raise ValueError(f"page_list contains duplicate page_id {page_id!r}")
+        seen.add(page_id)
+        url = page.get("url")
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError(f"page_list page {page_id!r} has an invalid url")
+        order = page.get("order")
+        if isinstance(order, bool) or not isinstance(order, int):
+            raise ValueError(f"page_list page {page_id!r} has an invalid order")

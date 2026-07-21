@@ -14,6 +14,7 @@ from palimpsest.factory.core.executors import (
     SubprocessExecutor,
     make,
 )
+from palimpsest.factory.core.station import Station, StationResult
 from palimpsest.factory.workspace.io import atomic_write_json, read_json
 from palimpsest.factory.workspace.layout import artifact_path
 
@@ -28,7 +29,16 @@ def workspace(tmp_path):
     doc_dir.mkdir()
     atomic_write_json(
         doc_dir / "page_list.json",
-        {"doc_id": DOC, "pages": [{"page_id": "f001r", "order": 1}]},
+        {
+            "doc_id": DOC,
+            "pages": [
+                {
+                    "page_id": "f001r",
+                    "url": "https://example.test/page.jpg",
+                    "order": 1,
+                }
+            ],
+        },
     )
     atomic_write_json(
         artifact_path(DOC, "page_transcription", "f001r", tmp_path),
@@ -113,12 +123,126 @@ def test_worker_refuses_mismatched_prompt_hash(workspace):
         library_root=str(workspace),
         config_fingerprint="cfg",
         input_fingerprint="inp",
-        model="gemini-3.1-flash-lite-preview",
+        model="gemini-3.1-flash-lite",
         prompt_name="read/la/diplomatic",
         prompt_sha256="0" * 64,
     )
     with pytest.raises(ValueError, match="hash mismatch"):
         execute_cell(spec)
+
+
+def test_execute_cell_validates_station_and_page_identity(workspace, monkeypatch):
+    no_page = CellSpec(
+        doc_id=DOC,
+        station="assemble_page",
+        page_id=None,
+        library_root=str(workspace),
+        config_fingerprint="cfg",
+        input_fingerprint="inp",
+    )
+    with pytest.raises(ValueError, match="requires a page_id"):
+        execute_cell(no_page)
+
+    unknown_page = CellSpec(
+        doc_id=DOC,
+        station="assemble_page",
+        page_id="missing",
+        library_root=str(workspace),
+        config_fingerprint="cfg",
+        input_fingerprint="inp",
+    )
+    with pytest.raises(ValueError, match="not present"):
+        execute_cell(unknown_page)
+
+    class ManuscriptStation(Station):
+        name = "manuscript_test"
+        grain = "manuscript"
+        consumes = ()
+        produces = "translation_brief"
+
+    monkeypatch.setattr(
+        "palimpsest.factory.core.cell.registry.get",
+        lambda name: ManuscriptStation(),
+    )
+    wrong_grain = CellSpec(
+        doc_id=DOC,
+        station="manuscript_test",
+        page_id="f001r",
+        library_root=str(workspace),
+        config_fingerprint="cfg",
+        input_fingerprint="inp",
+    )
+    with pytest.raises(ValueError, match="does not accept a page_id"):
+        execute_cell(wrong_grain)
+
+
+def test_execute_cell_validates_model_configuration(workspace):
+    incomplete = CellSpec(
+        doc_id=DOC,
+        station="read",
+        page_id="f001r",
+        library_root=str(workspace),
+        config_fingerprint="cfg",
+        input_fingerprint="inp",
+    )
+    with pytest.raises(ValueError, match="requires both model and prompt_name"):
+        execute_cell(incomplete)
+
+
+def test_json_station_must_return_payload(workspace, monkeypatch):
+    class EmptyJsonStation(Station):
+        name = "empty_json"
+        grain = "page"
+        consumes = ()
+        produces = "page_translation"
+
+        def run(self, job):
+            return StationResult()
+
+    monkeypatch.setattr(
+        "palimpsest.factory.core.cell.registry.get",
+        lambda name: EmptyJsonStation(),
+    )
+    spec = CellSpec(
+        doc_id=DOC,
+        station="empty_json",
+        page_id="f001r",
+        library_root=str(workspace),
+        config_fingerprint="cfg",
+        input_fingerprint="inp",
+    )
+
+    with pytest.raises(ValueError, match="must return a JSON payload"):
+        execute_cell(spec)
+
+
+def test_file_station_must_create_output_before_provenance(workspace, monkeypatch):
+    class MissingFileStation(Station):
+        name = "missing_file"
+        grain = "page"
+        consumes = ()
+        produces = "page_image"
+
+        def run(self, job):
+            return StationResult()
+
+    monkeypatch.setattr(
+        "palimpsest.factory.core.cell.registry.get",
+        lambda name: MissingFileStation(),
+    )
+    spec = CellSpec(
+        doc_id=DOC,
+        station="missing_file",
+        page_id="f001r",
+        library_root=str(workspace),
+        config_fingerprint="cfg",
+        input_fingerprint="inp",
+    )
+    output = artifact_path(DOC, "page_image", "f001r", workspace)
+
+    with pytest.raises(FileNotFoundError, match="did not write its output"):
+        execute_cell(spec)
+    assert not output.with_suffix(".jpg.provenance.json").exists()
 
 
 def test_make_rejects_unknown_executor():

@@ -26,9 +26,9 @@ class Prompt:
 def load(name: str, root: Path | None = None) -> Prompt:
     # PROMPTS_DIR is resolved at call time, not bound as a default, so tests
     # and future config overrides can repoint the store.
-    root = root if root is not None else PROMPTS_DIR
-    path = (root / f"{name}.txt").resolve()
-    if not path.is_relative_to(root.resolve()):
+    store = (root if root is not None else PROMPTS_DIR).resolve()
+    path = (store / f"{name}.txt").resolve()
+    if not path.is_relative_to(store):
         raise ValueError(f"Prompt name escapes the prompt store: {name}")
     if not path.exists():
         raise FileNotFoundError(f"Prompt not found: {path}")

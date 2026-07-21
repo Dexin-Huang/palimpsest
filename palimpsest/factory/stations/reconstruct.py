@@ -74,6 +74,8 @@ class Reconstruct(Station):
             read_json(job.path_of("page_assembled", page["page_id"]))
             for page in job.pages
         ]
+        if not pages:
+            raise ValueError("Reconstruction requires at least one assembled page")
         plan_text = "\n\n".join(_page_block(page) for page in pages)
         plan, response = generate_json(
             ModelRequest(
@@ -88,15 +90,13 @@ class Reconstruct(Station):
 
         by_id = {page["page_id"]: page for page in pages}
         order = [page["page_id"] for page in pages]
-        joins = {(j["from_page"], j["to_page"]): j for j in plan.get("joins", [])}
+        joins = _index_joins(order, plan.get("joins", []))
 
         sections = []
         for section in plan.get("sections", []) or [
             {"heading": "Text", "from_page": order[0], "to_page": order[-1]}
         ]:
-            span = order[
-                order.index(section["from_page"]) : order.index(section["to_page"]) + 1
-            ]
+            span = _section_span(order, section)
             sections.append(
                 {
                     "heading": section["heading"],
@@ -114,9 +114,46 @@ class Reconstruct(Station):
                 "joins": plan.get("joins", []),
             },
             tokens_in=response.prompt_tokens,
-            tokens_out=response.output_tokens,
+            tokens_out=response.billable_output_tokens,
             cost_usd=response.cost_usd,
         )
+
+
+def _section_span(order: list[str], section: dict) -> list[str]:
+    start_page = section["from_page"]
+    end_page = section["to_page"]
+    try:
+        start = order.index(start_page)
+        end = order.index(end_page)
+    except ValueError as error:
+        raise ValueError(
+            f"Reconstruction section {section['heading']!r} references "
+            f"an unknown page: {error.args[0]!r}"
+        ) from error
+    if start > end:
+        raise ValueError(
+            f"Reconstruction section {section['heading']!r} runs backward "
+            f"from {start_page!r} to {end_page!r}"
+        )
+    return order[start : end + 1]
+
+
+def _index_joins(order: list[str], joins: list[dict]) -> dict[tuple[str, str], dict]:
+    adjacent = set(zip(order, order[1:]))
+    indexed = {}
+    for join in joins:
+        pair = (join["from_page"], join["to_page"])
+        if pair not in adjacent:
+            raise ValueError(
+                f"Reconstruction join {pair[0]!r} → {pair[1]!r} "
+                "does not connect adjacent pages"
+            )
+        if pair in indexed:
+            raise ValueError(
+                f"Reconstruction repeats the join {pair[0]!r} → {pair[1]!r}"
+            )
+        indexed[pair] = join
+    return indexed
 
 
 def _page_block(page: dict) -> str:
@@ -129,25 +166,25 @@ def _page_block(page: dict) -> str:
 
 
 def _assemble(span: list[str], by_id: dict, joins: dict, side: str) -> str:
-    parts: list[str] = []
-    for index, page_id in enumerate(span):
+    if not span:
+        return ""
+
+    parts = [by_id[span[0]][side]["text"].strip()]
+    for previous_id, page_id in zip(span, span[1:]):
         text = by_id[page_id][side]["text"].strip()
-        if index == 0:
-            parts.append(text)
-            continue
-        join = joins.get((span[index - 1], page_id), {})
-        if join.get("kind") == "hyphenation_repair":
-            parts[-1] = parts[-1].rstrip("-¬")
-            parts.append(text)
+        kind = joins.get((previous_id, page_id), {}).get("kind")
+        if kind == "hyphenation_repair":
+            for index in range(len(parts) - 1, -1, -1):
+                parts[index] = parts[index].rstrip("-¬")
+                if parts[index]:
+                    break
             glue = ""
-        elif join.get("kind") in _FLOW_JOINS:
-            parts.append(text)
+        elif kind in _FLOW_JOINS:
             glue = " "
         else:
-            parts.append(text)
             glue = "\n\n"
-        parts[-2:] = [parts[-2] + glue + parts[-1]]
-    return parts[0] if parts else ""
+        parts.extend((glue, text))
+    return "".join(parts)
 
 
 register(Reconstruct())

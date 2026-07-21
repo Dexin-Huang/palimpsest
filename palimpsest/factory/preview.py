@@ -21,6 +21,7 @@ import numpy as np
 from palimpsest.factory.config import LIBRARY_ROOT, PROJECT_ROOT
 from palimpsest.factory.imaging import (
     attenuate_light_marks,
+    encode_png,
     flatten_illumination,
     parchment_frame,
     remove_overlay_marks,
@@ -28,7 +29,7 @@ from palimpsest.factory.imaging import (
     trim_gutter,
 )
 from palimpsest.factory.stations.segment import analyze
-from palimpsest.factory.workspace.io import read_json
+from palimpsest.factory.workspace.io import atomic_write_bytes, read_json
 from palimpsest.factory.workspace.layout import artifact_path
 
 DEFAULT_OUT_DIR = PROJECT_ROOT / "tmp" / "preview"
@@ -66,7 +67,7 @@ def build(
         if not panels:
             continue
         out_path = out_dir / f"{page_id}.png"
-        cv2.imwrite(str(out_path), np.hstack(panels))
+        atomic_write_bytes(out_path, encode_png(np.hstack(panels)))
         written.append(out_path)
     return written
 
@@ -107,7 +108,7 @@ def tune(
                 _labeled_panel(_draw_plan(clean, plan), "flatten + lassos"),
             ]
         )
-        cv2.imwrite(str(out_dir / f"{page_id}.png"), strip)
+        atomic_write_bytes(out_dir / f"{page_id}.png", encode_png(strip))
 
         kinds = [r["kind"] for r in plan["regions"]]
         row = {
@@ -151,16 +152,21 @@ def _find_source_image(doc_id: str, page_id: str, library_root: Path) -> Path:
     return image
 
 
-def _draw_plan(image: np.ndarray, plan: dict) -> np.ndarray:
+def _draw_plan(
+    image: np.ndarray, plan: dict, *, show_line_counts: bool = True
+) -> np.ndarray:
     viz = image.copy()
     thickness = max(2, image.shape[0] // 900)
     for region in plan.get("regions", []):
         x, y, bw, bh = region["bbox"]
         color = KIND_COLORS.get(region["kind"], (128, 128, 128))
         cv2.rectangle(viz, (x, y), (x + bw, y + bh), color, thickness)
+        label = f"{region['region_id']} {region['kind']}"
+        if show_line_counts:
+            label += f" {region['est_lines']}L"
         cv2.putText(
             viz,
-            f"{region['region_id']} {region['kind']} {region['est_lines']}L",
+            label,
             (x, max(18, y - 8)),
             cv2.FONT_HERSHEY_SIMPLEX,
             image.shape[0] / 2200,
@@ -185,32 +191,7 @@ def _overlay(
     regions_path = artifact_path(doc_id, "page_regions", page_id, library_root)
     if not regions_path.exists():
         return image
-    plan = read_json(regions_path)
-    viz = image.copy()
-    thickness = max(2, image.shape[0] // 900)
-    for region in plan.get("regions", []):
-        x, y, bw, bh = region["bbox"]
-        color = KIND_COLORS.get(region["kind"], (128, 128, 128))
-        cv2.rectangle(viz, (x, y), (x + bw, y + bh), color, thickness)
-        cv2.putText(
-            viz,
-            f"{region['region_id']} {region['kind']}",
-            (x, max(18, y - 8)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            image.shape[0] / 2200,
-            color,
-            thickness,
-        )
-    cv2.putText(
-        viz,
-        f"route: {plan.get('route', '?')}",
-        (20, image.shape[0] - 30),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        image.shape[0] / 1400,
-        (30, 30, 200),
-        thickness + 1,
-    )
-    return viz
+    return _draw_plan(image, read_json(regions_path), show_line_counts=False)
 
 
 def _labeled_panel(image: np.ndarray, label: str) -> np.ndarray:

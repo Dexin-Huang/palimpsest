@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from palimpsest.factory.glyphs import align_page
+from palimpsest.factory.glyphs import Cell, align_column, align_page
 
 GLYPH = 40  # px, synthetic character size
 PITCH = 70  # vertical pitch between characters
@@ -20,6 +20,33 @@ def _page(columns: list[int]) -> np.ndarray:
             y = 40 + PITCH * r
             img[y : y + GLYPH, x : x + GLYPH] = 0
     return img
+
+
+def test_column_alignment_matches_merges_and_skips_noise_without_mutation():
+    exact = [Cell(10, 0, 20, 40), Cell(10, 50, 20, 90)]
+    fragments = [Cell(10, 0, 20, 15), Cell(8, 18, 22, 40)]
+    noisy = [
+        Cell(10, 0, 20, 40),
+        Cell(5, 50, 25, 250),
+        Cell(10, 260, 20, 300),
+    ]
+    before = [
+        [Cell(c.x0, c.y0, c.x1, c.y1) for c in case]
+        for case in (exact, fragments, noisy)
+    ]
+
+    assert align_column(exact, list("甲乙"), GLYPH) == [
+        ("甲", [10, 0, 10, 40], 1.0, "blob"),
+        ("乙", [10, 50, 10, 40], 1.0, "blob"),
+    ]
+    assert align_column(fragments, ["甲"], GLYPH) == [
+        ("甲", [8, 0, 14, 40], 1.0, "merged")
+    ]
+    assert align_column(noisy, list("甲乙"), GLYPH) == [
+        ("甲", [10, 0, 10, 40], 1.0, "blob"),
+        ("乙", [10, 260, 10, 40], 1.0, "blob"),
+    ]
+    assert [exact, fragments, noisy] == before
 
 
 def test_clean_grid_aligns_fully():
@@ -67,3 +94,27 @@ def test_extra_line_without_ink_stays_auditable():
     result = align_page(img, ["甲乙", "丙丁"])
     second = result["columns"][1]["chars"]
     assert all(c["method"] == "none" for c in second)
+
+
+def test_blank_image_preserves_unboxed_transcription():
+    img = np.full((300, 200, 3), 255, np.uint8)
+    result = align_page(img, ["甲乙", "丙"])
+
+    assert [
+        [char["ch"] for char in column["chars"]] for column in result["columns"]
+    ] == [
+        ["甲", "乙"],
+        ["丙"],
+    ]
+    assert all(
+        char["method"] == "none"
+        for column in result["columns"]
+        for char in column["chars"]
+    )
+    assert result["stats"] == {
+        "transcribed": 3,
+        "boxed": 0,
+        "count_mismatch_columns": 2,
+        "image_columns": 0,
+        "small_blobs_unassigned": 0,
+    }

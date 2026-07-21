@@ -37,22 +37,13 @@ def page_list_path(doc_id: str, library_root: Path = LIBRARY_ROOT) -> Path:
     return doc_dir(doc_id, library_root) / PAGE_LIST_FILENAME
 
 
-def page_artifact(
-    doc_id: str, kind: str, page_id: str, library_root: Path = LIBRARY_ROOT
-) -> Path:
-    return doc_dir(doc_id, library_root) / kind / f"{page_id}{PAGE_KIND_SUFFIX[kind]}"
-
-
-def doc_artifact(doc_id: str, kind: str, library_root: Path = LIBRARY_ROOT) -> Path:
-    return doc_dir(doc_id, library_root) / DOC_KIND_FILENAME[kind].format(doc_id=doc_id)
-
-
 def artifact_path(
     doc_id: str, kind: str, page_id: str | None, library_root: Path = LIBRARY_ROOT
 ) -> Path:
-    """The one resolver stations and the conductor share: kind + page → file."""
+    """Resolve one artifact kind and optional page to its workspace path."""
+    root = doc_dir(doc_id, library_root)
     if kind in PAGE_KIND_SUFFIX:
         if page_id is None:
             raise ValueError(f"Page-grain kind {kind} requires a page_id")
-        return page_artifact(doc_id, kind, page_id, library_root)
-    return doc_artifact(doc_id, kind, library_root)
+        return root / kind / f"{page_id}{PAGE_KIND_SUFFIX[kind]}"
+    return root / DOC_KIND_FILENAME[kind].format(doc_id=doc_id)

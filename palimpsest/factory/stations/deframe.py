@@ -7,8 +7,6 @@ the background statistics of every later CV step and the model's attention.
 
 from __future__ import annotations
 
-import cv2
-
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.imaging import (
@@ -17,6 +15,7 @@ from palimpsest.factory.imaging import (
     to_gray,
     trim_gutter,
 )
+from palimpsest.factory.stations.image_input import load_image
 from palimpsest.factory.workspace.io import atomic_write_bytes
 
 
@@ -29,15 +28,14 @@ class Deframe(Station):
     option_keys = frozenset({"frame_margin"})
 
     def run(self, job: Job) -> StationResult:
-        image = cv2.imread(str(job.path_of("page_image")))
-        if image is None:
-            raise ValueError(f"Unreadable image: {job.path_of('page_image')}")
+        image = load_image(job, "page_image")
+        gray = to_gray(image)
         x0, y0, x1, y1 = parchment_frame(
-            to_gray(image),
+            gray,
             margin_fraction=float(job.config.options.get("frame_margin", 0.02)),
         )
         framed = image[y0:y1, x0:x1]
-        gx0, gx1 = trim_gutter(to_gray(framed))
+        gx0, gx1 = trim_gutter(gray[y0:y1, x0:x1])
         atomic_write_bytes(self.output_path(job), encode_jpeg(framed[:, gx0:gx1]))
         return StationResult()
 

@@ -1,24 +1,28 @@
 """assemble_page: join transcription + translation into the small loop's
 finished part. Pure assembly — no model call.
 
-Under ``trim_seam_overlap`` (overlapping scroll segments), the original is
-trimmed against the previous page with the same pure function translate used,
-so the assembled original and translation cover the same columns; the dropped
-duplicate stays auditable in ``original.seam``."""
+The translation artifact records any overlap removed before translation.
+Assembly applies that same seam report to the diplomatic transcription, so
+the original and translation cover identical columns without independently
+recomputing the boundary.
+"""
 
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
+import json
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.seams import prev_page_id, trim_overlap
-from palimpsest.factory.workspace.io import read_json
 
 
-def _sha16(path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+def _apply_seam(text: str, seam: dict | None) -> str:
+    if seam is None:
+        return text
+    dropped = seam.get("dropped_text")
+    if not isinstance(dropped, str) or not dropped or not text.startswith(dropped):
+        raise ValueError("Translation seam does not match the page transcription")
+    return text[len(dropped) :].strip("\n")
 
 
 class AssemblePage(Station):
@@ -27,26 +31,17 @@ class AssemblePage(Station):
     grain = "page"
     consumes = ("page_transcription", "page_translation")
     produces = "page_assembled"
-    option_keys = frozenset({"trim_seam_overlap"})
-
-    def input_paths(self, job: Job) -> list[Path]:
-        paths = [job.path_of(kind) for kind in self.consumes]
-        previous = self._seam_neighbor(job)
-        if previous:
-            paths.append(job.path_of("page_transcription", previous))
-        return paths
 
     def run(self, job: Job) -> StationResult:
         transcription_path = job.path_of("page_transcription")
         translation_path = job.path_of("page_translation")
-        transcription = read_json(transcription_path)
-        translation = read_json(translation_path)
+        transcription_bytes = transcription_path.read_bytes()
+        translation_bytes = translation_path.read_bytes()
+        transcription = json.loads(transcription_bytes)
+        translation = json.loads(translation_bytes)
 
-        text, seam = transcription["text"], None
-        previous = self._seam_neighbor(job)
-        if previous:
-            prev_text = read_json(job.path_of("page_transcription", previous))["text"]
-            text, seam = trim_overlap(prev_text, text)
+        seam = translation.get("seam")
+        text = _apply_seam(transcription["text"], seam)
 
         return StationResult(
             payload={
@@ -64,18 +59,16 @@ class AssemblePage(Station):
                     "notes": translation.get("notes", ""),
                     "flags": translation.get("flags", {}),
                 },
-                "alignment": [],
                 "inputs": {
-                    "page_transcription": _sha16(transcription_path),
-                    "page_translation": _sha16(translation_path),
+                    "page_transcription": hashlib.sha256(
+                        transcription_bytes
+                    ).hexdigest()[:16],
+                    "page_translation": hashlib.sha256(translation_bytes).hexdigest()[
+                        :16
+                    ],
                 },
             }
         )
-
-    def _seam_neighbor(self, job: Job) -> str | None:
-        if not job.config.options.get("trim_seam_overlap"):
-            return None
-        return prev_page_id(job.pages, job.page_id)
 
 
 register(AssemblePage())

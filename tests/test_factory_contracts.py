@@ -7,16 +7,18 @@ import pytest
 
 from palimpsest.factory import graph
 from palimpsest.factory.core import registry
-from palimpsest.factory.core.contracts import CONTRACTS, SOURCE_KINDS, validate_payload
+from palimpsest.factory.core.contracts import CONTRACTS, validate_payload
 from palimpsest.factory.core.station import Station
 
 
 def test_every_registered_station_references_known_kinds():
     for station in registry.all_stations():
-        for kind in (*station.consumes, station.produces):
-            assert kind in CONTRACTS or kind in SOURCE_KINDS, (
-                f"{station.name} references unknown kind {kind}"
-            )
+        for kind in (
+            *station.consumes,
+            *station.optional_consumes,
+            station.produces,
+        ):
+            assert kind in CONTRACTS, f"{station.name} references unknown kind {kind}"
 
 
 def test_registering_station_with_unknown_kind_fails():
@@ -28,6 +30,39 @@ def test_registering_station_with_unknown_kind_fails():
 
     with pytest.raises(ValueError, match="unknown artifact kind"):
         registry.register(Bogus())
+
+
+def test_registering_station_with_wrong_output_grain_fails():
+    class WrongGrain(Station):
+        name = "wrong_grain"
+        grain = "page"
+        consumes = ()
+        produces = "book"
+
+    with pytest.raises(ValueError, match="page-grain.*manuscript-grain"):
+        registry.register(WrongGrain())
+
+
+def test_source_kinds_and_station_outputs_have_one_producer():
+    registry.get("translate")  # load the built-in registry before checking conflicts
+
+    class DuplicateProducer(Station):
+        name = "duplicate_translation"
+        grain = "page"
+        consumes = ()
+        produces = "page_translation"
+
+    with pytest.raises(ValueError, match="already has producer 'translate'"):
+        registry.register(DuplicateProducer())
+
+    class SourceProducer(Station):
+        name = "source_producer"
+        grain = "manuscript"
+        consumes = ()
+        produces = "page_list"
+
+    with pytest.raises(ValueError, match="cannot produce source artifact"):
+        registry.register(SourceProducer())
 
 
 def test_validate_payload_enforces_required_fields():
@@ -42,6 +77,47 @@ def test_validate_payload_enforces_required_fields():
 def test_validate_payload_rejects_binary_kinds():
     with pytest.raises(ValueError, match="not a JSON payload"):
         validate_payload("page_image", {})
+
+
+@pytest.mark.parametrize(
+    ("pages", "message"),
+    [
+        ([], "nonempty list"),
+        ([{"page_id": "p1", "url": "", "order": 1}], "invalid url"),
+        (
+            [
+                {"page_id": "p1", "url": "https://example.test/1.jpg", "order": 1},
+                {"page_id": "p1", "url": "https://example.test/2.jpg", "order": 2},
+            ],
+            "duplicate page_id",
+        ),
+        (
+            [{"page_id": "p1", "url": "https://example.test/1.jpg", "order": "1"}],
+            "invalid order",
+        ),
+    ],
+)
+def test_page_list_contract_validates_page_members(pages, message):
+    with pytest.raises(ValueError, match=message):
+        validate_payload("page_list", {"doc_id": "doc", "pages": pages})
+
+
+def test_page_list_contract_rejects_cross_document_reload():
+    with pytest.raises(ValueError, match="does not match"):
+        validate_payload(
+            "page_list",
+            {
+                "doc_id": "other",
+                "pages": [
+                    {
+                        "page_id": "p1",
+                        "url": "https://example.test/1.jpg",
+                        "order": 1,
+                    }
+                ],
+            },
+            expected_doc_id="doc",
+        )
 
 
 def test_graph_reflects_live_registries():

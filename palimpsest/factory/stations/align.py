@@ -9,11 +9,10 @@ never forced — interlinear glosses and damaged spans stay auditable holes.
 
 from __future__ import annotations
 
-import cv2
-
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.glyphs import align_page
+from palimpsest.factory.stations.image_input import load_image
 from palimpsest.factory.workspace.io import read_json
 
 
@@ -25,9 +24,7 @@ class Align(Station):
     produces = "page_alignment"
 
     def run(self, job: Job) -> StationResult:
-        image = cv2.imread(str(job.path_of("page_image_clean")))
-        if image is None:
-            raise ValueError(f"Unreadable image: {job.path_of('page_image_clean')}")
+        image = load_image(job, "page_image_clean")
         transcription = read_json(job.path_of("page_transcription"))
         aligned = align_page(image, transcription["text"].splitlines())
         return StationResult(

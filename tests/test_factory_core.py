@@ -11,7 +11,12 @@ import sqlite3
 import pytest
 
 from palimpsest.factory import prompt_store
+from palimpsest.factory.core import conductor as conductor_module
+from palimpsest.factory.core.cell import CellOutcome
+from palimpsest.factory.core.conductor import CellReport, Conductor, RunReport
 from palimpsest.factory.core.ledger import Ledger, fingerprint
+from palimpsest.factory.core.recipe import Recipe, StationSpec
+from palimpsest.factory.core.station import Station
 from palimpsest.factory.gateway import GatewayError, ModelRequest, generate
 from palimpsest.factory.gateway.pricing import estimate_cost
 from palimpsest.factory.workspace import io as ws_io
@@ -35,6 +40,7 @@ def test_ledger_has_canonical_work_order_schema(ledger, tmp_path):
         }
     assert columns == {"doc_id", "recipe", "created_at", "status"}
     assert "prospects" not in tables
+    assert "work_runs" in tables
 
 
 def _adopt_test_item(ledger: Ledger) -> str:
@@ -49,6 +55,45 @@ def test_adopt_creates_work_order(ledger):
     assert item["doc_id"] == doc_id
     assert item["status"] == "active"
     assert item["recipe"] == "latin_manuscript"
+
+
+def test_work_claim_excludes_other_processes(tmp_path):
+    db_path = tmp_path / "factory.db"
+    with Ledger(db_path) as first, Ledger(db_path) as second:
+        first.adopt("claimed_doc", recipe="latin_manuscript")
+        first_claim = first.claim_work("claimed_doc", owner="first")
+
+        with pytest.raises(RuntimeError, match="already running under first"):
+            second.claim_work("claimed_doc", owner="second")
+
+        first.finish_work(first_claim, status="done")
+        second_claim = second.claim_work("claimed_doc", owner="second")
+        second.finish_work(second_claim, status="done")
+
+
+def test_stale_claim_reconciles_unfinished_cells(ledger, tmp_path):
+    doc_id = _adopt_test_item(ledger)
+    claim = ledger.claim_work(doc_id, owner="crashed")
+    stage = ledger.begin_run(
+        doc_id,
+        "read",
+        page_id="0042",
+        station_fingerprint="read-implementation",
+        config_fingerprint="cfg",
+        input_fingerprint="in",
+    )
+
+    assert ledger.reconcile_abandoned(doc_id, stale_before="9999-01-01") == 1
+
+    with sqlite3.connect(tmp_path / "factory.db") as database:
+        work_status = database.execute(
+            "SELECT status FROM work_runs WHERE work_run_id = ?", (claim,)
+        ).fetchone()[0]
+        stage_status = database.execute(
+            "SELECT status FROM stage_runs WHERE run_id = ?", (stage,)
+        ).fetchone()[0]
+    assert work_status == "abandoned"
+    assert stage_status == "failed:abandoned"
 
 
 def test_refresh_appends_history_and_state_shows_latest(ledger, tmp_path):
@@ -118,6 +163,147 @@ def test_fingerprint_is_deterministic_and_order_sensitive():
     assert fingerprint("a", None) == fingerprint("a", "")
 
 
+def test_run_report_preserves_unknown_cost_without_counting_skips():
+    report = RunReport(
+        doc_id="doc",
+        recipe="recipe",
+        cells=[
+            CellReport("read", "1", "fresh"),
+            CellReport("read", "2", "ran", cost_usd=0.25),
+            CellReport("read", "3", "ran", cost_usd=None),
+        ],
+    )
+
+    assert report.cost_usd is None
+    report.cells.pop()
+    assert report.cost_usd == 0.25
+
+
+def test_conductor_verifies_output_and_refreshes_prompt_snapshot(
+    ledger, tmp_path, monkeypatch
+):
+    class OutputStation(Station):
+        name = "test_output"
+        grain = "page"
+        consumes = ()
+        produces = "page_translation"
+
+    station = OutputStation()
+    prompt_digest = {"value": "a" * 64}
+    monkeypatch.setattr(
+        conductor_module.prompt_store,
+        "load",
+        lambda name: prompt_store.Prompt(
+            name=name,
+            text="test prompt",
+            sha256=prompt_digest["value"],
+        ),
+    )
+    recipe = Recipe(
+        name="test_recipe",
+        language="",
+        steps=(
+            StationSpec(
+                station=station,
+                model=None,
+                prompt_name="test/prompt",
+                params={},
+                options={},
+            ),
+        ),
+    )
+    monkeypatch.setattr(conductor_module, "load_recipe", lambda name: recipe)
+
+    doc_id = "integrity_doc"
+    page_id = "f001r"
+    ledger.adopt(doc_id, recipe=recipe.name)
+    ws_io.atomic_write_json(
+        layout.page_list_path(doc_id, tmp_path),
+        {
+            "doc_id": doc_id,
+            "pages": [
+                {"page_id": page_id, "url": "https://example.test/page.jpg", "order": 1}
+            ],
+        },
+    )
+    output_path = layout.artifact_path(
+        doc_id, station.produces, page_id, library_root=tmp_path
+    )
+
+    class RecordingExecutor:
+        calls = 0
+        reported_path = output_path
+
+        def execute(self, cell):
+            self.calls += 1
+            ws_io.atomic_write_json(
+                output_path,
+                {
+                    "doc_id": doc_id,
+                    "page_id": page_id,
+                    "translation": f"generated-{self.calls}",
+                    "flags": {},
+                    "provenance": {
+                        "station": cell.station,
+                        "station_fingerprint": station.implementation_fingerprint,
+                        "config_fingerprint": cell.config_fingerprint,
+                        "input_fingerprint": cell.input_fingerprint,
+                    },
+                },
+            )
+            return CellOutcome(output_path=str(self.reported_path))
+
+    executor = RecordingExecutor()
+    conductor = Conductor(ledger, library_root=tmp_path, workers=1)
+    conductor._executor = executor
+
+    assert conductor.run(doc_id).count("ran") == 1
+    tampered = ws_io.read_json(output_path)
+    tampered["translation"] = "manually changed"
+    ws_io.atomic_write_json(output_path, tampered)
+    rerun = conductor.run(doc_id)
+    assert rerun.count("ran") == 1
+    assert rerun.count("fresh") == 0
+    assert executor.calls == 2
+    forged = ws_io.read_json(output_path)
+    forged["provenance"]["input_fingerprint"] = "forged"
+    ws_io.atomic_write_json(output_path, forged)
+    assert conductor.run(doc_id).count("ran") == 1
+    assert executor.calls == 3
+
+    prompt_digest["value"] = "b" * 64
+    outdated = conductor.run(doc_id)
+    assert outdated.count("outdated") == 1
+    assert executor.calls == 3
+
+    output_path.unlink()
+    executor.reported_path = tmp_path / "unrelated.json"
+    failed = conductor.run(doc_id)
+    assert failed.count("failed") == 1
+    assert "expected" in failed.cells[0].error
+
+    class BilledFailureExecutor:
+        def execute(self, cell):
+            raise GatewayError(
+                "malformed paid response",
+                tokens_in=120,
+                tokens_out=45,
+                cost_usd=0.12,
+            )
+
+    conductor._executor = BilledFailureExecutor()
+    billed_failure = conductor.run(doc_id)
+    assert billed_failure.cost_usd == 0.12
+    with sqlite3.connect(tmp_path / "factory.db") as database:
+        tokens_in, tokens_out, cost = database.execute(
+            """
+            SELECT tokens_in, tokens_out, cost_usd
+            FROM stage_runs ORDER BY run_id DESC LIMIT 1
+            """
+        ).fetchone()
+    assert (tokens_in, tokens_out, cost) == (120, 45, 0.12)
+
+
 def test_prompt_store_loads_and_hashes(tmp_path):
     (tmp_path / "read" / "la").mkdir(parents=True)
     (tmp_path / "read" / "la" / "diplomatic.txt").write_text(
@@ -155,8 +341,8 @@ def test_gateway_rejects_unknown_provider():
 
 
 def test_pricing_known_and_unknown_models():
-    # rates come from the genai-prices database and change over time —
-    # assert resolution behavior, not specific numbers
-    cost = estimate_cost("gemini-3.5-flash", 1000, 500)
-    assert cost is not None and cost > 0
+    for model in ("gemini-3.6-flash", "gemini-3.5-flash-lite"):
+        cost = estimate_cost(model, 1000, 500)
+        assert cost is not None and cost > 0
+    assert estimate_cost("gemini-3.6-flash", 1_000_000, 1_000_000) == pytest.approx(9.0)
     assert estimate_cost("no-such-model", 1, 1) is None

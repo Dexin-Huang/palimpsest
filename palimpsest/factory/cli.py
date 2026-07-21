@@ -15,42 +15,55 @@ from palimpsest.factory.core.ledger import Ledger
 
 
 def add_commands(subparsers) -> None:
-
     init_db = subparsers.add_parser(
         "init-db", help="Create the factory ledger database"
     )
-    init_db.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
-    init_db.set_defaults(func=cmd_init_db)
-
     status = subparsers.add_parser(
         "status", help="Show items on the line, or one item's stage state"
     )
-    status.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
-    status.add_argument("--doc-id", default=None)
-    status.set_defaults(func=cmd_status)
     intake = subparsers.add_parser(
         "intake", help="Create a work order from an IIIF manifest"
     )
-    intake.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
-    intake.add_argument("--doc-id", required=True)
+    adopt = subparsers.add_parser(
+        "adopt", help="Put an existing library document on the line"
+    )
+    run = subparsers.add_parser("run", help="Drive a work order through its recipe")
+    graph = subparsers.add_parser(
+        "graph", help="The contract graph (input → transformation → output)"
+    )
+    preview = subparsers.add_parser(
+        "preview", help="Render preprocessing stages + lassos for given pages"
+    )
+    tune = subparsers.add_parser(
+        "tune",
+        help="Offline lasso tuning: compute the CV chain in memory, "
+        "render strips, score routing (no ledger, no network)",
+    )
+    evaluate = subparsers.add_parser(
+        "evaluate",
+        help="Compare factory transcriptions against a reference "
+        "JSONL: contamination/repetition metrics + optional "
+        "blind pairwise image judge",
+    )
+    site = subparsers.add_parser(
+        "site", help="Rebuild the hosted library from all published books"
+    )
+
+    for parser in (init_db, status, intake, adopt, run):
+        parser.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    for parser in (intake, adopt, run, preview, tune, evaluate):
+        parser.add_argument("--doc-id", required=True)
+
+    status.add_argument("--doc-id", default=None)
+
     intake.add_argument("--manifest", required=True)
     intake.add_argument("--recipe", required=True)
     intake.add_argument("--image-size", default="max")
     intake.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
-    intake.set_defaults(func=cmd_intake)
 
-    adopt = subparsers.add_parser(
-        "adopt", help="Put an existing library document on the line"
-    )
-    adopt.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
-    adopt.add_argument("--doc-id", required=True)
     adopt.add_argument("--recipe", required=True)
     adopt.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
-    adopt.set_defaults(func=cmd_adopt)
 
-    run = subparsers.add_parser("run", help="Drive a work order through its recipe")
-    run.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
-    run.add_argument("--doc-id", required=True)
     run.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     run.add_argument("--workers", type=int, default=None)
     run.add_argument(
@@ -66,33 +79,17 @@ def add_commands(subparsers) -> None:
         default="inline",
         help="How cells execute: in-thread, or one isolated process per cell",
     )
-    run.set_defaults(func=cmd_run)
 
-    graph = subparsers.add_parser(
-        "graph", help="The contract graph (input → transformation → output)"
-    )
     graph.add_argument("--format", choices=["mermaid", "json"], default="mermaid")
     graph.add_argument(
         "--write-docs", action="store_true", help="Regenerate docs/CONTRACTS.md"
     )
-    graph.set_defaults(func=cmd_graph)
 
-    preview = subparsers.add_parser(
-        "preview", help="Render preprocessing stages + lassos for given pages"
-    )
-    preview.add_argument("--doc-id", required=True)
     preview.add_argument(
         "--pages", required=True, help="Comma-separated page ids, e.g. f001r,f002v"
     )
     preview.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
-    preview.set_defaults(func=cmd_preview)
 
-    tune = subparsers.add_parser(
-        "tune",
-        help="Offline lasso tuning: compute the CV chain in memory, "
-        "render strips, score routing (no ledger, no network)",
-    )
-    tune.add_argument("--doc-id", required=True)
     tune.add_argument("--pages", required=True)
     tune.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     tune.add_argument(
@@ -101,15 +98,7 @@ def add_commands(subparsers) -> None:
         default=None,
         help="transcriptions.jsonl for routing sanity checks",
     )
-    tune.set_defaults(func=cmd_tune)
 
-    evaluate = subparsers.add_parser(
-        "evaluate",
-        help="Compare factory transcriptions against a reference "
-        "JSONL: contamination/repetition metrics + optional "
-        "blind pairwise image judge",
-    )
-    evaluate.add_argument("--doc-id", required=True)
     evaluate.add_argument("--reference", type=Path, required=True)
     evaluate.add_argument("--pages", required=True)
     evaluate.add_argument("--judge-model", default=None)
@@ -119,14 +108,30 @@ def add_commands(subparsers) -> None:
         help="Doc holding the page images (defaults to --doc-id)",
     )
     evaluate.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
-    evaluate.set_defaults(func=cmd_evaluate)
 
-    site = subparsers.add_parser(
-        "site", help="Rebuild the hosted library from all published books"
-    )
     site.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     site.add_argument("--site-root", type=Path, default=None)
-    site.set_defaults(func=cmd_site)
+
+    for parser, handler in (
+        (init_db, cmd_init_db),
+        (status, cmd_status),
+        (intake, cmd_intake),
+        (adopt, cmd_adopt),
+        (run, cmd_run),
+        (graph, cmd_graph),
+        (preview, cmd_preview),
+        (tune, cmd_tune),
+        (evaluate, cmd_evaluate),
+        (site, cmd_site),
+    ):
+        parser.set_defaults(func=handler)
+
+
+def _page_ids(value: str) -> list[str]:
+    page_ids = [page_id.strip() for page_id in value.split(",") if page_id.strip()]
+    if not page_ids:
+        raise ValueError("--pages must name at least one page")
+    return page_ids
 
 
 def cmd_init_db(args: argparse.Namespace) -> None:
@@ -159,18 +164,15 @@ def cmd_intake(args: argparse.Namespace) -> None:
 
 
 def cmd_adopt(args: argparse.Namespace) -> None:
-    from palimpsest.factory.core.contracts import validate_payload
     from palimpsest.factory.core.recipe import load as load_recipe
+    from palimpsest.factory.intake import validate_records
     from palimpsest.factory.workspace.io import read_json
     from palimpsest.factory.workspace.layout import metadata_path, page_list_path
 
     recipe = load_recipe(args.recipe)
-    validate_payload(
-        "metadata", read_json(metadata_path(args.doc_id, args.library_root))
-    )
-    validate_payload(
-        "page_list", read_json(page_list_path(args.doc_id, args.library_root))
-    )
+    metadata = read_json(metadata_path(args.doc_id, args.library_root))
+    page_list = read_json(page_list_path(args.doc_id, args.library_root))
+    validate_records(args.doc_id, metadata, page_list)
     with Ledger(args.db) as ledger:
         if ledger.item(args.doc_id) is not None:
             raise ValueError(f"Work order already exists: {args.doc_id}")
@@ -221,7 +223,7 @@ def cmd_graph(args: argparse.Namespace) -> None:
 def cmd_preview(args: argparse.Namespace) -> None:
     from palimpsest.factory.preview import build
 
-    written = build(args.doc_id, args.pages.split(","), library_root=args.library_root)
+    written = build(args.doc_id, _page_ids(args.pages), library_root=args.library_root)
     for path in written:
         print(path)
     if not written:
@@ -233,7 +235,7 @@ def cmd_tune(args: argparse.Namespace) -> None:
 
     rows = tune(
         args.doc_id,
-        args.pages.split(","),
+        _page_ids(args.pages),
         library_root=args.library_root,
         reference=args.reference,
     )
@@ -257,7 +259,7 @@ def cmd_evaluate(args: argparse.Namespace) -> None:
     results = evaluate(
         args.doc_id,
         args.reference,
-        args.pages.split(","),
+        _page_ids(args.pages),
         library_root=args.library_root,
         judge_model=args.judge_model,
         image_doc_id=args.image_doc_id,

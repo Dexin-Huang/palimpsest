@@ -2,18 +2,20 @@
 
 A station is one hermetic processing step: it reads its declared inputs,
 produces exactly one output artifact, and reports usage. It never touches
-the ledger, never talks to siblings, and keeps no state between executions —
-the conductor owns scheduling, freshness, provenance stamping, and logging.
+the ledger, never talks to siblings, and keeps no state between executions.
+The conductor owns scheduling, freshness, and ledger logging; the cell runtime
+owns output validation, provenance stamping, and atomic writes.
 
 Two artifact modes, signalled by ``StationResult.payload``:
-- JSON stations return the artifact content as a dict; the conductor embeds
+- JSON stations return the artifact content as a dict; the cell runtime embeds
   the provenance stamp and performs the atomic write.
 - File stations (images) write their output file themselves (atomically) and
-  return ``payload=None``; the conductor writes a ``<output>.provenance.json``
-  sidecar so binary artifacts stay auditable on disk.
+  return ``payload=None``; the cell runtime writes a
+  ``<output>.provenance.json`` sidecar so binary artifacts stay auditable.
 """
 
 from __future__ import annotations
+
 import hashlib
 from functools import cache
 
@@ -22,7 +24,8 @@ from pathlib import Path
 from typing import Any, Literal, Mapping
 
 from palimpsest.factory.prompt_store import Prompt
-from palimpsest.factory.workspace.layout import PAGE_KIND_SUFFIX, artifact_path
+from palimpsest.factory.core.contracts import contract
+from palimpsest.factory.workspace.layout import artifact_path
 
 
 @cache
@@ -82,11 +85,12 @@ class StationResult:
 class Station:
     """Base class: subclasses set the class attributes and implement run().
 
-    ``consumes``/``produces`` are artifact kinds (workspace/layout.py is the
-    kind registry). The default ``input_paths`` resolves each consumed kind
-    for the job's own page; stations with wider inputs (e.g. translate's
-    neighbor-context) override it — whatever they read MUST be listed, since
-    the conductor fingerprints exactly these files for staleness.
+    ``consumes``/``optional_consumes``/``produces`` are artifact kinds from
+    ``core.contracts``. The default ``input_paths`` resolves each required
+    input and every optional input present for this job. Stations with wider
+    inputs (e.g. translate's neighbor-context) override it — whatever they
+    read MUST be listed, since the conductor fingerprints exactly these files
+    for staleness.
     """
 
     name: str
@@ -101,19 +105,29 @@ class Station:
 
     grain: Literal["page", "manuscript"]
     consumes: tuple[str, ...]
+    optional_consumes: tuple[str, ...] = ()
     produces: str
     uses_model: bool = False
     param_keys: frozenset[str] = frozenset()
     option_keys: frozenset[str] = frozenset()
 
     def input_paths(self, job: Job) -> list[Path]:
+        required = self._paths_for(job, self.consumes)
+        optional = [
+            path
+            for path in self._paths_for(job, self.optional_consumes)
+            if path.is_file()
+        ]
+        return [*required, *optional]
+
+    def _paths_for(self, job: Job, kinds: tuple[str, ...]) -> list[Path]:
         if self.grain == "page":
-            return [job.path_of(kind) for kind in self.consumes]
+            return [job.path_of(kind) for kind in kinds]
         paths = []
-        for kind in self.consumes:
-            if kind in PAGE_KIND_SUFFIX:  # one file per page
+        for kind in kinds:
+            if contract(kind).grain == "page":
                 paths.extend(job.path_of(kind, page["page_id"]) for page in job.pages)
-            else:  # manuscript-grain kinds are single files
+            else:
                 paths.append(job.path_of(kind))
         return paths
 

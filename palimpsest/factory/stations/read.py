@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import re
 
-import cv2
 import numpy as np
 
+from palimpsest.factory.usage import combine_cost, combine_count
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.gateway import (
@@ -28,13 +28,14 @@ from palimpsest.factory.gateway import (
     generate_json,
 )
 from palimpsest.factory.imaging import encode_png
+from palimpsest.factory.stations.image_input import load_image
 from palimpsest.factory.workspace.io import read_json
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are an expert paleographer transcribing digitized manuscript pages."
 )
 TILE_PAD_GLYPHS = 1.5
-_TRUNCATION_REASONS = ("MAX_TOKENS", "LENGTH")
+_TRUNCATION_REASONS = ("MAX_TOKENS", "LENGTH", "INCOMPLETE")
 
 # Thinking models sometimes deliberate in their output; a schema leaves no
 # channel for anything but the transcription itself.
@@ -58,7 +59,7 @@ class Read(Station):
             "temperature",
             "max_output_tokens",
             "media_resolution",
-            "thinking_budget",
+            "thinking_level",
         }
     )
 
@@ -66,15 +67,22 @@ class Read(Station):
         plan = read_json(job.path_of("page_regions"))
         usage = _Usage()
 
-        route = plan["route"]
-        if route == "blank":
-            regions, text = [], ""
-        elif route == "full_page":
-            regions, text, escalated = self._full_page(job, plan, usage)
-            if escalated:
-                route = "segmented(escalated)"
-        else:
-            regions, text = self._segmented(job, plan, usage)
+        try:
+            route = plan["route"]
+            if route == "blank":
+                regions, text = [], ""
+            elif route == "full_page":
+                regions, text, escalated = self._full_page(job, plan, usage)
+                if escalated:
+                    route = "segmented(escalated)"
+            else:
+                regions, text = self._segmented(job, plan, usage)
+        except GatewayError as error:
+            raise error.with_prior_usage(
+                tokens_in=usage.tokens_in,
+                tokens_out=usage.tokens_out,
+                cost_usd=usage.cost,
+            ) from error
 
         return StationResult(
             payload={
@@ -88,7 +96,7 @@ class Read(Station):
             },
             tokens_in=usage.tokens_in,
             tokens_out=usage.tokens_out,
-            cost_usd=usage.cost or None,
+            cost_usd=usage.cost,
         )
 
     def _full_page(self, job: Job, plan: dict, usage: "_Usage"):
@@ -103,9 +111,7 @@ class Read(Station):
         return [], text, False
 
     def _segmented(self, job: Job, plan: dict, usage: "_Usage"):
-        image = cv2.imread(str(job.path_of("page_image_clean")))
-        if image is None:
-            raise ValueError(f"Unreadable image: {job.path_of('page_image_clean')}")
+        image = load_image(job, "page_image_clean")
         glyph = max(4, int(plan.get("glyph_height_px", 12)))
         pad = int(glyph * TILE_PAD_GLYPHS)
 
@@ -131,6 +137,7 @@ class Read(Station):
                 # a pathological tile (model loops on damaged/hyper-abbreviated
                 # script) becomes an auditable hole, not a dead page
                 entry["error"] = str(error)
+                usage.add_error(error)
             regions_out.append(entry)
             if entry["text"]:
                 texts.append(
@@ -155,7 +162,7 @@ class Read(Station):
                 media_resolution=params.get("media_resolution"),
                 json_output=True,
                 json_schema=READ_SCHEMA,
-                thinking_budget=params.get("thinking_budget"),
+                thinking_level=params.get("thinking_level"),
             )
         )
         usage.add(response)
@@ -169,9 +176,16 @@ class _Usage:
         self.cost = 0.0
 
     def add(self, response) -> None:
-        self.tokens_in += response.prompt_tokens
-        self.tokens_out += response.output_tokens
-        self.cost += response.cost_usd or 0.0
+        self.tokens_in = combine_count(self.tokens_in, response.prompt_tokens)
+        self.tokens_out = combine_count(
+            self.tokens_out, response.billable_output_tokens
+        )
+        self.cost = combine_cost(self.cost, response.cost_usd)
+
+    def add_error(self, error: GatewayError) -> None:
+        self.tokens_in = combine_count(self.tokens_in, error.tokens_in)
+        self.tokens_out = combine_count(self.tokens_out, error.tokens_out)
+        self.cost = combine_cost(self.cost, error.cost_usd)
 
 
 _TRAILING_JUNK = re.compile(r"[\s`{}\[\]<>|~^\\_]+$")

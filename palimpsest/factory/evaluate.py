@@ -160,9 +160,7 @@ def _judge(
     verdict, _ = generate_json(
         ModelRequest(
             model=judge_model,
-            prompt=JUDGE_PROMPT.replace("{A}", text_a or "(empty)").replace(
-                "{B}", text_b or "(empty)"
-            ),
+            prompt=JUDGE_PROMPT.format(A=text_a or "(empty)", B=text_b or "(empty)"),
             images=(image,),
             temperature=0.1,
             json_output=True,

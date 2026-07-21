@@ -50,6 +50,18 @@ def stage_workspace(
     """Lay out the cell's airlock: AGENTS.md (the skill), evidence/*.json,
     images/, out/. ``root`` is recreated from scratch — a cell re-run must
     not inherit a previous attempt's state."""
+    invalid_evidence = [
+        name for name in evidence if not name or Path(name).name != name
+    ]
+    if invalid_evidence:
+        raise AgentCellError(f"invalid evidence names: {invalid_evidence}")
+    image_names = [image.name for image in images]
+    if len(image_names) != len(set(image_names)):
+        raise AgentCellError("staged images must have unique file names")
+    missing_images = [str(image) for image in images if not image.is_file()]
+    if missing_images:
+        raise AgentCellError(f"staged images not found: {missing_images}")
+
     if root.exists():
         shutil.rmtree(root)
     for sub in ("evidence", "images", "out"):
@@ -64,6 +76,13 @@ def stage_workspace(
     return root
 
 
+def _require_executor(executor: str) -> None:
+    if executor not in EXECUTORS:
+        raise AgentCellError(
+            f"unknown agent executor {executor!r}; expected one of {EXECUTORS}"
+        )
+
+
 def run(
     workspace: Path,
     task: str,
@@ -71,6 +90,7 @@ def run(
     timeout_s: int = DEFAULT_TIMEOUT_S,
     executor: str = "codex",
 ) -> AgentRun:
+    _require_executor(executor)
     if executor == "omp":
         return _omp(workspace, ["--model", model], task, timeout_s, "agent_run.log")
     images = sorted((workspace / "images").glob("*"))
@@ -98,6 +118,7 @@ def resume(
     timeout_s: int = DEFAULT_TIMEOUT_S,
     executor: str = "codex",
 ) -> AgentRun:
+    _require_executor(executor)
     if executor == "omp":
         return _omp(
             workspace, ["-r", session_id], message, timeout_s, "agent_resume.log"
@@ -226,6 +247,9 @@ def read_artifact(workspace: Path, name: str) -> dict:
     try:
         # utf-8-sig: agents on Windows often write through PowerShell, which
         # prepends a BOM; accept both
-        return json.loads(path.read_text(encoding="utf-8-sig"))
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         raise AgentCellError(f"agent wrote invalid JSON to {name}: {error}") from error
+    if not isinstance(payload, dict):
+        raise AgentCellError(f"agent artifact {name} must be a JSON object")
+    return payload

@@ -10,14 +10,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Any, Mapping
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
-from palimpsest.factory.core.contracts import validate_payload
+from palimpsest.factory.core.contracts import validate_doc_id, validate_payload
 from palimpsest.factory.workspace.io import atomic_write_json, utc_now
 from palimpsest.factory.workspace.layout import metadata_path, page_list_path
 
-DOC_ID_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 REQUEST_HEADERS = {"User-Agent": "palimpsest manuscript recovery factory"}
 TIMEOUT_SECONDS = 30.0
 
@@ -31,6 +31,15 @@ def fetch_manifest(url: str) -> dict[str, Any]:
     return manifest
 
 
+def validate_records(
+    doc_id: str, metadata: Mapping[str, Any], page_list: Mapping[str, Any]
+) -> None:
+    """Validate the source contracts as one document-bound pair."""
+    validate_doc_id(doc_id)
+    validate_payload("metadata", metadata, expected_doc_id=doc_id)
+    validate_payload("page_list", page_list, expected_doc_id=doc_id)
+
+
 def build_records(
     doc_id: str,
     manifest_url: str,
@@ -39,10 +48,7 @@ def build_records(
     image_size: int | str = "max",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Convert a IIIF Presentation 2 or 3 manifest into source contracts."""
-    if not DOC_ID_RE.fullmatch(doc_id):
-        raise ValueError(
-            "doc_id must contain lowercase ASCII letters, digits, and single underscores"
-        )
+    validate_doc_id(doc_id)
 
     canvases = _canvases(manifest)
     if not canvases:
@@ -80,8 +86,8 @@ def build_records(
         "image_size": image_size,
         "pages": pages,
     }
-    validate_payload("metadata", metadata)
-    validate_payload("page_list", page_list)
+    validate_payload("metadata", metadata, expected_doc_id=doc_id)
+    validate_payload("page_list", page_list, expected_doc_id=doc_id)
     return metadata, page_list
 
 
@@ -93,11 +99,11 @@ def write_records(
     library_root: Path,
 ) -> Path:
     """Atomically install intake records without touching line artifacts."""
-    validate_payload("metadata", metadata)
-    validate_payload("page_list", page_list)
-    atomic_write_json(metadata_path(doc_id, library_root), metadata)
+    validate_records(doc_id, metadata, page_list)
+    metadata_file = metadata_path(doc_id, library_root)
+    atomic_write_json(metadata_file, metadata)
     atomic_write_json(page_list_path(doc_id, library_root), page_list)
-    return metadata_path(doc_id, library_root).parent
+    return metadata_file.parent
 
 
 def _text(value: Any) -> str:
@@ -217,13 +223,25 @@ def _canvases_v3(manifest: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _image_url(service_url: str, size: int | str) -> str:
-    base = service_url.rstrip("/")
-    if re.search(r"\.(?:jpe?g|png|webp|tiff?)$", base, re.IGNORECASE):
-        return base
-    size_parameter = "max" if str(size).lower() in {"max", "full"} else f"{int(size)},"
-    if "/full/" in base:
-        return re.sub(r"/full/[^/]+/", f"/full/{size_parameter}/", base)
-    return f"{base}/full/{size_parameter}/0/default.jpg"
+    parts = urlsplit(service_url)
+    path = parts.path.rstrip("/")
+    if re.search(r"\.(?:jpe?g|png|webp|tiff?)$", path, re.IGNORECASE):
+        return service_url
+
+    if str(size).lower() in {"max", "full"}:
+        size_parameter = "max"
+    else:
+        pixels = int(size)
+        if pixels <= 0:
+            raise ValueError("image_size must be a positive integer, 'max', or 'full'")
+        size_parameter = f"{pixels},"
+
+    path = re.sub(r"/info\.json$", "", path, flags=re.IGNORECASE)
+    if "/full/" in path:
+        path = re.sub(r"/full/[^/]+/", f"/full/{size_parameter}/", path)
+    else:
+        path = f"{path}/full/{size_parameter}/0/default.jpg"
+    return urlunsplit(parts._replace(path=path))
 
 
 def _page_id(index: int, label: Any, used: set[str]) -> str:

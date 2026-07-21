@@ -22,7 +22,8 @@ from typing import Any, Mapping
 
 from palimpsest.factory import prompt_store
 from palimpsest.factory.core import registry
-from palimpsest.factory.core.contracts import validate_payload
+from palimpsest.factory.core.artifact import content_fingerprint, payload_fingerprint
+from palimpsest.factory.core.contracts import contract, validate_payload
 from palimpsest.factory.core.station import Job, StationConfig
 from palimpsest.factory.workspace.io import atomic_write_json, read_json, utc_now
 from palimpsest.factory.workspace.layout import page_list_path
@@ -67,6 +68,16 @@ class CellOutcome:
 
 def execute_cell(spec: CellSpec) -> CellOutcome:
     station = registry.get(spec.station)
+    if station.grain == "page" and spec.page_id is None:
+        raise ValueError(f"Page station {station.name!r} requires a page_id")
+    if station.grain == "manuscript" and spec.page_id is not None:
+        raise ValueError(
+            f"Manuscript station {station.name!r} does not accept a page_id"
+        )
+    if station.uses_model and not (spec.model and spec.prompt_name):
+        raise ValueError(
+            f"Model station {station.name!r} requires both model and prompt_name"
+        )
     library_root = Path(spec.library_root)
 
     prompt = None
@@ -79,15 +90,17 @@ def execute_cell(spec: CellSpec) -> CellOutcome:
                 f"store now has {prompt.sha256[:12]}… — refusing to run"
             )
 
-    pages = tuple(
-        sorted(
-            read_json(page_list_path(spec.doc_id, library_root))["pages"],
-            key=lambda p: p.get("order", 0),
-        )
-    )
+    page_list = read_json(page_list_path(spec.doc_id, library_root))
+    validate_payload("page_list", page_list, expected_doc_id=spec.doc_id)
+    pages = tuple(sorted(page_list["pages"], key=lambda p: p.get("order", 0)))
     page = None
     if spec.page_id is not None:
-        page = next(p for p in pages if p["page_id"] == spec.page_id)
+        try:
+            page = next(p for p in pages if p["page_id"] == spec.page_id)
+        except StopIteration:
+            raise ValueError(
+                f"Page {spec.page_id!r} is not present in {spec.doc_id!r}'s page list"
+            ) from None
 
     job = Job(
         doc_id=spec.doc_id,
@@ -103,23 +116,48 @@ def execute_cell(spec: CellSpec) -> CellOutcome:
     )
 
     result = station.run(job)
-    output_path = station.output_path(job)
-    if result.payload is not None:
-        validate_payload(station.produces, result.payload)
-        payload = dict(result.payload)
-        payload["provenance"] = _provenance(spec, station, prompt, result)
-        atomic_write_json(output_path, payload)
-    else:
-        atomic_write_json(
-            output_path.with_suffix(output_path.suffix + ".provenance.json"),
-            _provenance(spec, station, prompt, result),
-        )
+    output_path = _persist_output(spec, station, job, prompt, result)
     return CellOutcome(
         output_path=str(output_path),
         tokens_in=result.tokens_in,
         tokens_out=result.tokens_out,
         cost_usd=result.cost_usd,
     )
+
+
+def _persist_output(spec: CellSpec, station, job: Job, prompt, result) -> Path:
+    output_path = station.output_path(job)
+    output_contract = contract(station.produces)
+    if output_contract.format == "json":
+        if result.payload is None:
+            raise ValueError(
+                f"Station {station.name!r} must return a JSON payload for "
+                f"{station.produces!r}"
+            )
+        validate_payload(station.produces, result.payload)
+        payload = dict(result.payload)
+        stamp = _provenance(spec, station, prompt, result)
+        stamp["output_fingerprint"] = payload_fingerprint(payload)
+        payload["provenance"] = stamp
+        atomic_write_json(output_path, payload)
+        return output_path
+
+    if result.payload is not None:
+        raise ValueError(
+            f"Station {station.name!r} must write its {output_contract.format} "
+            "artifact and return payload=None"
+        )
+    if not output_path.is_file():
+        raise FileNotFoundError(
+            f"Station {station.name!r} did not write its output: {output_path}"
+        )
+    stamp = _provenance(spec, station, prompt, result)
+    stamp["output_fingerprint"] = content_fingerprint(output_path)
+    atomic_write_json(
+        output_path.with_suffix(output_path.suffix + ".provenance.json"),
+        stamp,
+    )
+    return output_path
 
 
 def _provenance(spec: CellSpec, station, prompt, result) -> dict:

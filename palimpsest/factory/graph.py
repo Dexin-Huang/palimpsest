@@ -14,7 +14,7 @@ from pathlib import Path
 
 from palimpsest.factory.config import PROJECT_ROOT
 from palimpsest.factory.core import registry
-from palimpsest.factory.core.contracts import CONTRACTS, SOURCE_KINDS
+from palimpsest.factory.core.contracts import CONTRACTS, FORMAT_SUFFIX, SOURCE_KINDS
 from palimpsest.factory.workspace.io import atomic_write_text
 
 DEFAULT_DOC_PATH = PROJECT_ROOT / "docs" / "CONTRACTS.md"
@@ -39,6 +39,7 @@ def build() -> dict:
                 "implementation": s.implementation_fingerprint,
                 "grain": s.grain,
                 "consumes": list(s.consumes),
+                "optional_consumes": list(s.optional_consumes),
                 "produces": s.produces,
                 "uses_model": s.uses_model,
             }
@@ -54,15 +55,19 @@ def to_json() -> str:
 def to_mermaid() -> str:
     lines = ["flowchart TB"]
     used_kinds = set()
-    for station in registry.all_stations():
+    stations = registry.all_stations()
+    for station in stations:
         station_id = f"station_{station.name}"
         used_kinds.update(station.consumes)
+        used_kinds.update(station.optional_consumes)
         used_kinds.add(station.produces)
         for kind in station.consumes:
             lines.append(f"  kind_{kind} --> {station_id}")
+        for kind in station.optional_consumes:
+            lines.append(f"  kind_{kind} -. optional .-> {station_id}")
         lines.append(f"  {station_id} --> kind_{station.produces}")
 
-    for station in registry.all_stations():
+    for station in stations:
         station_id = f"station_{station.name}"
         model_mark = " ✱" if station.uses_model else ""
         lines.append(
@@ -102,7 +107,7 @@ def write_docs(path: Path = DEFAULT_DOC_PATH) -> Path:
         "|---|---|---|---|---|",
     ]
     for kind in data["kinds"]:
-        store = kind["store"] or f"<kind>/<page_id>{_suffix(kind['format'])}"
+        store = kind["store"] or f"<kind>/<page_id>{FORMAT_SUFFIX[kind['format']]}"
         required = ", ".join(f"`{f}`" for f in kind["required"]) or "—"
         parts.append(
             f"| `{kind['kind']}` | {kind['grain']} | {kind['format']} "
@@ -117,7 +122,9 @@ def write_docs(path: Path = DEFAULT_DOC_PATH) -> Path:
         "|---|---|---|---|---|---|",
     ]
     for station in data["stations"]:
-        consumes = ", ".join(f"`{k}`" for k in station["consumes"])
+        required = [f"`{kind}`" for kind in station["consumes"]]
+        optional = [f"`{kind}` (optional)" for kind in station["optional_consumes"]]
+        consumes = ", ".join([*required, *optional])
         parts.append(
             f"| `{station['station']}` | `{station['implementation']}` | {station['grain']} "
             f"| {consumes} | `{station['produces']}` "
@@ -132,9 +139,3 @@ def write_docs(path: Path = DEFAULT_DOC_PATH) -> Path:
     ]
     atomic_write_text(path, "\n".join(parts))
     return path
-
-
-def _suffix(format_name: str) -> str:
-    from palimpsest.factory.core.contracts import FORMAT_SUFFIX
-
-    return FORMAT_SUFFIX[format_name]

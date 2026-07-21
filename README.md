@@ -32,18 +32,34 @@ diplomatic transcription.
 
 ## Install
 
-Palimpsest requires Python 3.11 or newer.
+Palimpsest requires Python 3.11 or newer. Install it in a repository-local
+virtual environment so unrelated user packages cannot affect the factory.
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade --editable ".[dev]"
+```
+
+macOS or Linux:
 
 ```bash
-python -m pip install --editable ".[dev]"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade --editable ".[dev]"
 ```
+
+The remaining commands assume that environment is active. Verify it after
+installation with `python -m pip check`.
 
 Copy `.env.example` to `.env` and set `GEMINI_API_KEY`. The two recipe model
 defaults can be overridden there:
 
 ```env
-PALIMPSEST_MODEL_VISION=gemini-3.1-pro-preview
-PALIMPSEST_MODEL_READING=gemini-3.1-flash-lite-preview
+PALIMPSEST_MODEL_VISION=gemini-3.6-flash
+PALIMPSEST_MODEL_READING=gemini-3.5-flash-lite
 ```
 
 The `reference` and `emend` stations use an agent executor selected in the

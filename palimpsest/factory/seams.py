@@ -39,8 +39,9 @@ def find_overlap(prev_text: str, text: str) -> dict | None:
             SequenceMatcher(None, a, b).ratio()
             for a, b in zip(prev_lines[-k:], lines[:k])
         ]
-        if sum(ratios) / k >= _AVG_SIMILARITY and min(ratios) >= _MIN_SIMILARITY:
-            best = {"lines": k, "similarity": round(sum(ratios) / k, 3)}
+        similarity = sum(ratios) / k
+        if similarity >= _AVG_SIMILARITY and min(ratios) >= _MIN_SIMILARITY:
+            best = {"lines": k, "similarity": round(similarity, 3)}
     return best
 
 
@@ -51,17 +52,27 @@ def trim_overlap(prev_text: str, text: str) -> tuple[str, dict | None]:
     overlap = find_overlap(prev_text, text)
     if overlap is None:
         return text, None
-    kept = text.splitlines()
-    dropped: list[str] = []
-    while kept and len([line for line in dropped if line.strip()]) < overlap["lines"]:
-        dropped.append(kept.pop(0))
-    return "\n".join(kept).strip("\n"), {**overlap, "dropped_text": "\n".join(dropped)}
+    lines = text.splitlines()
+    content_seen = 0
+    split_at = 0
+    for split_at, line in enumerate(lines, start=1):
+        content_seen += bool(line.strip())
+        if content_seen == overlap["lines"]:
+            break
+    dropped = lines[:split_at]
+    kept = lines[split_at:]
+    return "\n".join(kept).strip("\n"), {
+        **overlap,
+        "dropped_text": "\n".join(dropped),
+    }
 
 
 def prev_page_id(pages: tuple[dict, ...], page_id: str) -> str | None:
     """The page whose tail this page's head is trimmed against."""
-    index = next(i for i, page in enumerate(pages) if page["page_id"] == page_id)
-    return pages[index - 1]["page_id"] if index else None
+    for index, page in enumerate(pages):
+        if page["page_id"] == page_id:
+            return pages[index - 1]["page_id"] if index else None
+    raise ValueError(f"page_id not found in ordered pages: {page_id}")
 
 
 def _content_lines(text: str) -> list[str]:

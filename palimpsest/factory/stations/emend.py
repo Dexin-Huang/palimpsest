@@ -120,29 +120,34 @@ class Emend(Station):
     def _seam_variants(self, job: Job) -> list[dict]:
         """The two-vote pairs: at each trimmed seam, the kept tail of the
         previous capture and the dropped duplicate of this capture."""
+        pages = sorted(job.pages, key=lambda page: page.get("order", 0))
+        if not pages:
+            return []
+
         variants = []
-        pages = sorted(job.pages, key=lambda p: p.get("order", 0))
-        for index, page in enumerate(pages):
+        previous_page = pages[0]
+        previous = read_json(job.path_of("page_assembled", previous_page["page_id"]))
+        for page in pages[1:]:
             assembled = read_json(job.path_of("page_assembled", page["page_id"]))
             seam = (assembled.get("original") or {}).get("seam")
-            if not seam or not seam.get("dropped_text") or index == 0:
-                continue
-            previous = read_json(
-                job.path_of("page_assembled", pages[index - 1]["page_id"])
-            )
-            kept = [
-                line
-                for line in previous["original"]["text"].splitlines()
-                if line.strip()
-            ][-seam["lines"] :]
-            variants.append(
-                {
-                    "at_seam_between": [pages[index - 1]["page_id"], page["page_id"]],
-                    "kept_reading": "\n".join(kept),
-                    "duplicate_reading": seam["dropped_text"],
-                    "note": "same physical columns, two independent transcriptions",
-                }
-            )
+            if seam and seam.get("dropped_text"):
+                kept = [
+                    line
+                    for line in previous["original"]["text"].splitlines()
+                    if line.strip()
+                ][-seam["lines"] :]
+                variants.append(
+                    {
+                        "at_seam_between": [
+                            previous_page["page_id"],
+                            page["page_id"],
+                        ],
+                        "kept_reading": "\n".join(kept),
+                        "duplicate_reading": seam["dropped_text"],
+                        "note": "same physical columns, two independent transcriptions",
+                    }
+                )
+            previous_page, previous = page, assembled
         return variants
 
 

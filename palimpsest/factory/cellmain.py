@@ -15,8 +15,8 @@ from palimpsest.factory.core.cell import CellSpec, execute_cell
 
 
 def main() -> int:
-    spec = CellSpec.from_json(sys.stdin.read())
     try:
+        spec = CellSpec.from_json(sys.stdin.read())
         outcome = execute_cell(spec)
     except Exception as error:  # report structured failure to the conductor
         print(
@@ -24,6 +24,9 @@ def main() -> int:
                 {
                     "kind": type(error).__name__.lower(),
                     "message": str(error),
+                    "tokens_in": getattr(error, "tokens_in", None),
+                    "tokens_out": getattr(error, "tokens_out", None),
+                    "cost_usd": getattr(error, "cost_usd", None),
                 }
             )
         )
