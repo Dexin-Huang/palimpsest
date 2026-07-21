@@ -105,3 +105,13 @@ Losers are deleted from the tree; this file is what remains of them.
   objective the perfection loop optimizes. One bug found live: uint8
   overflow (255*255) silently blanked all synthesis — caught because
   the output is an image you look at.  (open)
+
+- 2026-07-20  hand_font  M3 lives: P3477-Hand.ttf, a real TrueType font
+  cut from the scribe's ink. 875 labeled crops -> consensus gate
+  (cluster coherence x alignment-claim agreement >= 0.6) -> 15 glyphs,
+  ~10 authentic (從 尺 者 是 有 下 中 當 render beautifully), ~5
+  mislabels that each trace to binding noise (口 renders a 寸; 無 is a
+  damaged crop). Vectorization/assembly proven end to end (cv2 contours
+  -> fontTools, 4KB TTF, renders via PIL). Coverage scales directly
+  with label quality — the labeling ladder is now also the font ladder.
+  New dep: fonttools (pure-python).  (open)
