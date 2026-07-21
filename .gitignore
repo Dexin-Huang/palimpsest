@@ -33,3 +33,4 @@ site/
 # Windows device file
 nul
 experiments/**/out/
+experiments/testset/folios/
