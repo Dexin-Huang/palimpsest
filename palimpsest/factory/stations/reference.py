@@ -31,6 +31,7 @@ class Reference(Station):
     produces = "reference"
     uses_model = True
     option_keys = frozenset({"timeout_s", "executor"})
+    production_dependencies = ("factory/agent_cell.py",)
 
     def run(self, job: Job) -> StationResult:
         manuscript = read_json(job.path_of("manuscript"))

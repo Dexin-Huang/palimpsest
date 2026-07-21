@@ -1,0 +1,11 @@
+schema_version: 1
+id: reconstruct/current
+station: reconstruct
+variant: default
+model: gemini-3.5-flash-lite
+prompt: reconstruct/generic/structure
+params:
+  temperature: 0.1
+  max_output_tokens: 32768
+options: {}
+notes: Fixed-model snapshot of the current reconstruction configuration for development conformance reporting.

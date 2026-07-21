@@ -52,6 +52,10 @@ class Publish(Station):
     optional_consumes = ("page_alignment",)
     produces = "book"
     option_keys = frozenset({"original_language"})
+    production_dependencies = (
+        "factory/core/ledger.py",
+        "factory/usage.py",
+    )
 
     def signature_extras(self, job: Job) -> tuple[str, ...]:
         page_paths = (

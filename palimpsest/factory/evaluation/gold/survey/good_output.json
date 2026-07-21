@@ -1,0 +1,50 @@
+{
+  "document": {
+    "doc_id": "caesar_bellum_gallicum",
+    "total_pages": 2
+  },
+  "glossary": [
+    {
+      "term": "Gallia",
+      "translation": "Gaul",
+      "note": "Region"
+    },
+    {
+      "term": "Galli",
+      "translation": "Gauls",
+      "note": "People"
+    }
+  ],
+  "outline": [
+    {
+      "start_page": "bg_1_1",
+      "description": "Peoples and boundaries of Gaul"
+    }
+  ],
+  "abbreviations": [],
+  "entities": [
+    {
+      "name": "Belgae",
+      "translation": "Belgae"
+    },
+    {
+      "name": "Aquitani",
+      "translation": "Aquitani"
+    }
+  ],
+  "difficulty_flags": [],
+  "style_notes": [
+    "Language: Latin; script: Latin script."
+  ],
+  "identification": {
+    "language": "Latin",
+    "script": "Latin script"
+  },
+  "downstream_probe": {
+    "translation": "All Gaul is divided among the Belgae, Aquitani, and Gauls.",
+    "reconstruction_pages": [
+      "bg_1_1",
+      "bg_1_2"
+    ]
+  }
+}

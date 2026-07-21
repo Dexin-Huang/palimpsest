@@ -43,6 +43,10 @@ class Emend(Station):
     produces = "emendations"
     uses_model = True
     option_keys = frozenset({"timeout_s", "executor", "max_repairs"})
+    production_dependencies = (
+        "factory/agent_cell.py",
+        "factory/apparatus.py",
+    )
 
     def run(self, job: Job) -> StationResult:
         manuscript = read_json(job.path_of("manuscript"))

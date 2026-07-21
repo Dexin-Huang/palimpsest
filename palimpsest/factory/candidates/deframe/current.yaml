@@ -1,0 +1,8 @@
+schema_version: 1
+id: deframe/current-default-v1
+station: deframe
+variant: default
+params: {}
+options:
+  frame_margin: 0.02
+notes: current deterministic parchment-frame crop

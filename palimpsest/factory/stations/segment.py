@@ -64,6 +64,10 @@ class Segment(Station):
             "bleed_depth_delta",
         }
     )
+    production_dependencies = (
+        "factory/imaging.py",
+        "factory/stations/image_input.py",
+    )
 
     def run(self, job: Job) -> StationResult:
         image = load_image(job, "page_image_clean")

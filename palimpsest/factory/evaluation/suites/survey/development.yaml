@@ -1,0 +1,46 @@
+schema_version: 1
+id: survey/development-v1
+station: survey
+mission: One-manuscript deterministic conformance report for source-backed brief facts and fixed downstream-product utility; not a qualification battery.
+qualification_eligible: false
+case_manifest: survey/development.jsonl
+primary_metrics:
+  survey_structural_coverage:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  survey_terminology_coverage:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  survey_entity_coverage:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  survey_language_script_identification:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  survey_downstream_brief_utility:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+hard_limits:
+  survey_language_script_identification:
+    minimum: 1.0
+  survey_downstream_brief_utility:
+    minimum: 1.0
+protected_slices:
+  - downstream_probe
+slice_policy:
+  minimum_cases: 1
+  maximum_regression: 0.0
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 1
+  paired_bootstrap_samples: 1
+  seed: 1702
+  require_all_hard_limits: false
+  require_all_downstream_probes: false

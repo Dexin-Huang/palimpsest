@@ -1,0 +1,7 @@
+schema_version: 1
+id: acquire/current-default-v1
+station: acquire
+variant: default
+params: {}
+options: {}
+notes: Current deterministic production implementation used for conformance reporting

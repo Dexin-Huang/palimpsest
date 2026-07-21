@@ -1,0 +1,32 @@
+{
+  "page_order": [
+    "bg_1_1",
+    "bg_1_2"
+  ],
+  "sections": [
+    {
+      "heading": "Three parts",
+      "pages": {
+        "from": "bg_1_1",
+        "to": "bg_1_1"
+      },
+      "original": "Gallia est omnis divisa in partes tres.",
+      "translation": "All Gaul is divided into three parts."
+    },
+    {
+      "heading": "River boundary",
+      "pages": {
+        "from": "bg_1_2",
+        "to": "bg_1_2"
+      },
+      "original": "Gallos ab Aquitanis Garumna flumen dividit.",
+      "translation": "The river Garonne separates the Gauls from the Aquitani."
+    }
+  ],
+  "rights": {
+    "source": "C. Julius Caesar, De Bello Gallico 1.1, public-domain Latin text; W. A. McDevitte and W. S. Bohn, 1869 public-domain English translation.",
+    "source_url": "https://www.gutenberg.org/cache/epub/10657/pg10657.txt",
+    "fixture": "CC0-1.0",
+    "adjudication": "Expected strings and section ranges are copied directly from the content-addressed page_assembled fixture artifacts."
+  }
+}

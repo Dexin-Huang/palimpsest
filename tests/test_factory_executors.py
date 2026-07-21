@@ -6,6 +6,8 @@ proving a cell runs identically outside the conductor's interpreter.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from palimpsest.factory.core.cell import CellOutcome, CellSpec, execute_cell
@@ -81,12 +83,19 @@ def test_spec_roundtrips_through_json(workspace):
     assert CellSpec.from_json(spec.to_json()) == spec
 
 
+def test_spec_roundtrips_explicit_station_variant(workspace):
+    spec = replace(_assemble_spec(workspace), variant="default")
+    assert spec.variant == "default"
+    assert CellSpec.from_json(spec.to_json()) == spec
+
+
 def test_execute_cell_inline(workspace):
     outcome = execute_cell(_assemble_spec(workspace))
     assembled = read_json(artifact_path(DOC, "page_assembled", "f001r", workspace))
     assert assembled["original"]["text"] == "Lorem"
     assert assembled["translation"]["text"] == "Lorem EN"
     assert assembled["provenance"]["config_fingerprint"] == "cfg"
+    assert assembled["provenance"]["station_variant"] == "default"
     station_fingerprint = assembled["provenance"]["station_fingerprint"]
     assert len(station_fingerprint) == 16
     assert int(station_fingerprint, 16) >= 0

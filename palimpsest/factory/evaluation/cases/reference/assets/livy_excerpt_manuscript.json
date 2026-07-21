@@ -1,0 +1,17 @@
+{
+  "doc_id": "editorial_livy_dev",
+  "sections": [
+    {
+      "heading": "Lucretia",
+      "original": "Tace, Lucretia; ferrum in manu est.\nPer hunc castissimum ante regiam iniuriam sanguinem iuro.",
+      "translation": "Be silent, Lucretia; a sword is in my hand.\nBy this blood, most chaste before the royal wrong, I swear."
+    }
+  ],
+  "joins": [],
+  "readers_note": "A short project-authored conformance excerpt transcribed from the public-domain Latin text of Livy 1.58-59; it is not qualification gold.",
+  "rights": {
+    "fixture": "CC0-1.0",
+    "source_text": "Public domain",
+    "source_url": "https://www.thelatinlibrary.com/livy/liv.1.shtml"
+  }
+}

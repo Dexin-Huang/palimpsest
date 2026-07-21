@@ -62,6 +62,16 @@ class Read(Station):
             "thinking_level",
         }
     )
+    production_dependencies = (
+        "factory/gateway/__init__.py",
+        "factory/gateway/client.py",
+        "factory/gateway/gemini.py",
+        "factory/gateway/pricing.py",
+        "factory/gateway/protocol.py",
+        "factory/imaging.py",
+        "factory/stations/image_input.py",
+        "factory/usage.py",
+    )
 
     def run(self, job: Job) -> StationResult:
         plan = read_json(job.path_of("page_regions"))

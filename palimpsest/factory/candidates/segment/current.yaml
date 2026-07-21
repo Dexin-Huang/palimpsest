@@ -1,0 +1,8 @@
+schema_version: 1
+id: segment/current-default-v1
+station: segment
+variant: default
+params: {}
+options:
+  include_faint: false
+notes: current deterministic ink-density segmentation

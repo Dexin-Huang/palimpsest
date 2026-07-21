@@ -1,0 +1,13 @@
+schema_version: 1
+id: read/zh-vatican-f004r-low-thinking-development-v1
+station: read
+variant: default
+model: gemini-3.6-flash
+prompt: read/zh/diplomatic
+params:
+  temperature: 0.1
+  media_resolution: high
+  max_output_tokens: 32768
+  thinking_level: low
+options: {}
+notes: fixed-model development candidate; not qualification evidence

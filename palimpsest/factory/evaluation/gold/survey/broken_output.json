@@ -1,0 +1,36 @@
+{
+  "document": {
+    "doc_id": "caesar_bellum_gallicum",
+    "total_pages": 2
+  },
+  "glossary": [
+    {
+      "term": "Gallia",
+      "translation": "France",
+      "note": "Modernized"
+    }
+  ],
+  "outline": [
+    {
+      "start_page": "bg_1_2",
+      "description": "A timeless meditation on civilization"
+    }
+  ],
+  "abbreviations": [],
+  "entities": [
+    {
+      "name": "Romans",
+      "translation": "Romans"
+    }
+  ],
+  "difficulty_flags": [],
+  "style_notes": [
+    "Elegant historical prose in an unidentified language."
+  ],
+  "downstream_probe": {
+    "translation": "The country contains several peoples.",
+    "reconstruction_pages": [
+      "bg_1_1"
+    ]
+  }
+}

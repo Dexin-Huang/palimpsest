@@ -37,6 +37,7 @@ class CellSpec:
     library_root: str
     config_fingerprint: str
     input_fingerprint: str
+    variant: str | None = None
     model: str | None = None
     prompt_name: str | None = None
     prompt_sha256: str | None = None
@@ -67,7 +68,11 @@ class CellOutcome:
 
 
 def execute_cell(spec: CellSpec) -> CellOutcome:
-    station = registry.get(spec.station)
+    station = (
+        registry.get(spec.station)
+        if spec.variant is None
+        else registry.get(spec.station, spec.variant)
+    )
     if station.grain == "page" and spec.page_id is None:
         raise ValueError(f"Page station {station.name!r} requires a page_id")
     if station.grain == "manuscript" and spec.page_id is not None:
@@ -163,6 +168,7 @@ def _persist_output(spec: CellSpec, station, job: Job, prompt, result) -> Path:
 def _provenance(spec: CellSpec, station, prompt, result) -> dict:
     stamp = {
         "station": station.name,
+        "station_variant": station.variant,
         "station_fingerprint": station.implementation_fingerprint,
         "config_fingerprint": spec.config_fingerprint,
         "input_fingerprint": spec.input_fingerprint,

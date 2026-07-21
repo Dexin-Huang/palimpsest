@@ -22,6 +22,10 @@ class Align(Station):
     grain = "page"
     consumes = ("page_image_clean", "page_transcription")
     produces = "page_alignment"
+    production_dependencies = (
+        "factory/glyphs.py",
+        "factory/stations/image_input.py",
+    )
 
     def run(self, job: Job) -> StationResult:
         image = load_image(job, "page_image_clean")

@@ -1,0 +1,8 @@
+schema_version: 1
+id: read-image-pairwise/gemini-3.6-v1
+model: gemini-3.6-flash
+prompt: judge/read/image-pairwise-v1
+response_schema: pairwise_preference/v1
+params:
+  temperature: 0.1
+  max_output_tokens: 512

@@ -1,0 +1,25 @@
+schema_version: 1
+id: flatten/generated-conformance/v1
+station: flatten
+qualification_eligible: false
+mission: equalize generated illumination while preserving dark and faint documentary strokes
+case_manifest: flatten/conformance-v1.jsonl
+primary_metrics:
+  flatten_local_separation: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+  flatten_background_uniformity: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+  flatten_faint_stroke_retention: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+hard_limits:
+  flatten_clipping_rate: {maximum: 0.0}
+  flatten_geometry_preservation: {minimum: 1.0}
+  flatten_source_provenance: {minimum: 1.0}
+protected_slices: [generated_geometry]
+slice_policy: {minimum_cases: 1, maximum_regression: 0.0}
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 1
+  paired_bootstrap_samples: 1000
+  seed: 4103
+  require_all_hard_limits: true
+  require_all_downstream_probes: false

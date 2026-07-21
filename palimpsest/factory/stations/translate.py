@@ -43,6 +43,15 @@ class Translate(Station):
     uses_model = True
     param_keys = frozenset({"temperature", "max_output_tokens"})
     option_keys = frozenset({"overlap", "trim_seam_overlap"})
+    production_dependencies = (
+        "factory/gateway/__init__.py",
+        "factory/gateway/client.py",
+        "factory/gateway/gemini.py",
+        "factory/gateway/pricing.py",
+        "factory/gateway/protocol.py",
+        "factory/seams.py",
+        "factory/usage.py",
+    )
 
     def input_paths(self, job: Job) -> list[Path]:
         window = self._context_window(job)

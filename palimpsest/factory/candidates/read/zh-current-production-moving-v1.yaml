@@ -1,0 +1,13 @@
+schema_version: 1
+id: read/zh-current-production-moving-v1
+station: read
+variant: default
+model: gemini-flash-latest
+prompt: read/zh/diplomatic
+params:
+  temperature: 0.1
+  media_resolution: high
+  max_output_tokens: 32768
+  thinking_level: high
+options: {}
+notes: current resolved Chinese production recipe slot; moving identity requires an explicit waiver and cannot auto-qualify

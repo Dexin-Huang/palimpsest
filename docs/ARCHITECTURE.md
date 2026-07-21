@@ -2,8 +2,11 @@
 
 Palimpsest is one factory: an IIIF manifest enters, provenance-stamped
 artifacts move through a validated recipe, and a readable book leaves as EPUB
-and static HTML. [`FACTORY.md`](FACTORY.md) defines the system in detail;
-[`CONTRACTS.md`](CONTRACTS.md) is the generated artifact and station graph.
+and static HTML. [`FACTORY.md`](FACTORY.md) defines the production system in
+detail; [`CONTRACTS.md`](CONTRACTS.md) is the generated artifact and station
+graph. [`EVALUATION.md`](EVALUATION.md) defines the proposed benchmark,
+candidate, promotion, canary, and rollback plane used to improve individual
+stations without coupling it to production orchestration.
 
 ## Runtime layers
 
@@ -82,11 +85,22 @@ their provenance stamps.
 rebuilds the hosted shelf and reader from published book models. Presentation
 never reaches back into intermediate station outputs.
 
+### Evaluation and promotion layer
+
+Evaluation runs outside the production conductor in isolated workspaces. A
+versioned suite compares a current and challenger station candidate on paired
+inputs, validates both through the production artifact contract, measures
+local and downstream fitness, and emits an immutable scorecard. Only a
+qualified scorecard plus a passing end-to-end canary may produce a promotion
+record. Production continues to resolve exactly one candidate for each recipe
+station. [`EVALUATION.md`](EVALUATION.md) defines the implemented contracts and
+the qualification policy.
+
 ## Dependency direction
 
 ```text
 cli
-  -> intake / conductor / graph / preview / evaluate / site
+  -> intake / conductor / graph / preview / tune / site / bench
 conductor
   -> recipe / registry / executors / ledger / workspace
 executors
@@ -112,13 +126,16 @@ palimpsest/
     intake.py
     graph.py
     preview.py
-    evaluate.py
     imaging.py
     glyphs.py
     seams.py
     apparatus.py
-    agent_cell.py
     site.py
+    evaluation/
+      candidate.py / suite.py / judge.py
+      runner.py / metrics.py / statistics.py / judging.py
+      report.py / store.py / promotion.py / canary.py
+      station_metrics/
     config.py
     core/
       contracts.py

@@ -22,6 +22,7 @@ import socket
 import sqlite3
 import threading
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
@@ -85,6 +86,7 @@ class Conductor:
         workers: int = DEFAULT_WORKERS,
         refresh: frozenset[str] = frozenset(),
         executor: str = "inline",
+        recipe_loader: Callable[[str], Recipe] | None = None,
     ) -> None:
         self._ledger = ledger
         self._ledger_lock = threading.Lock()
@@ -92,6 +94,7 @@ class Conductor:
         self._workers = workers
         self._refresh = refresh
         self._executor = make_executor(executor)
+        self._recipe_loader = recipe_loader or load_recipe
 
     # -- public ---------------------------------------------------------------
 
@@ -162,7 +165,7 @@ class Conductor:
         item: sqlite3.Row,
         heartbeat_errors: list[Exception],
     ) -> RunReport:
-        recipe = load_recipe(item["recipe"])
+        recipe = self._recipe_loader(item["recipe"])
         prompts = self._load_prompts(recipe)
         pages = self._pages(doc_id)
         previous_runs = {
@@ -380,6 +383,7 @@ class Conductor:
         cell = CellSpec(
             doc_id=doc_id,
             station=station.name,
+            variant=station.variant,
             page_id=page_id,
             library_root=str(self._library_root),
             config_fingerprint=config_fp,

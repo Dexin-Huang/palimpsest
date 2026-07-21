@@ -135,8 +135,8 @@ site/index.html
 | `graph` | Render the live artifact/station contract graph |
 | `preview` | Render preprocessing stages and segmentation lassos |
 | `tune` | Tune segmentation offline without network or ledger writes |
-| `evaluate` | Compare factory transcriptions with a reference |
 | `site` | Rebuild the static library from published book models |
+| `bench` | Verify, run, report, canary, promote, and roll back immutable evaluations |
 
 Run `python -m palimpsest <command> --help` for command-specific options.
 
@@ -156,10 +156,14 @@ before a network request or paid model call.
 
 ### Stations
 
-Every station has one contract:
+Every station has one contract. Its logical name and variant identify the
+implementation to execute; its localized implementation fingerprint, declared
+inputs, optional inputs, and production dependencies determine freshness.
+Stations emit exactly one `StationResult`:
 
 ```python
 name: str
+variant: str
 implementation_fingerprint: str
 grain: "page" | "manuscript"
 consumes: tuple[str, ...]
@@ -184,6 +188,22 @@ The conductor sends a complete `CellSpec` to an executor. `inline` and
 `subprocess` are interchangeable execution policies; neither owns scheduling,
 freshness, or the ledger. Agentic editorial stations have a second contained
 executor seam for `codex` and `omp`.
+
+### Evaluation and promotion
+
+The evaluation plane runs outside the production conductor. Immutable
+candidates and suites drive paired, isolated executions through the same cell
+and artifact contracts as production. Scorecards retain quality, hard-limit,
+downstream, reliability, latency, cost, and blinded-judge evidence. A qualified
+report can produce a compare-and-swap recipe proposal; a protected production
+canary gates promotion, and append-only records support exact rollback.
+[`docs/EVALUATION.md`](docs/EVALUATION.md) defines the contracts and
+`palimpsest bench --help` exposes the operator workflow.
+
+The checked-in suites exercise every production station but are deliberately
+non-authorizing development/conformance evidence. Promotion remains blocked
+until a curated suite explicitly opts into qualification; changing that flag
+changes the suite fingerprint and therefore the evidence identity.
 
 ### Contracts and workspace
 
@@ -220,6 +240,7 @@ docs/
   FACTORY.md                architecture and invariants
   CONTRACTS.md              generated live graph
   GLYPHS.md                 alignment and glyph-system design
+  EVALUATION.md             evaluation, candidate, promotion, and rollback blueprint
 ```
 
 Generated images, model artifacts, books, runs, the ledger, and the static site

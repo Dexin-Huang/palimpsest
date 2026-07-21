@@ -1,0 +1,32 @@
+{
+  "doc_id": "caesar_bellum_gallicum",
+  "readers_note": "The opening division is followed by one geographic boundary.",
+  "sections": [
+    {
+      "heading": "Three parts",
+      "pages": {
+        "from": "bg_1_1",
+        "to": "bg_1_1"
+      },
+      "original": "Gallia est omnis divisa in partes tres.",
+      "translation": "All Gaul is divided into three parts."
+    },
+    {
+      "heading": "River boundary",
+      "pages": {
+        "from": "bg_1_2",
+        "to": "bg_1_2"
+      },
+      "original": "Gallos ab Aquitanis Garumna flumen dividit.",
+      "translation": "The river Garonne separates the Gauls from the Aquitani."
+    }
+  ],
+  "joins": [
+    {
+      "from_page": "bg_1_1",
+      "to_page": "bg_1_2",
+      "kind": "section_break",
+      "rationale": "The second page begins a separate boundary statement."
+    }
+  ]
+}

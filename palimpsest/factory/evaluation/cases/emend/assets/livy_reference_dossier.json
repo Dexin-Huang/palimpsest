@@ -1,0 +1,46 @@
+{
+  "doc_id": "editorial_emend_dev",
+  "identification": {
+    "work": "Titus Livius, Ab urbe condita",
+    "tradition": "Roman historiography",
+    "period_script": "Conformance fixture; no manuscript dating asserted",
+    "witness_status": "Project-authored fixture, not a historical witness",
+    "summary": "Short source-backed excerpts from Livy 1.58-59."
+  },
+  "reference_points": [
+    {
+      "section": "Lucretia A",
+      "anchor": "cultrun ex volnere",
+      "work": "Titus Livius, Ab urbe condita",
+      "chapter": "1.59",
+      "received_text": "cultrum ex volnere Lucretiae extractum",
+      "relationship": "quotes",
+      "confidence": "high",
+      "verified": "web: The Latin Library, Livy I.59"
+    },
+    {
+      "section": "Lucretia B",
+      "anchor": "cultrun ex volnere",
+      "work": "Titus Livius, Ab urbe condita",
+      "chapter": "1.59",
+      "received_text": "cultrum ex volnere Lucretiae extractum",
+      "relationship": "quotes",
+      "confidence": "high",
+      "verified": "web: The Latin Library, Livy I.59"
+    },
+    {
+      "section": "Oath",
+      "anchor": "Per hunc castisimum",
+      "work": "Titus Livius, Ab urbe condita",
+      "chapter": "1.59",
+      "received_text": "Per hunc castissimum ante regiam iniuriam sanguinem iuro.",
+      "relationship": "quotes",
+      "confidence": "high",
+      "verified": "web: The Latin Library, Livy I.59"
+    }
+  ],
+  "editorial_notes": [
+    "The repeated cultrun/cultrum substitution is intentionally systematic in this fixture.",
+    "The unresolved 〔?〕 has no source support and must remain explicit."
+  ]
+}

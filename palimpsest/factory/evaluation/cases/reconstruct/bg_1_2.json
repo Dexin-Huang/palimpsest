@@ -1,0 +1,20 @@
+{
+  "doc_id": "caesar_bellum_gallicum",
+  "page_id": "bg_1_2",
+  "page_seq": 2,
+  "canvas_id": "https://la.wikisource.org/wiki/De_bello_Gallico/Liber_I",
+  "original": {
+    "text": "Gallos ab Aquitanis Garumna flumen dividit.",
+    "regions": [],
+    "seam": null
+  },
+  "translation": {
+    "text": "The river Garonne separates the Gauls from the Aquitani.",
+    "notes": "",
+    "flags": {}
+  },
+  "inputs": {
+    "page_transcription": "fixture-bg12",
+    "page_translation": "fixture-bg12-en"
+  }
+}

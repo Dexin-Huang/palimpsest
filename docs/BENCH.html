@@ -72,9 +72,9 @@
 <main>
   <div class="kicker">Palimpsest · design note</div>
   <h1>The Bench</h1>
-  <p class="lede">How a module leaves the production line, gets experimented on,
-  proves itself against a number, and is bolted back in — or deleted.
-  The lab is not a place; it is a loop with a gate.</p>
+  <p class="lede">How a production component becomes an immutable candidate,
+  proves itself on paired evidence, and enters a recipe only through a
+  qualification and canary gate.</p>
 
   <h2>The premise</h2>
   <p>The factory's production line is deliberately rigid: stations communicate
@@ -88,7 +88,7 @@
   <b>socket</b>, the <b>fixtures</b>, and the <b>promotion gate</b>.</p>
 
   <figure>
-  <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The bench loop: a module is unplugged from the production line, candidates run against fixtures, the scoreboard decides, winner promoted or candidate deleted." style="width:100%;height:auto">
+  <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The bench loop: immutable baseline and challenger candidates run on paired cases, the scorecard qualifies or rejects the challenger, and a protected canary gates recipe promotion." style="width:100%;height:auto">
     <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
       <path d="M1.5 1L8.5 5L1.5 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round"/></marker></defs>
     <rect x="20" y="22" width="640" height="64" rx="10" fill="#ffffff" stroke="#d9d2c4"/>
@@ -99,20 +99,20 @@
     <rect x="60" y="132" width="270" height="118" rx="10" fill="#ffffff" stroke="#d9d2c4"/>
     <text x="80" y="156" font-family="Consolas,monospace" font-size="11" fill="#8a4b2d" letter-spacing="2">BENCH</text>
     <text x="80" y="180" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">frozen fixtures · incumbent</text>
-    <text x="80" y="202" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">+ candidates loaded by path</text>
-    <text x="80" y="230" font-family="Consolas,monospace" font-size="12" fill="#6b6257">experiments/&lt;idea&gt;/candidate.py</text>
+    <text x="80" y="202" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">+ immutable candidate identities</text>
+    <text x="80" y="230" font-family="Consolas,monospace" font-size="12" fill="#6b6257">candidates/&lt;station&gt;/&lt;candidate&gt;.yaml</text>
     <path d="M330 190 H388" fill="none" stroke="#8a4b2d" stroke-width="1.6" marker-end="url(#a)"/>
     <rect x="392" y="132" width="228" height="118" rx="10" fill="#ffffff" stroke="#d9d2c4"/>
     <text x="412" y="156" font-family="Consolas,monospace" font-size="11" fill="#8a4b2d" letter-spacing="2">SCOREBOARD</text>
-    <text x="412" y="182" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">the module's own metric,</text>
-    <text x="412" y="203" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">same fixtures, no debate</text>
-    <text x="412" y="230" font-family="Charter,Georgia,serif" font-size="13" fill="#3d6b35" font-weight="600">wins → promote in place</text>
+    <text x="412" y="182" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">quality · limits · reliability</text>
+    <text x="412" y="203" font-family="Charter,Georgia,serif" font-size="14" fill="#2b2620">cost · downstream effects</text>
+    <text x="412" y="230" font-family="Charter,Georgia,serif" font-size="13" fill="#3d6b35" font-weight="600">qualifies → proposal → canary</text>
     <path d="M506 250 V282 H340" fill="none" stroke="#6b6257" stroke-width="1.4" stroke-dasharray="4 3"/>
     <path d="M340 282 H180 V254" fill="none" stroke="#6b6257" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a)"/>
-    <text x="252" y="274" font-family="Charter,Georgia,serif" font-size="13" fill="#6b6257" font-style="italic">loses → deleted; one line in the log</text>
+    <text x="252" y="274" font-family="Charter,Georgia,serif" font-size="13" fill="#6b6257" font-style="italic">reject / retain evidence / iterate</text>
   </svg>
-  <figcaption>The loop. The production line never sees a candidate that
-  hasn't beaten the incumbent on the scoreboard.</figcaption>
+  <figcaption>The loop. The production recipe never changes until paired
+  qualification and a protected canary have both passed.</figcaption>
   </figure>
 
   <h2>1 · The socket</h2>
@@ -124,10 +124,10 @@
   There is no plugin framework, no strategy registry, no abstract base
   hierarchy: the artifact contract <em>is</em> the abstraction, and it already
   exists because stations only talk through artifacts.</p>
-  <div class="rule"><b>house rule.</b> One implementation in the tree at a
-  time. An interface with one implementation is scaffolding, not architecture —
-  the socket earns a second implementation only for the duration of an
-  experiment, and the experiment ends with one implementation again.</div>
+  <div class="rule"><b>house rule.</b> One selected implementation per
+  production recipe slot. Candidate variants may coexist only as immutable,
+  explicit evaluation identities; the conductor never treats them as parallel
+  producers.</div>
 
   <h2>2 · The fixtures and the scoreboard</h2>
   <p>Every module owns a frozen fixture set — real inputs snapshotted from the
@@ -136,13 +136,17 @@
   model-backed modules the scoreboard adds the blind pairwise judge; for pure
   code it is numbers alone, and costs nothing.</p>
   <pre><code># the shape of every experiment
-factory bench align \
-    --candidate experiments/hough_columns/candidate.py
-# → scoreboard: incumbent vs candidate, per fixture, one metric</code></pre>
-  <p>Candidates are loaded <em>by path</em>. They live in
-  <code>experiments/</code>, outside the package; the production tree is never
-  touched until promotion. Three rival ideas are three directories, all
-  runnable in one command, none of them contaminating the line.</p>
+palimpsest bench run \
+    --suite palimpsest/factory/evaluation/suites/read/zh-vatican-borg-cin-361-f004r-development-v1.yaml \
+    --baseline palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml \
+    --challenger palimpsest/factory/candidates/read/zh-vatican-f004r-high-thinking-development-v1.yaml \
+    --run-id read-f004r-high-thinking-001
+# → immutable paired scorecard and qualification decision</code></pre>
+  <p>Candidates are strict YAML records under
+  <code>factory/candidates/&lt;station&gt;/</code>. Model, prompt, parameters,
+  options, station variant, and localized implementation closure all
+  participate in identity. The runner materializes isolated workspaces; it
+  never edits a production artifact or work order.</p>
 
   <table>
     <tr><th>module</th><th>fixture</th><th>metric at the gate</th></tr>
@@ -158,26 +162,24 @@ factory bench align \
         <td>generate held-out chars, score against the real ink</td></tr>
   </table>
 
-  <div class="rule"><b>boundary.</b> The bench measures <em>modules against
-  fixtures</em>; <code>evaluate</code> measures <em>whole-line output against
-  references</em>. Keep them separate — a module-level win that does not
-  survive line-level evaluation is how an over-fitted part sneaks onto a
-  production line.</div>
+  <div class="rule"><b>boundary.</b> The bench scores local station quality,
+  hard limits, downstream probes, reliability, cost, and latency. A separate
+  recipe canary proves that a local win survives the whole line before the
+  proposal may change production.</div>
 
   <h2>3 · The promotion gate</h2>
-  <p>A candidate that beats the incumbent is promoted <em>in place</em>: its
-  code replaces the incumbent's, the suite and golden fixtures run, and one
-  commit carries the scoreboard in its message. Then the experiment directory
-  is deleted. Losers are deleted too, immediately.</p>
-  <p>Git is the only version store. There are no <code>_v2</code> files, no
-  commented-out alternatives, no "old approach kept just in case" — a worse
-  implementation held in the tree contaminates every future reading of the
-  code. What survives a losing experiment is one line in
-  <code>experiments/LOG.md</code>:</p>
-  <pre><code>2026-07-20  align/columns   Hough-transform column detection
-            lost to projection profile: 61% vs 86% boxed. Deleted.</code></pre>
-  <p>That line is the lab notebook. "We tried that in July and it lost by 25
-  points" is knowledge worth one sentence — and no more than one sentence.</p>
+  <p>A winning score is necessary, not sufficient. The suite must be explicitly
+  qualification-eligible, every hard gate must pass, protected slices must stay
+  within their regression limits, required downstream probes must be known and
+  passing, and the effect must clear the declared minimum. Moving model aliases
+  require an explicit reproducibility waiver.</p>
+  <p>A qualified report creates a compare-and-swap recipe proposal. The canary
+  runs that exact candidate in an isolated production copy and records
+  byte-checked recipe and artifact evidence. Promotion commits the recipe and
+  append-only history as one recoverable decision; production paid work still
+  requires explicit refresh. Rollback is a new inverse decision restoring the
+  exact prior candidate fingerprint. JSON reports remain authoritative, while
+  SQLite is a rebuildable index.</p>
 
   <h2>The loop, proven before it was named</h2>
   <p>The bench codifies a practice, not a plan. Each of these ran the full
@@ -212,15 +214,14 @@ factory bench align \
       <p><b>Socket:</b> <code>generate(char, exemplars) → glyph</code>.
       Fixture: the exemplar library; hold out attested characters.</p></div>
     <div class="col"><span class="n">experiment</span>
-      <p><b>Candidates:</b> few-shot image-model call vs a fine-tuned
-      font-generation model — each a directory under
-      <code>experiments/</code>.</p></div>
+      <p><b>Candidates:</b> immutable records for a few-shot image-model call
+      and a fine-tuned font-generation model, each with a fixed identity.</p></div>
     <div class="col"><span class="n">measure</span>
       <p><b>Scoreboard:</b> generate the held-out characters, score against
       the scribe's real ink. One number per candidate, per manuscript.</p></div>
     <div class="col"><span class="n">send it back</span>
-      <p><b>Promote</b> the winner into the recipe slot; scoreboard in the
-      commit; delete the rest. The line never noticed.</p></div>
+      <p><b>Promote</b> only after qualification and a recipe canary; retain
+      the report and decision records for audit and exact rollback.</p></div>
   </div>
 
   <footer>Palimpsest · The Bench · design note, July 2026. Companion to

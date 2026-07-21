@@ -1,0 +1,44 @@
+schema_version: 1
+id: reconstruct/development-v1
+station: reconstruct
+mission: One-manuscript deterministic conformance report for section order, page linkage, supported sections, and verbatim source traceability; not a qualification battery.
+qualification_eligible: false
+case_manifest: reconstruct/development.jsonl
+primary_metrics:
+  reconstruction_section_order:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  reconstruction_page_source_linkage:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  reconstruction_no_invented_sections:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  reconstruction_traceability:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+hard_limits:
+  reconstruction_page_source_linkage:
+    minimum: 1.0
+  reconstruction_no_invented_sections:
+    minimum: 1.0
+  reconstruction_traceability:
+    minimum: 1.0
+protected_slices:
+  - traceability
+slice_policy:
+  minimum_cases: 1
+  maximum_regression: 0.0
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 1
+  paired_bootstrap_samples: 1
+  seed: 1703
+  require_all_hard_limits: false
+  require_all_downstream_probes: false

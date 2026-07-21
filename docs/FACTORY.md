@@ -40,8 +40,8 @@ palimpsest status [--doc-id DOC]
 palimpsest graph [--format json|mermaid] [--write-docs]
 palimpsest preview --doc-id DOC --pages PAGE...
 palimpsest tune --doc-id DOC --pages PAGE...
-palimpsest evaluate ...
 palimpsest site
+palimpsest bench ...
 ```
 
 `intake` is the normal entry point. It fetches one IIIF manifest, validates the
@@ -250,6 +250,16 @@ station artifacts directly.
 The publication colophon reports the model and prompt identity for model-backed
 stations, implementation fingerprints for every contributing station, total
 recorded production cost, source catalog identity, and page count.
+
+## Improvement plane
+
+This document describes the production line. The implemented evaluation and
+promotion plane is specified separately in
+[`EVALUATION.md`](EVALUATION.md). It adds versioned station candidates,
+evidence-anchored benchmark suites, paired scorecards, explicit promotion
+gates, end-to-end canaries, and exact rollback while keeping evaluation out of
+the production conductor. Its records and SQLite indexes are separate from
+production work orders and stage runs.
 
 ## Invariants
 

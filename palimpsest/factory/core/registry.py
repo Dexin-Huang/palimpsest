@@ -1,23 +1,41 @@
-"""Station registry: recipes reference stations by name; implementations
-plug in here without the conductor knowing them."""
+"""Station variant registry, keyed by logical station name and variant."""
 
 from __future__ import annotations
 
 from palimpsest.factory.core.contracts import CONTRACTS, SOURCE_KINDS, contract
 from palimpsest.factory.core.station import Station
 
-_STATIONS: dict[str, Station] = {}
+_STATIONS: dict[str, dict[str, Station]] = {}
 
 
 def register(station: Station) -> Station:
-    if station.name in _STATIONS:
-        raise ValueError(f"Station already registered: {station.name}")
+    if not isinstance(station.name, str) or not station.name.strip():
+        raise ValueError("Station name must be a non-empty string")
+    if not isinstance(station.variant, str) or not station.variant.strip():
+        raise ValueError(f"Station {station.name!r} variant must be a non-empty string")
+
+    registered_variants = _STATIONS.get(station.name)
+    if registered_variants is not None and station.variant in registered_variants:
+        raise ValueError(
+            f"Station variant already registered: {station.name!r}/{station.variant!r}"
+        )
+
     for kind in (*station.consumes, *station.optional_consumes, station.produces):
         if kind not in CONTRACTS:
             raise ValueError(
                 f"Station {station.name!r} references unknown artifact kind "
                 f"{kind!r} — declare it in core/contracts.py first"
             )
+
+    if registered_variants:
+        reference = next(iter(registered_variants.values()))
+        if station.socket != reference.socket:
+            raise ValueError(
+                f"Station {station.name!r} variant {station.variant!r} has an "
+                f"incompatible artifact socket; expected {reference.socket!r}, "
+                f"got {station.socket!r}"
+            )
+
     output = contract(station.produces)
     if output.grain != station.grain:
         raise ValueError(
@@ -32,8 +50,10 @@ def register(station: Station) -> Station:
     existing_producer = next(
         (
             registered.name
-            for registered in _STATIONS.values()
-            if registered.produces == station.produces
+            for variants_by_name in _STATIONS.values()
+            for registered in variants_by_name.values()
+            if registered.name != station.name
+            and registered.produces == station.produces
         ),
         None,
     )
@@ -42,23 +62,78 @@ def register(station: Station) -> Station:
             f"Artifact {station.produces!r} already has producer "
             f"{existing_producer!r}; cannot also register {station.name!r}"
         )
-    _STATIONS[station.name] = station
+
+    # Resolve declared files before mutating the registry. The concrete station
+    # module is checked when its fingerprint is first requested, which keeps
+    # lightweight test implementations registerable without hashing test code.
+    station.validate_production_dependencies()
+    _STATIONS.setdefault(station.name, {})[station.variant] = station
     return station
 
 
 def all_stations() -> list[Station]:
+    """Return one representative per logical station for the contract graph."""
     _ensure_loaded()
-    return [_STATIONS[name] for name in sorted(_STATIONS)]
+    return [_graph_representative(name) for name in sorted(_STATIONS)]
 
 
-def get(name: str) -> Station:
+def all_variants() -> list[Station]:
+    """Return every registered station implementation in stable order."""
+    _ensure_loaded()
+    return [
+        variants_by_name[variant]
+        for name in sorted(_STATIONS)
+        for variants_by_name in (_STATIONS[name],)
+        for variant in sorted(variants_by_name)
+    ]
+
+
+def variants(name: str) -> list[Station]:
+    """Return all registered implementations of one logical station."""
     _ensure_loaded()
     try:
-        return _STATIONS[name]
+        variants_by_name = _STATIONS[name]
     except KeyError:
         raise KeyError(
             f"Unknown station: {name!r}. Registered: {sorted(_STATIONS)}"
         ) from None
+    return [variants_by_name[variant] for variant in sorted(variants_by_name)]
+
+
+def get(name: str, variant: str | None = None) -> Station:
+    """Resolve an explicit variant or the conservative production default."""
+    _ensure_loaded()
+    try:
+        variants_by_name = _STATIONS[name]
+    except KeyError:
+        raise KeyError(
+            f"Unknown station: {name!r}. Registered: {sorted(_STATIONS)}"
+        ) from None
+
+    if variant is not None:
+        try:
+            return variants_by_name[variant]
+        except KeyError:
+            raise KeyError(
+                f"Unknown variant {variant!r} for station {name!r}. "
+                f"Registered: {sorted(variants_by_name)}"
+            ) from None
+
+    if "default" in variants_by_name:
+        return variants_by_name["default"]
+    if len(variants_by_name) == 1:
+        return next(iter(variants_by_name.values()))
+    raise KeyError(
+        f"Station {name!r} has multiple variants and no 'default'; "
+        f"select one explicitly from {sorted(variants_by_name)}"
+    )
+
+
+def _graph_representative(name: str) -> Station:
+    variants_by_name = _STATIONS[name]
+    if "default" in variants_by_name:
+        return variants_by_name["default"]
+    return variants_by_name[sorted(variants_by_name)[0]]
 
 
 def _ensure_loaded() -> None:

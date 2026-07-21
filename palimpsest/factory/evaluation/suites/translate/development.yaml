@@ -1,0 +1,46 @@
+schema_version: 1
+id: translate/development-v1
+station: translate
+mission: One-case deterministic conformance report for passage retention, explicit uncertainty, and repeated terminology; not a qualification battery.
+qualification_eligible: false
+case_manifest: translate/development.jsonl
+primary_metrics:
+  translation_passage_coverage:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  translation_omission_rate:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.8
+  translation_uncertainty_retention:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  translation_terminology_consistency:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+hard_limits:
+  translation_passage_coverage:
+    minimum: 1.0
+  translation_omission_rate:
+    maximum: 0.0
+  translation_uncertainty_retention:
+    minimum: 1.0
+  translation_terminology_consistency:
+    minimum: 1.0
+protected_slices:
+  - uncertainty
+slice_policy:
+  minimum_cases: 1
+  maximum_regression: 0.0
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 1
+  paired_bootstrap_samples: 1
+  seed: 1701
+  require_all_hard_limits: false
+  require_all_downstream_probes: false

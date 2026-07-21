@@ -55,6 +55,14 @@ class Survey(Station):
     uses_model = True
     param_keys = frozenset({"temperature", "max_output_tokens"})
     option_keys = frozenset({"max_tokens_per_chunk"})
+    production_dependencies = (
+        "factory/gateway/__init__.py",
+        "factory/gateway/client.py",
+        "factory/gateway/gemini.py",
+        "factory/gateway/pricing.py",
+        "factory/gateway/protocol.py",
+        "factory/usage.py",
+    )
 
     def run(self, job: Job) -> StationResult:
         records = [

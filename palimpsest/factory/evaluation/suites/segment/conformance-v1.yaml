@@ -1,0 +1,27 @@
+schema_version: 1
+id: segment/generated-conformance/v1
+station: segment
+qualification_eligible: false
+mission: recover every generated text region, marginal note, and adjudicated reading-order relation
+case_manifest: segment/conformance-v1.jsonl
+primary_metrics:
+  segment_region_precision: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+  segment_region_recall: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+  segment_mean_intersection_over_union: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+  segment_region_intersection_recall: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+  segment_marginalia_recall: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+  segment_reading_order_accuracy: {direction: maximize, minimum_effect: 0.0, confidence: 0.95}
+hard_limits:
+  segment_protected_completeness: {minimum: 1.0}
+  segment_false_blank_page_rate: {maximum: 0.0}
+protected_slices: [generated_geometry]
+slice_policy: {minimum_cases: 1, maximum_regression: 0.0}
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 1
+  paired_bootstrap_samples: 1000
+  seed: 4104
+  require_all_hard_limits: true
+  require_all_downstream_probes: false

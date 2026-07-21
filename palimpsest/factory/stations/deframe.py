@@ -26,6 +26,10 @@ class Deframe(Station):
     consumes = ("page_image",)
     produces = "page_image_framed"
     option_keys = frozenset({"frame_margin"})
+    production_dependencies = (
+        "factory/imaging.py",
+        "factory/stations/image_input.py",
+    )
 
     def run(self, job: Job) -> StationResult:
         image = load_image(job, "page_image")

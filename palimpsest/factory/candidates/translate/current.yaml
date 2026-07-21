@@ -1,0 +1,13 @@
+schema_version: 1
+id: translate/current
+station: translate
+variant: default
+model: gemini-3.5-flash-lite
+prompt: translate/la/with_brief
+params:
+  temperature: 0.1
+  max_output_tokens: 32768
+options:
+  overlap: 1
+  trim_seam_overlap: false
+notes: Fixed-model snapshot of the current Latin translation configuration for development conformance reporting.

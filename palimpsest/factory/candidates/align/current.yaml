@@ -1,0 +1,7 @@
+schema_version: 1
+id: align/current-default-v1
+station: align
+variant: default
+params: {}
+options: {}
+notes: current deterministic forced glyph alignment

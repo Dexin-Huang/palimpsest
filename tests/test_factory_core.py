@@ -212,7 +212,11 @@ def test_conductor_verifies_output_and_refreshes_prompt_snapshot(
             ),
         ),
     )
-    monkeypatch.setattr(conductor_module, "load_recipe", lambda name: recipe)
+    loaded_recipes = []
+
+    def injected_recipe_loader(name):
+        loaded_recipes.append(name)
+        return recipe
 
     doc_id = "integrity_doc"
     page_id = "f001r"
@@ -254,10 +258,16 @@ def test_conductor_verifies_output_and_refreshes_prompt_snapshot(
             return CellOutcome(output_path=str(self.reported_path))
 
     executor = RecordingExecutor()
-    conductor = Conductor(ledger, library_root=tmp_path, workers=1)
+    conductor = Conductor(
+        ledger,
+        library_root=tmp_path,
+        workers=1,
+        recipe_loader=injected_recipe_loader,
+    )
     conductor._executor = executor
 
     assert conductor.run(doc_id).count("ran") == 1
+    assert loaded_recipes == [recipe.name]
     tampered = ws_io.read_json(output_path)
     tampered["translation"] = "manually changed"
     ws_io.atomic_write_json(output_path, tampered)

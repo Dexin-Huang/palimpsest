@@ -1,0 +1,43 @@
+schema_version: 1
+id: read/zh-vatican-borg-cin-361-f004r-development/v1
+station: read
+qualification_eligible: false
+mission: >-
+  Development-only, non-qualifying comparison of faithful Chinese diplomatic
+  reading on a Vatican spread; scorer gold is a visible user-corrected
+  transcription, not independent double transcription or qualification gold.
+case_manifest: read/zh-vatican-borg-cin-361-f004r-development-v1.jsonl
+primary_metrics:
+  character_error_rate:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.8
+  page_completeness:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+hard_limits:
+  contamination_rate: {maximum: 0.0}
+  empty_output_rate: {maximum: 0.0}
+  invented_character_rate: {maximum: 0.15}
+  repetition_rate: {maximum: 0.1}
+protected_slices:
+  - classical_chinese
+  - vertical_script
+  - two_page_spread
+  - mixed_script_marginalia
+  - digitization_footer
+slice_policy:
+  minimum_cases: 1
+  maximum_regression: 0.1
+operational_limits: {}
+judges:
+  - metric: blind_image_pairwise
+    judge: read-image-pairwise/gemini-3.6-v1
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 1
+  paired_bootstrap_samples: 1000
+  seed: 361004
+  require_all_hard_limits: true
+  require_all_downstream_probes: false

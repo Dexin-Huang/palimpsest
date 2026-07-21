@@ -1,0 +1,59 @@
+{
+  "passages": [
+    {
+      "id": "division",
+      "acceptable": [
+        "All Gaul is divided into three parts"
+      ]
+    },
+    {
+      "id": "peoples",
+      "acceptable": [
+        "one of which the Belgae inhabit, the Aquitani another"
+      ]
+    },
+    {
+      "id": "names",
+      "acceptable": [
+        "in their own language are called Celts, in ours Gauls"
+      ]
+    },
+    {
+      "id": "boundary",
+      "acceptable": [
+        "The river Garonne separates the Gauls from the Aquitani"
+      ]
+    }
+  ],
+  "uncertainties": [
+    {
+      "id": "uncertain_ethnonym",
+      "acceptable_markers": [
+        "Aquitani?",
+        "uncertain reading at Aquitani"
+      ]
+    }
+  ],
+  "terms": [
+    {
+      "source": "Gallia",
+      "acceptable_targets": [
+        "Gaul"
+      ],
+      "minimum_occurrences": 1
+    },
+    {
+      "source": "Galli",
+      "acceptable_targets": [
+        "Gauls"
+      ],
+      "minimum_occurrences": 2
+    }
+  ],
+  "rights": {
+    "source": "C. Julius Caesar, De Bello Gallico 1.1, public-domain Latin text; W. A. McDevitte and W. S. Bohn, 1869 public-domain English translation.",
+    "source_url": "https://www.gutenberg.org/cache/epub/10657/pg10657.txt",
+    "fixture": "CC0-1.0",
+    "adjudication": "Passage anchors quote the published translation; the uncertainty check is limited to the explicit bracketed condition in the fixture input."
+  }
+}

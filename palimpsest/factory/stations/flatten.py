@@ -31,6 +31,10 @@ class Flatten(Station):
     consumes = ("page_image_unmarked",)
     produces = "page_image_clean"
     option_keys = frozenset({"mode", "factor"})
+    production_dependencies = (
+        "factory/imaging.py",
+        "factory/stations/image_input.py",
+    )
 
     def run(self, job: Job) -> StationResult:
         mode = job.config.options.get("mode", "flatten")

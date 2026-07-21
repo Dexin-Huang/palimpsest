@@ -26,7 +26,7 @@ _CONFIG_VARS = {
     "PALIMPSEST_MODEL_VISION": config.MODEL_VISION,
     "PALIMPSEST_MODEL_READING": config.MODEL_READING,
 }
-_SPEC_KEYS = {"station", "model", "prompt", "params"}
+_SPEC_KEYS = {"station", "variant", "model", "prompt", "params"}
 
 
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ def _interpolate(text: str) -> str:
 
 
 def _spec(slot: dict) -> StationSpec:
-    station = registry.get(slot["station"])
+    station = registry.get(slot["station"], slot.get("variant"))
     if station.uses_model and not (slot.get("model") and slot.get("prompt")):
         raise ValueError(f"Station {station.name!r} requires 'model' and 'prompt'")
 

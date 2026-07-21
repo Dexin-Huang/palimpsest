@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.15.10,<1"]
+dev = ["pytest>=8.0", "ruff>=0.15.10,<1", "setuptools>=68", "wheel"]
 
 [project.scripts]
 palimpsest = "palimpsest.cli:main"
@@ -30,7 +30,19 @@ palimpsest = "palimpsest.cli:main"
 include = ["palimpsest*"]
 
 [tool.setuptools.package-data]
-"palimpsest.factory" = ["recipes/*.yaml", "prompts/**/*.txt"]
+"palimpsest.factory" = [
+  "recipes/*.yaml",
+  "prompts/**/*.txt",
+  "candidates/**/*.yaml",
+  "judges/**/*.yaml",
+  "evaluation/suites/**/*.yaml",
+  "evaluation/cases/**/*.json",
+  "evaluation/cases/**/*.jsonl",
+  "evaluation/cases/**/*.jpg",
+  "evaluation/gold/**/*.json",
+  "evaluation/gold/**/*.jpg",
+  "evaluation/gold/**/*.epub",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

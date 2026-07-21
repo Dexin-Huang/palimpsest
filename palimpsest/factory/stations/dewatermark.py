@@ -22,6 +22,10 @@ class Dewatermark(Station):
     consumes = ("page_image_framed",)
     produces = "page_image_unmarked"
     option_keys = frozenset({"height_fraction", "max_std"})
+    production_dependencies = (
+        "factory/imaging.py",
+        "factory/stations/image_input.py",
+    )
 
     def run(self, job: Job) -> StationResult:
         image = load_image(job, "page_image_framed")
