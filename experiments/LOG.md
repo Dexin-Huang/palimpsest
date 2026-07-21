@@ -42,3 +42,11 @@ Losers are deleted from the tree; this file is what remains of them.
   stored in out/page_0001_lassos.json; boxes-vs-lassos side-by-side in
   out/lasso_report.html. SAM refine staged as next challenger — needs
   torch (not installed; ~2.5GB CPU wheel) + SAM2 weights.  (open)
+
+- 2026-07-20  char_inventory/grabcut  lightweight lasso challenger:
+  OpenCV GrabCut, box-prompted, zero new deps. 689 cells in 22s
+  (~30ms/char); masks are stroke-tight (systematically tighter than the
+  closed-mask incumbent — the "687 materially different" is the closing
+  kernel's fat, not error). Defects: some faint chars return background,
+  some stain bleed. Next: hybrid init (Otsu mask as GC_PR_FGD seed).
+  Big-SAM deferred — the zero-byte rung may be enough.  (open)
