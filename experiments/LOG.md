@@ -15,3 +15,10 @@ Losers are deleted from the tree; this file is what remains of them.
   the audit can't bootstrap at this noise level (mushy class means,
   single-instance distractors). Next: hand-labeled ground truth for
   binding accuracy, then within-column junk gates.  (open)
+
+- 2026-07-20  m2 postprocess  clean_crop: neighbor-ink removal (component
+  centroids outside box core dropped) + junk gates (empty/solid/sparse/
+  sliver/solid-mass). 705→651 instances, 54 auto-junked; crops visibly
+  clean; purity 1.9% — binding, not hygiene, remains the blocker.
+  Ground-truth page regenerated with raw+cleaned columns.  (folded into
+  m2 candidate)

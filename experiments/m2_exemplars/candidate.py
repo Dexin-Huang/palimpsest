@@ -46,15 +46,50 @@ def harvest(alignments: dict[str, dict] | None = None) -> dict[str, list[dict]]:
     return instances
 
 
-def normalize(image: np.ndarray, bbox: list[int]):
+def clean_crop(image: np.ndarray, bbox: list[int]):
+    """Post-process one crop: strip neighbor ink (components centered
+    outside the box core), then junk-gate what cannot be a character.
+    Returns (ink mask, gray, junk_reason|None)."""
     x, y, w, h = bbox
     pad = int(max(w, h) * PAD_FRAC)
-    crop = image[max(0, y - pad):y + h + pad, max(0, x - pad):x + w + pad]
+    x0, y0 = max(0, x - pad), max(0, y - pad)
+    crop = image[y0:y + h + pad, x0:x + w + pad]
     if crop.size == 0:
-        return None, None
+        return None, None, "empty"
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
     _, ink = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    count, labels, stats, centroids = cv2.connectedComponentsWithStats(ink, 8)
+    core_x, core_y = x - x0, y - y0
+    keep = np.zeros(count, bool)
+    for i in range(1, count):
+        cx, cy = centroids[i]
+        inside = (core_x - 2 <= cx <= core_x + w + 2
+                  and core_y - 2 <= cy <= core_y + h + 2)
+        keep[i] = inside and stats[i, cv2.CC_STAT_AREA] >= 4
+    ink = np.where(keep[labels], np.uint8(255), np.uint8(0))
     if ink.sum() == 0:
+        return None, None, "empty"
+    fill = float((ink > 0).sum()) / max(1, w * h)
+    if fill > 0.62:
+        return None, None, "solid_blob"
+    # damage masses are solid; characters are strokes (~20-40% of their box)
+    n2, l2, s2, _ = cv2.connectedComponentsWithStats((ink > 0).astype(np.uint8), 8)
+    if n2 > 1:
+        big = 1 + int(np.argmax(s2[1:, cv2.CC_STAT_AREA]))
+        bw, bh = s2[big, cv2.CC_STAT_WIDTH], s2[big, cv2.CC_STAT_HEIGHT]
+        extent = s2[big, cv2.CC_STAT_AREA] / max(1, bw * bh)
+        if extent > 0.55 and bw * bh > 0.25 * w * h:
+            return None, None, "solid_mass"
+    if fill < 0.04:
+        return None, None, "sparse"
+    if min(w, h) < 18 and max(w, h) > 3.2 * min(w, h):
+        return None, None, "sliver"
+    return ink, gray, None
+
+
+def normalize(image: np.ndarray, bbox: list[int]):
+    ink, gray, junk = clean_crop(image, bbox)
+    if junk:
         return None, None
     ys, xs = np.nonzero(ink)
     tight = ink[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
