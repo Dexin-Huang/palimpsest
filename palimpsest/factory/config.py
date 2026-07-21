@@ -29,5 +29,5 @@ LIBRARY_ROOT = Path(_env("PALIMPSEST_LIBRARY_ROOT", str(PROJECT_ROOT / "library"
 FACTORY_DB_PATH = Path(_env("PALIMPSEST_FACTORY_DB", str(LIBRARY_ROOT / "factory.db")))
 
 # Model defaults used by recipe interpolation.
-MODEL_VISION = _env("PALIMPSEST_MODEL_VISION", "gemini-3.6-flash")
-MODEL_READING = _env("PALIMPSEST_MODEL_READING", "gemini-3.5-flash-lite")
+MODEL_VISION = _env("PALIMPSEST_MODEL_VISION", "gemini-flash-latest")
+MODEL_READING = _env("PALIMPSEST_MODEL_READING", "gemini-flash-lite-latest")

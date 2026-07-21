@@ -341,8 +341,13 @@ def test_gateway_rejects_unknown_provider():
 
 
 def test_pricing_known_and_unknown_models():
-    for model in ("gemini-3.6-flash", "gemini-3.5-flash-lite"):
+    for model in ("gemini-flash-latest", "gemini-flash-lite-latest"):
         cost = estimate_cost(model, 1000, 500)
         assert cost is not None and cost > 0
-    assert estimate_cost("gemini-3.6-flash", 1_000_000, 1_000_000) == pytest.approx(9.0)
+    assert estimate_cost("gemini-flash-latest", 1_000_000, 1_000_000) == pytest.approx(
+        9.0
+    )
+    assert estimate_cost("gemini-flash-lite-latest", 1000, 500) == estimate_cost(
+        "gemini-3.5-flash-lite", 1000, 500
+    )
     assert estimate_cost("no-such-model", 1, 1) is None

@@ -58,8 +58,8 @@ Copy `.env.example` to `.env` and set `GEMINI_API_KEY`. The two recipe model
 defaults can be overridden there:
 
 ```env
-PALIMPSEST_MODEL_VISION=gemini-3.6-flash
-PALIMPSEST_MODEL_READING=gemini-3.5-flash-lite
+PALIMPSEST_MODEL_VISION=gemini-flash-latest
+PALIMPSEST_MODEL_READING=gemini-flash-lite-latest
 ```
 
 The `reference` and `emend` stations use an agent executor selected in the
