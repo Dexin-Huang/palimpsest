@@ -50,3 +50,12 @@ Losers are deleted from the tree; this file is what remains of them.
   kernel's fat, not error). Defects: some faint chars return background,
   some stain bleed. Next: hybrid init (Otsu mask as GC_PR_FGD seed).
   Big-SAM deferred — the zero-byte rung may be enough.  (open)
+
+- 2026-07-20  char_inventory/cluster  unsupervised: blurred 32x32 density
+  features + thresholded leader clustering over 1,948 crops -> 307
+  clusters (127 multi-member). Distinctive shapes discovered cleanly
+  (pure rows of 之, 脈, 為, 寸 with zero labels); dense complex chars
+  clump into mixed attractors — feature resolution is the limit, not the
+  approach. Next rungs: higher-res/HOG features, then hierarchical
+  re-cluster inside attractors; then cluster-level labeling + document-
+  level assignment (cryptogram matching vs transcription).  (open)
