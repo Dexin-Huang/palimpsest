@@ -93,3 +93,15 @@ Losers are deleted from the tree; this file is what remains of them.
   (2) parchment_frame assumes dark backdrop, so Gallica/IDP light-gray
   frames evade prep — the single biggest remaining lever.  (promoted to
   lab champion; external-SOTA claim awaits M5HisDoc benchmark run)
+
+- 2026-07-20  synthesis  analysis-by-synthesis v0: page_0001 rewritten
+  from its own clustered ink (peer instances of each character; no
+  fonts, no labels). 246/689 cells peer-rewritten (rest singletons,
+  self-copied), rewrite IoU median 0.435, p10 0.280 — the synthetic
+  page is a legible facsimile. This is the verification loop: rewrite
+  mismatch = localized segmentation/cluster error. Growth path: cross-
+  page exemplars raise peer coverage; hand-font/generation covers
+  singletons; residual becomes the corpus-wide self-supervised
+  objective the perfection loop optimizes. One bug found live: uint8
+  overflow (255*255) silently blanked all synthesis — caught because
+  the output is an image you look at.  (open)
