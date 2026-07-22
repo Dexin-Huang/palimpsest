@@ -160,7 +160,7 @@ def _write_resources(root: Path) -> tuple[Path, Path, Path]:
             "thinking_level": "low",
             "secondary_model": "google/gemini-3.6-flash",
             "secondary_thinking_level": None,
-            "adjudicator_model": "anthropic/claude-opus-4-6",
+            "adjudicator_model": "anthropic/claude-fable-5",
             "adjudicator_thinking_level": "high",
         },
         "options": {},

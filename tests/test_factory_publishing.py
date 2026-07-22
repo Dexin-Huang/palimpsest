@@ -125,8 +125,8 @@ def test_unresolved_transcription_publishes_with_full_audit(
         "candidate_readings": [
             {
                 "role": "primary",
-                "requested_model": "anthropic/claude-opus-4-6",
-                "model": "anthropic/claude-opus-4-6",
+                "requested_model": "anthropic/claude-fable-5",
+                "model": "anthropic/claude-fable-5",
                 "raw_text": "Experimenta 〔?〕 ad morbos",
                 "text": "Experimenta 〔?〕 ad morbos",
             },
@@ -139,8 +139,8 @@ def test_unresolved_transcription_publishes_with_full_audit(
             },
         ],
         "adjudication_status": "adjudicated",
-        "adjudication_requested_model": "anthropic/claude-opus-4-6",
-        "adjudication_model": "anthropic/claude-opus-4-6",
+        "adjudication_requested_model": "anthropic/claude-fable-5",
+        "adjudication_model": "anthropic/claude-fable-5",
         "adjudication_reasoning": "The damaged span remains illegible.",
         "unresolved": ["damaged span after Experimenta"],
         "adjudication_error": None,

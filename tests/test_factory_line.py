@@ -233,7 +233,7 @@ def run_line(ledger, library, **kw):
 def dual_read_models(monkeypatch):
     monkeypatch.setenv("PALIMPSEST_MODEL_READING", "openai-codex/gpt-5.6-sol")
     monkeypatch.setenv("PALIMPSEST_MODEL_READING_SECONDARY", "google/gemini-3.6-flash")
-    monkeypatch.setenv("PALIMPSEST_MODEL_ADJUDICATOR", "anthropic/claude-opus-4-6")
+    monkeypatch.setenv("PALIMPSEST_MODEL_ADJUDICATOR", "anthropic/claude-fable-5")
 
 
 def test_recipe_loads_and_validates(dual_read_models):
@@ -263,7 +263,7 @@ def test_recipe_loads_and_validates(dual_read_models):
         "thinking_level": "low",
         "secondary_model": "google/gemini-3.6-flash",
         "secondary_thinking_level": None,
-        "adjudicator_model": "anthropic/claude-opus-4-6",
+        "adjudicator_model": "anthropic/claude-fable-5",
         "adjudicator_thinking_level": "high",
     }
 
@@ -330,7 +330,7 @@ def test_chinese_recipe_loads_and_validates(dual_read_models):
         "thinking_level": "low",
         "secondary_model": "google/gemini-3.6-flash",
         "secondary_thinking_level": None,
-        "adjudicator_model": "anthropic/claude-opus-4-6",
+        "adjudicator_model": "anthropic/claude-fable-5",
         "adjudicator_thinking_level": "high",
     }
 

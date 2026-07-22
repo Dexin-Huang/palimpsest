@@ -521,7 +521,7 @@ class ScriptedReadGateway:
 DUAL_PARAMS = {
     "secondary_model": "omp/gemini-3.6",
     "secondary_thinking_level": None,
-    "adjudicator_model": "anthropic/claude-opus-4-6",
+    "adjudicator_model": "anthropic/claude-fable-5",
     "adjudicator_thinking_level": "high",
 }
 
@@ -668,7 +668,7 @@ def test_read_dual_exact_agreement_skips_adjudication(tmp_path, monkeypatch):
     ]
     assert result.payload["adjudication_status"] == "agreement"
     assert result.payload["adjudication_model"] is None
-    assert result.payload["adjudication_requested_model"] == "anthropic/claude-opus-4-6"
+    assert result.payload["adjudication_requested_model"] == "anthropic/claude-fable-5"
 
 
 def test_read_dual_disagreement_is_anonymously_adjudicated_and_usage_combined(
@@ -686,7 +686,7 @@ def test_read_dual_disagreement_is_anonymously_adjudicated_and_usage_combined(
 
     assert len(fake.calls) == 3
     judge = fake.calls[2]
-    assert judge.model == "anthropic/claude-opus-4-6"
+    assert judge.model == "anthropic/claude-fable-5"
     assert judge.images == fake.calls[0].images == fake.calls[1].images
     assert "fake-model" not in judge.prompt
     assert "omp/gemini-3.6" not in judge.prompt
@@ -697,7 +697,7 @@ def test_read_dual_disagreement_is_anonymously_adjudicated_and_usage_combined(
     assert judge.json_schema["additionalProperties"] is False
     assert result.payload["text"] == "alpha"
     assert result.payload["adjudication_status"] == "adjudicated"
-    assert result.payload["adjudication_model"] == "anthropic/claude-opus-4-6"
+    assert result.payload["adjudication_model"] == "anthropic/claude-fable-5"
     assert result.payload["adjudication_reasoning"] == "visible letterforms"
     assert result.payload["unresolved"] == ["z/e"]
     assert (result.tokens_in, result.tokens_out, result.cost_usd) == (30, 15, 0.003)
@@ -752,7 +752,7 @@ def test_read_dual_segmented_failed_adjudication_is_an_auditable_hole(
 
     assert result.payload["text"] == ""
     assert result.payload["adjudication_status"] == "failed"
-    assert result.payload["adjudication_requested_model"] == "anthropic/claude-opus-4-6"
+    assert result.payload["adjudication_requested_model"] == "anthropic/claude-fable-5"
     assert result.payload["adjudication_model"] is None
     assert result.payload["adjudication_error"] == "judge unavailable"
     assert result.payload["regions"][0]["candidate_readings"] == [
@@ -881,7 +881,7 @@ def test_read_dual_full_page_adjudicator_truncation_escalates_to_tiles(
     result = Read().run(job)
 
     assert len(fake.calls) == 5
-    assert fake.calls[2].model == "anthropic/claude-opus-4-6"
+    assert fake.calls[2].model == "anthropic/claude-fable-5"
     assert result.payload["route"] == "segmented(escalated)"
     assert result.payload["text"] == "complete"
     assert (result.tokens_in, result.tokens_out) == (50, 25)
@@ -985,7 +985,7 @@ def test_read_records_requested_and_resolved_model_ids(tmp_path, monkeypatch):
             model="resolved-secondary-v2",
         ),
     ]
-    assert result.payload["adjudication_requested_model"] == "anthropic/claude-opus-4-6"
+    assert result.payload["adjudication_requested_model"] == "anthropic/claude-fable-5"
     assert result.payload["adjudication_model"] == "resolved-adjudicator-v3"
 
 

@@ -57,7 +57,7 @@ installation with `python -m pip check`.
 Factory model selectors containing `/` execute through OMP. The production
 reading lane uses `openai-codex/gpt-5.6-sol` (low thinking) as its primary,
 `google/gemini-3.6-flash` (no thinking argument) as its secondary, and
-`anthropic/claude-opus-4-6` (high thinking) as its adjudicator. Ensure
+`anthropic/claude-fable-5` (high thinking) as its adjudicator. Ensure
 `omp` is on `PATH`, start one interactive OMP session, and run
 `/login openai-codex` and `/login anthropic` before the first run. Configure
 OMP's Google provider as well; its Google backend accepts `GEMINI_API_KEY`
@@ -69,7 +69,7 @@ Copy `.env.example` to `.env` to use or override that lane:
 ```env
 PALIMPSEST_MODEL_READING=openai-codex/gpt-5.6-sol
 PALIMPSEST_MODEL_READING_SECONDARY=google/gemini-3.6-flash
-PALIMPSEST_MODEL_ADJUDICATOR=anthropic/claude-opus-4-6
+PALIMPSEST_MODEL_ADJUDICATOR=anthropic/claude-fable-5
 ```
 
 `PALIMPSEST_MODEL_READING` selects the model for the `read`, `survey`,

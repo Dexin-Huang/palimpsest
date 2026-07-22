@@ -63,4 +63,4 @@ def test_model_defaults_load_unchanged(monkeypatch):
 
     assert config.MODEL_READING == "openai-codex/gpt-5.6-sol"
     assert config.MODEL_READING_SECONDARY == "google/gemini-3.6-flash"
-    assert config.MODEL_ADJUDICATOR == "anthropic/claude-opus-4-6"
+    assert config.MODEL_ADJUDICATOR == "anthropic/claude-fable-5"

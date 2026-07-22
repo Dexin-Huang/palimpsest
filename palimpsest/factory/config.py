@@ -46,4 +46,4 @@ MODEL_READING = _env("PALIMPSEST_MODEL_READING", "openai-codex/gpt-5.6-sol")
 MODEL_READING_SECONDARY = _env(
     "PALIMPSEST_MODEL_READING_SECONDARY", "google/gemini-3.6-flash"
 )
-MODEL_ADJUDICATOR = _env("PALIMPSEST_MODEL_ADJUDICATOR", "anthropic/claude-opus-4-6")
+MODEL_ADJUDICATOR = _env("PALIMPSEST_MODEL_ADJUDICATOR", "anthropic/claude-fable-5")
