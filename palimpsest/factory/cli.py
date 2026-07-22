@@ -81,6 +81,18 @@ def add_commands(subparsers) -> None:
         help="Force re-run of a station even if fresh/outdated (repeatable)",
     )
     run.add_argument(
+        "--page",
+        action="append",
+        default=[],
+        metavar="PAGE_ID",
+        help="Run only this page (repeatable; cannot cross a manuscript barrier)",
+    )
+    run.add_argument(
+        "--through",
+        metavar="STATION",
+        help="Stop after this station, inclusive",
+    )
+    run.add_argument(
         "--executor",
         choices=["inline", "subprocess"],
         default="inline",
@@ -839,14 +851,18 @@ def cmd_run(args: argparse.Namespace) -> None:
             workers=args.workers or DEFAULT_WORKERS,
             refresh=frozenset(args.refresh),
             executor=args.executor,
+            page_ids=tuple(args.page),
+            through=args.through,
         )
         report = conductor.run(args.doc_id)
 
+    cost = "unknown" if report.cost_usd is None else f"${report.cost_usd:.4f}"
+    scope = "partial" if report.partial else "complete"
     print(
-        f"{report.doc_id} [{report.recipe}]  "
+        f"{report.doc_id} [{report.recipe}]  scope={scope} "
         f"ran={report.count('ran')} fresh={report.count('fresh')} "
         f"outdated={report.count('outdated')} failed={report.count('failed')}  "
-        f"cost=${report.cost_usd:.4f}"
+        f"cost={cost}"
     )
     for cell in report.cells:
         if cell.action == "failed":

@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from palimpsest.cli import build_parser
 import palimpsest.factory.stations.acquire as acquire_module
 from palimpsest.factory.core.conductor import Conductor
 from palimpsest.factory.core.ledger import Ledger
@@ -391,6 +392,84 @@ def test_end_to_end_line(ledger, library, gateway, fetch):
     )
     assert "febris" in f001r_call.prompt
     assert "[f001v]" in f001r_call.prompt  # neighbor context present
+
+
+def test_cli_partial_run_reports_unknown_cost(ledger, library, fetch, capsys):
+    args = build_parser().parse_args(
+        [
+            "run",
+            "--db",
+            str(library / "factory.db"),
+            "--library-root",
+            str(library),
+            "--doc-id",
+            DOC,
+            "--page",
+            "f001r",
+            "--through",
+            "acquire",
+            "--workers",
+            "1",
+        ]
+    )
+
+    args.func(args)
+
+    output = capsys.readouterr().out
+    assert "scope=partial" in output
+    assert "ran=1" in output
+    assert "cost=unknown" in output
+
+
+def test_page_selected_run_stops_inclusively_and_resumes_full_line(
+    ledger, library, gateway, fetch
+):
+    partial = run_line(
+        ledger,
+        library,
+        page_ids=("f001v",),
+        through="read",
+    )
+
+    assert partial.partial is True
+    assert [
+        (cell.station, cell.page_id) for cell in partial.cells if cell.action == "ran"
+    ] == [
+        ("acquire", "f001v"),
+        ("deframe", "f001v"),
+        ("dewatermark", "f001v"),
+        ("flatten", "f001v"),
+        ("segment", "f001v"),
+        ("read", "f001v"),
+    ]
+    assert ledger.item(DOC)["status"] == "active"
+
+    completed = run_line(ledger, library)
+
+    assert completed.partial is False
+    assert completed.count("fresh") == 6
+    assert completed.count("ran") == 16
+    assert ledger.item(DOC)["status"] == "complete"
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        ({"through": "missing"}, "Unknown --through station"),
+        ({"page_ids": ("missing",), "through": "read"}, "Unknown --page ids"),
+        (
+            {"page_ids": ("f001r",), "through": "translate"},
+            "cannot cross manuscript station",
+        ),
+    ],
+)
+def test_invalid_partial_scope_does_not_claim_or_fail_work_order(
+    ledger, library, options, message
+):
+    with pytest.raises(ValueError, match=message):
+        run_line(ledger, library, **options)
+
+    assert ledger.item(DOC)["status"] == "active"
 
 
 def test_second_run_is_all_fresh(ledger, library, gateway, fetch):

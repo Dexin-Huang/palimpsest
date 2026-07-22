@@ -12,13 +12,12 @@ line:
   - station: read
     model: ${PALIMPSEST_MODEL_VISION}
     prompt: read/zh/diplomatic
-    # temperature 0.1 + deep thinking, unlike the Latin lane's 0.7/low:
-    # regular kaishu columns don't trap low-temperature decoding the way
-    # abbreviated Latin script does, and 0.7 made the twice-photographed
-    # seam columns diverge between reads (P.3477, 2026-07-10). The read
-    # schema keeps thinking out of the transcription channel.
+    # Low reasoning is the production default. Temperature 0.1 keeps the
+    # twice-photographed seam columns stable between reads (P.3477,
+    # 2026-07-10), while high-resolution media preserves the regular kaishu
+    # strokes needed by the transcription schema.
     params: { temperature: 0.1, media_resolution: high,
-              max_output_tokens: 32768, thinking_level: high }
+              max_output_tokens: 32768, thinking_level: low }
   - station: align
   - station: survey
     model: ${PALIMPSEST_MODEL_READING}

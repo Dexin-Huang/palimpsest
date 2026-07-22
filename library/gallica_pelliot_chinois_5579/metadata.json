@@ -1,0 +1,57 @@
+{
+  "doc_id": "gallica_pelliot_chinois_5579",
+  "source": {
+    "kind": "iiif",
+    "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b10097266s/manifest.json"
+  },
+  "source_catalog": {
+    "label": "BnF. Département des Manuscrits. Pelliot Chinois 5579 (1-19)",
+    "title": "Pelliot Chinois 5579 (1-19)",
+    "shelfmark": "Bibliothèque nationale de France. Département des Manuscrits. Pelliot Chinois 5579 (1-19)",
+    "author": "Kumārajīva (0344-0413). Traducteur",
+    "date": "0801-0900",
+    "language": null,
+    "description": "Pelliot Chinois 5579 (1-19)",
+    "canvas_count": 80,
+    "metadata_entries": [
+      {
+        "label": "Repository",
+        "value": ""
+      },
+      {
+        "label": "Digitised by",
+        "value": "Bibliothèque nationale de France"
+      },
+      {
+        "label": "Source Images",
+        "value": "https://gallica.bnf.fr/ark:/12148/btv1b10097266s"
+      },
+      {
+        "label": "Metadata Source",
+        "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b10097266s"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "Bibliothèque nationale de France. Département des Manuscrits. Pelliot Chinois 5579 (1-19)"
+      },
+      {
+        "label": "Title",
+        "value": "Pelliot Chinois 5579 (1-19)"
+      },
+      {
+        "label": "Date",
+        "value": "0801-0900"
+      },
+      {
+        "label": "Creator",
+        "value": "Kumārajīva (0344-0413). Traducteur"
+      },
+      {
+        "label": "Type",
+        "value": "Manuscrit"
+      }
+    ]
+  },
+  "created_at": "2026-07-22T15:58:14.197783+00:00",
+  "updated_at": "2026-07-22T15:58:14.197783+00:00"
+}

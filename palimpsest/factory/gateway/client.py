@@ -94,6 +94,10 @@ def generate_json(
 
 
 def _resolve_provider(model: str):
+    if model.startswith("openai-codex/"):
+        from palimpsest.factory.gateway.omp_codex import generate as omp_codex_generate
+
+        return omp_codex_generate
     if model.startswith("gemini"):
         from palimpsest.factory.gateway.gemini import generate as gemini_generate
 

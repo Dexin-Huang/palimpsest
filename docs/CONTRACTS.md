@@ -157,13 +157,13 @@ flowchart TB
 | `emend` | `dd45d87c0eabb718` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
 | `flatten` | `2a384be2fb39ddc8` | page | `page_image_unmarked` | `page_image_clean` | no |
 | `publish` | `4aae4a5988a7164c` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `page_alignment` (optional) | `book` | no |
-| `read` | `77b77279fb121523` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
-| `reconstruct` | `1558bae6a9bb6445` | manuscript | `page_assembled` | `manuscript` | yes |
+| `read` | `5d301868318d6f19` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
+| `reconstruct` | `2c7ec7c75ed0d770` | manuscript | `page_assembled` | `manuscript` | yes |
 | `reference` | `377472e1d70d8d9d` | manuscript | `manuscript` | `reference` | yes |
 | `render_epub` | `75326db1cf2296bf` | manuscript | `book` | `book_epub` | no |
 | `segment` | `08b9c69b3c0e3c08` | page | `page_image_clean` | `page_regions` | no |
-| `survey` | `a85e070d3f62f882` | manuscript | `page_transcription` | `translation_brief` | yes |
-| `translate` | `3bf6748f37befb4b` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
+| `survey` | `2210cc9e83580789` | manuscript | `page_transcription` | `translation_brief` | yes |
+| `translate` | `87ca714ad710b7ed` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
 
 Contracts are enforced twice at runtime: a station referencing an
 unknown kind fails at registration, and a JSON artifact missing its

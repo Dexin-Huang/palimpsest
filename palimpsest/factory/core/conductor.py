@@ -63,6 +63,7 @@ class CellReport:
 class RunReport:
     doc_id: str
     recipe: str
+    partial: bool = False
     cells: list[CellReport] = field(default_factory=list)
 
     def count(self, action: str) -> int:
@@ -86,6 +87,8 @@ class Conductor:
         workers: int = DEFAULT_WORKERS,
         refresh: frozenset[str] = frozenset(),
         executor: str = "inline",
+        page_ids: tuple[str, ...] = (),
+        through: str | None = None,
         recipe_loader: Callable[[str], Recipe] | None = None,
     ) -> None:
         self._ledger = ledger
@@ -94,6 +97,8 @@ class Conductor:
         self._workers = workers
         self._refresh = refresh
         self._executor = make_executor(executor)
+        self._page_ids = page_ids
+        self._through = through
         self._recipe_loader = recipe_loader or load_recipe
 
     # -- public ---------------------------------------------------------------
@@ -105,6 +110,11 @@ class Conductor:
                 f"No work order for {doc_id!r} — run "
                 f"'palimpsest adopt --doc-id {doc_id} --recipe <name>' first"
             )
+
+        recipe = self._recipe_loader(item["recipe"])
+        steps, partial = self._execution_steps(recipe)
+        pages = self._pages(doc_id)
+        selected_pages = self._selected_pages(pages)
 
         stale_before = (
             datetime.now(timezone.utc) - timedelta(seconds=WORK_LEASE_SECONDS)
@@ -128,12 +138,26 @@ class Conductor:
         try:
             with self._ledger_lock:
                 self._ledger.set_item_status(doc_id, "active")
-            report = self._drive(doc_id, item, heartbeat_errors)
+            report = self._drive(
+                doc_id,
+                recipe,
+                steps,
+                pages,
+                selected_pages,
+                partial,
+                heartbeat_errors,
+            )
             if heartbeat_errors:
                 raise RuntimeError("Work-order heartbeat failed") from heartbeat_errors[
                     0
                 ]
-            item_status = "failed" if report.count("failed") else "complete"
+            item_status = (
+                "failed"
+                if report.count("failed")
+                else "active"
+                if report.partial
+                else "complete"
+            )
             with self._ledger_lock:
                 self._ledger.set_item_status(doc_id, item_status)
             work_status = "failed" if item_status == "failed" else "done"
@@ -162,34 +186,34 @@ class Conductor:
     def _drive(
         self,
         doc_id: str,
-        item: sqlite3.Row,
+        recipe: Recipe,
+        steps: tuple[StationSpec, ...],
+        pages: tuple[dict, ...],
+        selected_pages: tuple[dict, ...],
+        partial: bool,
         heartbeat_errors: list[Exception],
     ) -> RunReport:
-        recipe = self._recipe_loader(item["recipe"])
         prompts = self._load_prompts(recipe)
-        pages = self._pages(doc_id)
         previous_runs = {
             (row["station"], row["page_id"]): row for row in self._ledger.state(doc_id)
         }
-        report = RunReport(doc_id=doc_id, recipe=recipe.name)
+        report = RunReport(doc_id=doc_id, recipe=recipe.name, partial=partial)
 
         index = 0
-        while index < len(recipe.steps):
+        while index < len(steps):
             if heartbeat_errors:
                 raise RuntimeError("Work-order heartbeat failed") from heartbeat_errors[
                     0
                 ]
-            spec = recipe.steps[index]
+            spec = steps[index]
             if spec.station.grain == "page":
                 end = index + 1
-                while (
-                    end < len(recipe.steps)
-                    and recipe.steps[end].station.grain == "page"
-                ):
+                while end < len(steps) and steps[end].station.grain == "page":
                     end += 1
                 cells = self._run_page_batch(
                     doc_id,
-                    recipe.steps[index:end],
+                    steps[index:end],
+                    selected_pages,
                     pages,
                     prompts,
                     previous_runs,
@@ -214,6 +238,53 @@ class Conductor:
             index += 1
         return report
 
+    def _execution_steps(self, recipe: Recipe) -> tuple[tuple[StationSpec, ...], bool]:
+        steps = recipe.steps
+        stop = len(steps)
+        if self._through is not None:
+            matching = [
+                index
+                for index, spec in enumerate(steps)
+                if spec.station.name == self._through
+            ]
+            if not matching:
+                known = ", ".join(spec.station.name for spec in steps)
+                raise ValueError(
+                    f"Unknown --through station {self._through!r} for recipe "
+                    f"{recipe.name!r}; expected one of: {known}"
+                )
+            stop = matching[0] + 1
+
+        if self._page_ids:
+            first_manuscript = next(
+                (
+                    index
+                    for index, spec in enumerate(steps)
+                    if spec.station.grain == "manuscript"
+                ),
+                len(steps),
+            )
+            if stop > first_manuscript:
+                barrier = steps[first_manuscript].station.name
+                raise ValueError(
+                    "Page-selected runs cannot cross manuscript station "
+                    f"{barrier!r}; choose --through before that barrier"
+                )
+            if self._through is None:
+                stop = first_manuscript
+
+        return steps[:stop], bool(self._page_ids or stop < len(steps))
+
+    def _selected_pages(self, pages: tuple[dict, ...]) -> tuple[dict, ...]:
+        if not self._page_ids:
+            return pages
+        requested = set(self._page_ids)
+        known = {page["page_id"] for page in pages}
+        unknown = sorted(requested - known)
+        if unknown:
+            raise ValueError(f"Unknown --page ids: {', '.join(unknown)}")
+        return tuple(page for page in pages if page["page_id"] in requested)
+
     def _heartbeat_claim(
         self,
         work_run_id: int,
@@ -235,6 +306,7 @@ class Conductor:
         doc_id: str,
         batch: tuple[StationSpec, ...],
         pages: tuple[dict, ...],
+        all_pages: tuple[dict, ...],
         prompts: dict[str, prompt_store.Prompt],
         previous_runs: dict[tuple[str, str | None], sqlite3.Row],
     ) -> list[CellReport]:
@@ -247,7 +319,7 @@ class Conductor:
                 cell = self._run_cell(
                     doc_id,
                     spec,
-                    pages,
+                    all_pages,
                     page=page,
                     prompts=prompts,
                     previous_runs=previous_runs,

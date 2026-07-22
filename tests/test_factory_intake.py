@@ -58,6 +58,29 @@ def test_v2_manifest_becomes_source_contracts(tmp_path):
     ]
 
 
+def test_v2_nested_metadata_values_are_normalized():
+    manifest = {
+        "label": {"@value": "Nested metadata"},
+        "metadata": [
+            {"label": "Date", "value": [{"@value": "0801-0900"}]},
+            {"label": "Language", "value": [{"@value": "Chinese"}]},
+        ],
+        "sequences": [
+            {
+                "canvases": [
+                    {"images": [{"resource": {"@id": "https://archive.test/page.jpg"}}]}
+                ]
+            }
+        ],
+    }
+
+    metadata, _ = build_records("test_codex", "https://archive.test/manifest", manifest)
+
+    assert metadata["source_catalog"]["label"] == "Nested metadata"
+    assert metadata["source_catalog"]["date"] == "0801-0900"
+    assert metadata["source_catalog"]["language"] == "Chinese"
+
+
 def test_v3_manifest_uses_image_body_when_service_is_absent():
     manifest = {
         "type": "Manifest",
@@ -216,3 +239,22 @@ def test_factory_commands_are_the_only_top_level_surface():
     assert {"intake", "adopt", "run", "status", "graph", "site"} <= set(choices)
     assert "factory" not in choices
     assert {"discovery", "library", "transcribe"}.isdisjoint(choices)
+
+
+def test_run_parser_accepts_repeatable_pages_and_station_boundary():
+    args = build_parser().parse_args(
+        [
+            "run",
+            "--doc-id",
+            "test_codex",
+            "--page",
+            "f001r",
+            "--page",
+            "f004v",
+            "--through",
+            "read",
+        ]
+    )
+
+    assert args.page == ["f001r", "f004v"]
+    assert args.through == "read"

@@ -54,17 +54,21 @@ python -m pip install --upgrade --editable ".[dev]"
 The remaining commands assume that environment is active. Verify it after
 installation with `python -m pip check`.
 
-Copy `.env.example` to `.env` and set `GEMINI_API_KEY`. The two recipe model
-defaults can be overridden there:
+Direct factory model calls default to `openai-codex/gpt-5.6-luna` with low
+reasoning through OMP. Ensure `omp` is on `PATH`, start one interactive OMP
+session, and run `/login openai-codex`. OMP then owns OAuth refresh and routes
+calls through the authenticated Codex subscription; no OpenAI API key is required.
+
+Copy `.env.example` to `.env` to override either model:
 
 ```env
-PALIMPSEST_MODEL_VISION=gemini-flash-latest
-PALIMPSEST_MODEL_READING=gemini-flash-lite-latest
+PALIMPSEST_MODEL_VISION=openai-codex/gpt-5.6-luna
+PALIMPSEST_MODEL_READING=openai-codex/gpt-5.6-luna
 ```
 
-The `reference` and `emend` stations use an agent executor selected in the
-recipe. Their current recipes require either the `codex` or `omp` CLI on
-`PATH`; the default is `codex`.
+Gemini remains available by selecting a `gemini...` model and setting
+`GEMINI_API_KEY`. The `reference` and `emend` stations use the agent executor
+selected in each recipe and likewise require their selected CLI on `PATH`.
 
 ## Run a manuscript
 
@@ -105,6 +109,22 @@ python -m palimpsest run \
   --refresh read
 ```
 
+Bound a canary to selected pages and an inclusive station:
+
+```bash
+python -m palimpsest run \
+  --doc-id gallica_pelliot_chinois_5579 \
+  --page page_0001 \
+  --page page_0058 \
+  --through read \
+  --workers 1
+```
+
+`--page` is repeatable. A page-selected run cannot cross the recipe's first
+manuscript-grain station, so incomplete page evidence never feeds a manuscript
+artifact. Successful partial runs leave the work order active; a later full run
+reuses their fresh cells.
+
 Use `--executor subprocess` to isolate each cell in a fresh Python process.
 The station contract and artifacts are identical under either executor.
 
@@ -123,11 +143,34 @@ library/<doc_id>/book/<doc_id>.epub
 site/index.html
 ```
 
+## Harvest source catalogs
+
+Catalog heads translate repository conventions at the boundary and write
+source-local records to `library/catalog.db`; they do not create factory work
+orders or merge records that may describe the same manuscript.
+
+```bash
+python -m palimpsest catalog init
+python -m palimpsest catalog source add-gallica pelliot-chinois \
+  --query 'dc.title all "Pelliot chinois"' \
+  --collection "Pelliot chinois"
+python -m palimpsest catalog sync pelliot-chinois
+python -m palimpsest catalog stats
+python -m palimpsest catalog records pelliot-chinois --limit 20
+```
+
+`normalized-jsonl` is the protocol-neutral import head. Every input line is an
+envelope with `source_key`, strict canonical `record`, optional `source_url`
+and `source_modified_at`, and the untouched `raw` source payload. Syncs are
+resumable, unchanged records do not create revisions, changed records do, and
+records absent from a completed refresh are tombstoned rather than deleted.
+
 ## Commands
 
 | Command | Purpose |
 |---|---|
 | `init-db` | Initialize the SQLite inventory and production ledger |
+| `catalog` | Register source heads, normalize records, and refresh the pointer catalog |
 | `intake` | Turn an IIIF manifest into source contracts and a work order |
 | `adopt` | Put an existing library workspace on the line |
 | `run` | Execute or resume a recipe |
@@ -247,6 +290,7 @@ python -m palimpsest graph --write-docs
 ```text
 palimpsest/
   cli.py                    top-level command entrypoint
+  catalog/                  source heads, canonical records, revision store
   factory/
     core/                   contracts, recipes, stations, conductor, ledger
     gateway/                provider-neutral model boundary
@@ -259,7 +303,8 @@ palimpsest/
 library/
   <doc_id>/                 source records and local factory artifacts
   factory.db                local inventory and production log
-tests/                      deterministic factory contract and behavior tests
+  catalog.db                source pointers and immutable record revisions
+tests/                      deterministic catalog and factory behavior tests
 docs/
   FACTORY.md                architecture and invariants
   CONTRACTS.md              generated live graph

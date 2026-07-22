@@ -27,7 +27,8 @@ def _env(key: str, default: str = "") -> str:
 
 LIBRARY_ROOT = Path(_env("PALIMPSEST_LIBRARY_ROOT", str(PROJECT_ROOT / "library")))
 FACTORY_DB_PATH = Path(_env("PALIMPSEST_FACTORY_DB", str(LIBRARY_ROOT / "factory.db")))
+CATALOG_DB_PATH = Path(_env("PALIMPSEST_CATALOG_DB", str(LIBRARY_ROOT / "catalog.db")))
 
 # Model defaults used by recipe interpolation.
-MODEL_VISION = _env("PALIMPSEST_MODEL_VISION", "gemini-flash-latest")
-MODEL_READING = _env("PALIMPSEST_MODEL_READING", "gemini-flash-lite-latest")
+MODEL_VISION = _env("PALIMPSEST_MODEL_VISION", "openai-codex/gpt-5.6-luna")
+MODEL_READING = _env("PALIMPSEST_MODEL_READING", "openai-codex/gpt-5.6-luna")

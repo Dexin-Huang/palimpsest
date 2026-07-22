@@ -107,15 +107,22 @@ def write_records(
 
 
 def _text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
     if isinstance(value, Mapping):
+        if "@value" in value:
+            return _text(value["@value"])
         for candidate in value.values():
-            if isinstance(candidate, list) and candidate:
-                return str(candidate[0])
-            if candidate:
-                return str(candidate)
+            text = _text(candidate)
+            if text:
+                return text
         return ""
     if isinstance(value, list):
-        return str(value[0]) if value else ""
+        for candidate in value:
+            text = _text(candidate)
+            if text:
+                return text
+        return ""
     return str(value) if value is not None else ""
 
 

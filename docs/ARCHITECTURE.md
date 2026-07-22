@@ -1,18 +1,28 @@
 # Architecture
 
-Palimpsest is one factory: an IIIF manifest enters, provenance-stamped
-artifacts move through a validated recipe, and a readable book leaves as EPUB
-and static HTML. [`FACTORY.md`](FACTORY.md) defines the production system in
-detail; [`CONTRACTS.md`](CONTRACTS.md) is the generated artifact and station
-graph. [`EVALUATION.md`](EVALUATION.md) defines the proposed benchmark,
-candidate, promotion, canary, and rollback plane used to improve individual
-stations without coupling it to production orchestration.
+Palimpsest has a continuously refreshed source catalog in front of one
+production factory. Source heads translate repository conventions into
+source-grounded pointers in `catalog.db`. An operator explicitly selects a
+record and supplies its IIIF manifest to intake; catalog presence never creates
+a work order. The factory then moves provenance-stamped artifacts through a
+validated recipe and emits a readable EPUB and static HTML book.
+
+[`FACTORY.md`](FACTORY.md) defines production in detail;
+[`CONTRACTS.md`](CONTRACTS.md) is its generated artifact and station graph.
+[`EVALUATION.md`](EVALUATION.md) defines the benchmark, candidate, promotion,
+canary, and rollback plane used to improve stations without coupling it to
+production orchestration.
 
 ## Runtime layers
 
 ```mermaid
 flowchart TB
-    cli[palimpsest CLI] --> intake[IIIF intake]
+    source[External catalogs] --> head[Source head]
+    head --> catalog[(Catalog DB)]
+    cli[palimpsest CLI] --> head
+    catalog --> selection[Explicit operator selection]
+    selection --> intake[IIIF intake]
+    cli --> intake
     cli --> conductor[Conductor]
     recipe[Recipe loader] --> conductor
     registry[Contract and station registries] --> recipe
@@ -21,10 +31,26 @@ flowchart TB
     executor --> station[Station]
     station --> gateway[Model gateway]
     station --> workspace[Workspace I/O]
-    conductor --> ledger[(Ledger)]
+    conductor --> ledger[(Factory ledger)]
     workspace --> library[Artifact library]
     library --> publication[Book and site renderers]
 ```
+
+### Catalog layer
+
+`palimpsest/catalog/heads.py` is the external source boundary. Each registered
+head owns one protocol convention, pagination cursor, source-specific parsing,
+and normalization into `NormalizedRecord`. The initial heads are Gallica SRU
+and strict normalized JSONL. A source head never decides that two repository
+records are the same physical manuscript.
+
+`catalog/database.py` assigns deterministic identities from
+`source_id + source_key`, stores the untouched source payload beside the
+normalized projection, and appends a revision only when content changes.
+Completed refreshes tombstone missing records; resumed refreshes continue after
+the last committed page. Cross-source conflicts remain separate source claims.
+Future object-identity assertions belong above this layer and must never rewrite
+source history.
 
 ### Command and intake layer
 
@@ -72,11 +98,15 @@ centralized here rather than repeated in stations.
 
 ### Storage layer
 
-`palimpsest/factory/workspace/layout.py` resolves every artifact path from the
-contract registry. `workspace/io.py` owns atomic JSON, text, and binary writes.
-`core/ledger.py` owns the SQLite work-order inventory and append-only production
-history. The ledger is an index; artifacts remain independently auditable from
-their provenance stamps.
+`library/catalog.db` holds source pointers, immutable record revisions, and
+sync events. It is deliberately separate from `library/factory.db`: catalog
+presence is evidence, not production authorization.
+
+`palimpsest/factory/workspace/layout.py` resolves every production artifact path
+from the contract registry. `workspace/io.py` owns atomic JSON, text, and binary
+writes. `core/ledger.py` owns factory work orders and append-only production
+history. Both databases are indexes; raw catalog payloads and factory artifacts
+remain independently auditable.
 
 ### Publication layer
 
@@ -100,7 +130,9 @@ the qualification policy.
 
 ```text
 cli
-  -> intake / conductor / graph / preview / tune / site / bench
+  -> catalog / intake / conductor / graph / preview / tune / site / bench
+catalog
+  -> source heads / normalized records / catalog database
 conductor
   -> recipe / registry / executors / ledger / workspace
 executors
@@ -122,6 +154,12 @@ the contract registry.
 ```text
 palimpsest/
   cli.py
+  catalog/
+    records.py
+    heads.py
+    database.py
+    sync.py
+    cli.py
   factory/
     intake.py
     graph.py
@@ -162,6 +200,10 @@ palimpsest/
 
 - Add or change an artifact in `core/contracts.py`; regenerate
   `docs/CONTRACTS.md`.
+- Add an external catalog convention as a source head; preserve its raw payload
+  and normalize before persistence.
+- Keep source-record identity separate from tentative manuscript-object
+  identity. Never merge conflicting source claims during harvest.
 - Add a station in `stations/`, register it, and declare every accepted recipe
   key on the station.
 - Change production order only in a recipe.
