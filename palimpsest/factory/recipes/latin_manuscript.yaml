@@ -14,13 +14,19 @@ line:
     full_page_max_lines: 999
     full_page_max_regions: 99
   - station: read
-    model: ${PALIMPSEST_MODEL_VISION}
+    model: ${PALIMPSEST_MODEL_READING}
     prompt: read/la/diplomatic
-    # temperature 0.7: dense abbreviated script traps low-temperature
-    # decoding in placeholder loops; low thinking minimizes reasoning cost
-    # without asking Gemini 3 Pro to perform an unsupported full disable
-    params: { temperature: 0.7, media_resolution: low,
-              max_output_tokens: 32768, thinking_level: low }
+    # Temperature remains for optional bare-Gemini overrides; OMP does not
+    # expose sampling temperature. Both readers receive the identical image.
+    params:
+      temperature: 0.7
+      media_resolution: low
+      max_output_tokens: 32768
+      thinking_level: low
+      secondary_model: ${PALIMPSEST_MODEL_READING_SECONDARY}
+      secondary_thinking_level: null
+      adjudicator_model: ${PALIMPSEST_MODEL_ADJUDICATOR}
+      adjudicator_thinking_level: high
   - station: survey
     model: ${PALIMPSEST_MODEL_READING}
     prompt: survey/generic/brief

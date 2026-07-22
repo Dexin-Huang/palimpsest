@@ -12,6 +12,9 @@ from palimpsest.factory.core import registry
 from palimpsest.factory.core.artifact import content_fingerprint, payload_fingerprint
 from palimpsest.factory.core.conductor import Conductor
 from palimpsest.factory.core.ledger import Ledger, fingerprint
+from palimpsest.factory.core.station import Job, StationConfig
+from palimpsest.factory.stations.assemble_page import AssemblePage
+from palimpsest.factory.stations.publish import Publish
 from palimpsest.factory.workspace.io import atomic_write_json, read_json
 from palimpsest.factory.workspace.layout import artifact_path
 
@@ -80,6 +83,82 @@ def test_full_line_to_book(ledger, library, gateway, fetch):  # noqa: F811
         assert "Experimenta" in content  # original included per chapter
         assert "Source evidence" in content
         assert "https://archive.test/f001r.jpg" in content
+
+
+def test_failed_transcription_cannot_assemble_or_publish(
+    ledger, library, gateway, fetch
+):  # noqa: F811
+    run_line(ledger, library)
+    transcription_path = artifact_path(DOC, "page_transcription", "f001r", library)
+    transcription = read_json(transcription_path)
+    transcription["adjudication_status"] = "failed"
+    transcription["adjudication_error"] = "adjudicator unavailable"
+    atomic_write_json(transcription_path, transcription)
+    page = line_cases.PAGES[0]
+    page_job = Job(DOC, tuple(line_cases.PAGES), page, library, StationConfig())
+    manuscript_job = Job(DOC, tuple(line_cases.PAGES), None, library, StationConfig())
+
+    with pytest.raises(
+        ValueError,
+        match=r"Cannot assemble page f001r: transcription adjudication failed: "
+        r"adjudicator unavailable",
+    ):
+        AssemblePage().run(page_job)
+    with pytest.raises(
+        ValueError,
+        match=r"Cannot publish page f001r: transcription adjudication failed: "
+        r"adjudicator unavailable",
+    ):
+        Publish().run(manuscript_job)
+
+    assert read_json(transcription_path) == transcription
+
+
+def test_unresolved_transcription_publishes_with_full_audit(
+    ledger, library, gateway, fetch
+):  # noqa: F811
+    run_line(ledger, library)
+    transcription_path = artifact_path(DOC, "page_transcription", "f001r", library)
+    transcription = read_json(transcription_path)
+    transcription["text"] = "Experimenta 〔?〕 ad morbos"
+    audit = {
+        "candidate_readings": [
+            {
+                "role": "primary",
+                "requested_model": "anthropic/claude-opus-4-6",
+                "model": "anthropic/claude-opus-4-6",
+                "raw_text": "Experimenta 〔?〕 ad morbos",
+                "text": "Experimenta 〔?〕 ad morbos",
+            },
+            {
+                "role": "secondary",
+                "requested_model": "openai/gpt-5.4",
+                "model": "openai/gpt-5.4-2026-06-01",
+                "raw_text": "Experimenta [?] ad morbos",
+                "text": "Experimenta [?] ad morbos",
+            },
+        ],
+        "adjudication_status": "adjudicated",
+        "adjudication_requested_model": "anthropic/claude-opus-4-6",
+        "adjudication_model": "anthropic/claude-opus-4-6",
+        "adjudication_reasoning": "The damaged span remains illegible.",
+        "unresolved": ["damaged span after Experimenta"],
+        "adjudication_error": None,
+    }
+    transcription.update(audit)
+    atomic_write_json(transcription_path, transcription)
+    pages = tuple(line_cases.PAGES)
+
+    assembled = (
+        AssemblePage().run(Job(DOC, pages, pages[0], library, StationConfig())).payload
+    )
+    book = Publish().run(Job(DOC, pages, None, library, StationConfig())).payload
+    first_page = book["evidence"]["pages"][0]
+
+    assert assembled["original"]["text"] == "Experimenta 〔?〕 ad morbos"
+    assert assembled["transcription_audit"] == audit
+    assert first_page["diplomatic"] == "Experimenta 〔?〕 ad morbos"
+    assert first_page["transcription_audit"] == audit
 
 
 def test_full_line_second_run_fresh(ledger, library, gateway, fetch):  # noqa: F811

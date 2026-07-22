@@ -58,12 +58,14 @@ class GatewayError(RuntimeError):
         tokens_in: int | None = 0,
         tokens_out: int | None = 0,
         cost_usd: float | None = 0.0,
+        finish_reason: str | None = None,
     ) -> None:
         super().__init__(message)
         self.transient = transient
         self.tokens_in = tokens_in
         self.tokens_out = tokens_out
         self.cost_usd = cost_usd
+        self.finish_reason = finish_reason
 
     def with_prior_usage(
         self,
@@ -78,4 +80,5 @@ class GatewayError(RuntimeError):
             tokens_in=combine_count(tokens_in, self.tokens_in),
             tokens_out=combine_count(tokens_out, self.tokens_out),
             cost_usd=combine_cost(cost_usd, self.cost_usd),
+            finish_reason=self.finish_reason,
         )

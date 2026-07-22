@@ -40,7 +40,7 @@ EXPECTED_DEPENDENCIES = {
         "factory/gateway/__init__.py",
         "factory/gateway/client.py",
         "factory/gateway/gemini.py",
-        "factory/gateway/omp_codex.py",
+        "factory/gateway/omp.py",
         "factory/gateway/pricing.py",
         "factory/gateway/protocol.py",
         "factory/imaging.py",

@@ -3,5 +3,20 @@
   "page_id": "bg_1_1",
   "text": "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam [Aquitani?], tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit.",
   "route": "full_page",
-  "regions": []
+  "regions": [],
+  "candidate_readings": [
+    {
+      "role": "primary",
+      "requested_model": "published-source-fixture",
+      "model": "published-source-fixture",
+      "raw_text": "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam [Aquitani?], tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit.",
+      "text": "Gallia est omnis divisa in partes tres, quarum unam incolunt Belgae, aliam [Aquitani?], tertiam qui ipsorum lingua Celtae, nostra Galli appellantur. Gallos ab Aquitanis Garumna flumen, a Belgis Matrona et Sequana dividit."
+    }
+  ],
+  "adjudication_status": "not_configured",
+  "adjudication_requested_model": null,
+  "adjudication_model": null,
+  "adjudication_reasoning": null,
+  "unresolved": [],
+  "adjudication_error": null
 }

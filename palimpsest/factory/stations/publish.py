@@ -15,6 +15,7 @@ from palimpsest.factory.core.artifact import (
     provenance_fingerprint,
     provenance_matches,
 )
+from palimpsest.factory.core.contracts import transcription_audit
 from palimpsest.factory.core.ledger import fingerprint
 from palimpsest.factory.core.registry import get, register
 from palimpsest.factory.core.station import Job, Station, StationResult
@@ -132,12 +133,20 @@ class Publish(Station):
             page_id = source_page["page_id"]
             transcription_path = job.path_of("page_transcription", page_id)
             transcription = read_json(transcription_path)
+            if transcription.get("adjudication_status") == "failed":
+                error = transcription.get("adjudication_error")
+                detail = f": {error}" if error else ""
+                raise ValueError(
+                    f"Cannot publish page {page_id}: "
+                    f"transcription adjudication failed{detail}"
+                )
             evidence = {
                 "page_id": page_id,
                 "order": source_page["order"],
                 "source_image_url": source_page["url"],
                 "aligned_image_kind": "page_image_clean",
                 "diplomatic": transcription["text"],
+                "transcription_audit": transcription_audit(transcription),
             }
             alignment_path = job.path_of("page_alignment", page_id)
             if self._alignment_is_current(

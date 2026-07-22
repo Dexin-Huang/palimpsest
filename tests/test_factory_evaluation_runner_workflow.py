@@ -187,6 +187,21 @@ def _install_execution(monkeypatch, plans, calls, candidate_views):
                         "text": "text",
                         "route": "full_page",
                         "regions": [],
+                        "candidate_readings": [
+                            {
+                                "role": "primary",
+                                "requested_model": spec.model,
+                                "model": spec.model,
+                                "raw_text": "text",
+                                "text": "text",
+                            }
+                        ],
+                        "adjudication_status": "not_configured",
+                        "adjudication_requested_model": None,
+                        "adjudication_model": None,
+                        "adjudication_reasoning": "",
+                        "unresolved": [],
+                        "adjudication_error": None,
                         "score": plan["score"],
                         "hard": plan.get("hard", 0.1),
                     },

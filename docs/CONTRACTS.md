@@ -124,7 +124,7 @@ flowchart TB
 | | | | *Illumination-flattened study image; what segment and read consume.* | |
 | `page_regions` | page | json | `doc_id`, `page_id`, `route`, `image`, `regions` | `<kind>/<page_id>.json` |
 | | | | *Polygon lassos + the routing decision (blank | full_page | segmented).* | |
-| `page_transcription` | page | json | `doc_id`, `page_id`, `text`, `route`, `regions` | `<kind>/<page_id>.json` |
+| `page_transcription` | page | json | `doc_id`, `page_id`, `text`, `route`, `regions`, `candidate_readings`, `adjudication_status`, `adjudication_requested_model`, `adjudication_model`, `adjudication_reasoning`, `unresolved`, `adjudication_error` | `<kind>/<page_id>.json` |
 | | | | *Diplomatic transcription; per-region texts when the page was segmented.* | |
 | `page_translation` | page | json | `doc_id`, `page_id`, `translation`, `flags` | `<kind>/<page_id>.json` |
 | | | | *English translation of one page, with continuity flags.* | |
@@ -149,21 +149,21 @@ flowchart TB
 
 | Station | Implementation | Grain | Consumes | Produces | Model |
 |---|---|---|---|---|---|
-| `acquire` | `73d94e31392c38a9` | page | `page_list` | `page_image` | no |
-| `align` | `08719992bf9045d0` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
-| `assemble_page` | `307b7741d3b556d0` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
-| `deframe` | `92424c958d48627a` | page | `page_image` | `page_image_framed` | no |
-| `dewatermark` | `2c0976e098c37621` | page | `page_image_framed` | `page_image_unmarked` | no |
-| `emend` | `dd45d87c0eabb718` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
-| `flatten` | `2a384be2fb39ddc8` | page | `page_image_unmarked` | `page_image_clean` | no |
-| `publish` | `4aae4a5988a7164c` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `page_alignment` (optional) | `book` | no |
-| `read` | `5d301868318d6f19` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
-| `reconstruct` | `2c7ec7c75ed0d770` | manuscript | `page_assembled` | `manuscript` | yes |
-| `reference` | `377472e1d70d8d9d` | manuscript | `manuscript` | `reference` | yes |
-| `render_epub` | `75326db1cf2296bf` | manuscript | `book` | `book_epub` | no |
-| `segment` | `08b9c69b3c0e3c08` | page | `page_image_clean` | `page_regions` | no |
-| `survey` | `2210cc9e83580789` | manuscript | `page_transcription` | `translation_brief` | yes |
-| `translate` | `87ca714ad710b7ed` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
+| `acquire` | `164a207719c2325f` | page | `page_list` | `page_image` | no |
+| `align` | `8f2ec7eb68f29c1b` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
+| `assemble_page` | `4bdf4191554dd89d` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
+| `deframe` | `41ee89260f60657d` | page | `page_image` | `page_image_framed` | no |
+| `dewatermark` | `a5168c2ebdef9aae` | page | `page_image_framed` | `page_image_unmarked` | no |
+| `emend` | `e9edf6f5fbe562cf` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
+| `flatten` | `775b8d0bc76f40d2` | page | `page_image_unmarked` | `page_image_clean` | no |
+| `publish` | `102822ec327f2bed` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `page_alignment` (optional) | `book` | no |
+| `read` | `0cc08c1ed3b917ff` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
+| `reconstruct` | `560e49fe59e44972` | manuscript | `page_assembled` | `manuscript` | yes |
+| `reference` | `eec596a2cdeeea06` | manuscript | `manuscript` | `reference` | yes |
+| `render_epub` | `e478a9373a5b56ec` | manuscript | `book` | `book_epub` | no |
+| `segment` | `662691183077048f` | page | `page_image_clean` | `page_regions` | no |
+| `survey` | `56277056d489dcde` | manuscript | `page_transcription` | `translation_brief` | yes |
+| `translate` | `44f033a09a334c37` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
 
 Contracts are enforced twice at runtime: a station referencing an
 unknown kind fails at registration, and a JSON artifact missing its

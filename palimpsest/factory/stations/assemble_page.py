@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+from palimpsest.factory.core.contracts import transcription_audit
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 
@@ -40,6 +41,14 @@ class AssemblePage(Station):
         transcription = json.loads(transcription_bytes)
         translation = json.loads(translation_bytes)
 
+        if transcription.get("adjudication_status") == "failed":
+            error = transcription.get("adjudication_error")
+            detail = f": {error}" if error else ""
+            raise ValueError(
+                f"Cannot assemble page {job.page_id}: "
+                f"transcription adjudication failed{detail}"
+            )
+
         seam = translation.get("seam")
         text = _apply_seam(transcription["text"], seam)
 
@@ -59,6 +68,7 @@ class AssemblePage(Station):
                     "notes": translation.get("notes", ""),
                     "flags": translation.get("flags", {}),
                 },
+                "transcription_audit": transcription_audit(transcription),
                 "inputs": {
                     "page_transcription": hashlib.sha256(
                         transcription_bytes

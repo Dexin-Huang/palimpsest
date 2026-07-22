@@ -158,6 +158,10 @@ def _write_resources(root: Path) -> tuple[Path, Path, Path]:
             "media_resolution": "low",
             "max_output_tokens": 32768,
             "thinking_level": "low",
+            "secondary_model": "google/gemini-3.6-flash",
+            "secondary_thinking_level": None,
+            "adjudicator_model": "anthropic/claude-opus-4-6",
+            "adjudicator_thinking_level": "high",
         },
         "options": {},
     }
@@ -218,6 +222,11 @@ def test_evaluation_to_promotion_and_exact_rollback_lifecycle(
                 spec.page_id,
                 Path(spec.library_root),
             )
+            transcription = (
+                "challenger"
+                if spec.config_fingerprint == challenger.fingerprint
+                else "baseline"
+            )
             atomic_write_json(
                 output_path,
                 {
@@ -225,11 +234,31 @@ def test_evaluation_to_promotion_and_exact_rollback_lifecycle(
                     "page_id": spec.page_id,
                     "page_seq": int(spec.page_id.removeprefix("p")),
                     "canvas_id": "",
-                    "text": "challenger"
-                    if spec.config_fingerprint == challenger.fingerprint
-                    else "baseline",
+                    "text": transcription,
                     "route": "full_page",
                     "regions": [],
+                    "candidate_readings": [
+                        {
+                            "role": "primary",
+                            "requested_model": spec.model,
+                            "model": spec.model,
+                            "raw_text": transcription,
+                            "text": transcription,
+                        },
+                        {
+                            "role": "secondary",
+                            "requested_model": spec.params["secondary_model"],
+                            "model": spec.params["secondary_model"],
+                            "raw_text": transcription,
+                            "text": transcription,
+                        },
+                    ],
+                    "adjudication_status": "agreement",
+                    "adjudication_requested_model": spec.params["adjudicator_model"],
+                    "adjudication_model": None,
+                    "adjudication_reasoning": "",
+                    "unresolved": [],
+                    "adjudication_error": None,
                     "score": 0.9
                     if spec.config_fingerprint == challenger.fingerprint
                     else 0.4,
@@ -279,8 +308,16 @@ def test_evaluation_to_promotion_and_exact_rollback_lifecycle(
     production_source = Path(
         "palimpsest/factory/recipes/latin_manuscript.yaml"
     ).read_text(encoding="utf-8")
-    baseline_source = production_source.replace(
-        "${PALIMPSEST_MODEL_VISION}", baseline.model or ""
+    baseline_source = (
+        production_source.replace("${PALIMPSEST_MODEL_READING}", baseline.model or "")
+        .replace(
+            "${PALIMPSEST_MODEL_READING_SECONDARY}",
+            str(baseline.params["secondary_model"]),
+        )
+        .replace(
+            "${PALIMPSEST_MODEL_ADJUDICATOR}",
+            str(baseline.params["adjudicator_model"]),
+        )
     )
     recipe_path = recipe_root / "latin_manuscript.yaml"
     recipe_path.write_text(baseline_source, encoding="utf-8")

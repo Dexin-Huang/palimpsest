@@ -10,14 +10,19 @@ line:
     full_page_max_lines: 999
     full_page_max_regions: 99
   - station: read
-    model: ${PALIMPSEST_MODEL_VISION}
+    model: ${PALIMPSEST_MODEL_READING}
     prompt: read/zh/diplomatic
-    # Low reasoning is the production default. Temperature 0.1 keeps the
-    # twice-photographed seam columns stable between reads (P.3477,
-    # 2026-07-10), while high-resolution media preserves the regular kaishu
-    # strokes needed by the transcription schema.
-    params: { temperature: 0.1, media_resolution: high,
-              max_output_tokens: 32768, thinking_level: low }
+    # Temperature remains for optional bare-Gemini overrides; OMP does not
+    # expose sampling temperature. High media resolution preserves kaishu strokes.
+    params:
+      temperature: 0.1
+      media_resolution: high
+      max_output_tokens: 32768
+      thinking_level: low
+      secondary_model: ${PALIMPSEST_MODEL_READING_SECONDARY}
+      secondary_thinking_level: null
+      adjudicator_model: ${PALIMPSEST_MODEL_ADJUDICATOR}
+      adjudicator_thinking_level: high
   - station: align
   - station: survey
     model: ${PALIMPSEST_MODEL_READING}

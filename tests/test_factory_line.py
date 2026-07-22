@@ -229,7 +229,14 @@ def run_line(ledger, library, **kw):
     return Conductor(ledger, library_root=library, workers=2, **kw).run(DOC)
 
 
-def test_recipe_loads_and_validates():
+@pytest.fixture
+def dual_read_models(monkeypatch):
+    monkeypatch.setenv("PALIMPSEST_MODEL_READING", "openai-codex/gpt-5.6-sol")
+    monkeypatch.setenv("PALIMPSEST_MODEL_READING_SECONDARY", "google/gemini-3.6-flash")
+    monkeypatch.setenv("PALIMPSEST_MODEL_ADJUDICATOR", "anthropic/claude-opus-4-6")
+
+
+def test_recipe_loads_and_validates(dual_read_models):
     recipe = load_recipe("latin_manuscript")
     assert [spec.station.name for spec in recipe.steps] == [
         "acquire",
@@ -247,7 +254,18 @@ def test_recipe_loads_and_validates():
         "publish",
         "render_epub",
     ]
-    assert recipe.steps[5].model  # ${VAR} interpolated
+    read = recipe.steps[5]
+    assert read.model == "openai-codex/gpt-5.6-sol"
+    assert read.params == {
+        "temperature": 0.7,
+        "media_resolution": "low",
+        "max_output_tokens": 32768,
+        "thinking_level": "low",
+        "secondary_model": "google/gemini-3.6-flash",
+        "secondary_thinking_level": None,
+        "adjudicator_model": "anthropic/claude-opus-4-6",
+        "adjudicator_thinking_level": "high",
+    }
 
 
 def test_recipe_rejects_duplicate_artifact_producers(tmp_path):
@@ -284,7 +302,7 @@ line:
         load_recipe("out_of_order", recipes_dir=tmp_path)
 
 
-def test_chinese_recipe_loads_and_validates():
+def test_chinese_recipe_loads_and_validates(dual_read_models):
     recipe = load_recipe("chinese_scroll")
     assert [spec.station.name for spec in recipe.steps] == [
         "acquire",
@@ -303,6 +321,18 @@ def test_chinese_recipe_loads_and_validates():
         "publish",
         "render_epub",
     ]
+    read = recipe.steps[5]
+    assert read.model == "openai-codex/gpt-5.6-sol"
+    assert read.params == {
+        "temperature": 0.1,
+        "media_resolution": "high",
+        "max_output_tokens": 32768,
+        "thinking_level": "low",
+        "secondary_model": "google/gemini-3.6-flash",
+        "secondary_thinking_level": None,
+        "adjudicator_model": "anthropic/claude-opus-4-6",
+        "adjudicator_thinking_level": "high",
+    }
 
 
 def test_assemble_page_applies_the_translation_seam(tmp_path):

@@ -52,6 +52,21 @@ def workspace(tmp_path):
             "text": "Lorem",
             "route": "full_page",
             "regions": [],
+            "candidate_readings": [
+                {
+                    "role": "primary",
+                    "requested_model": "fixture-reader",
+                    "model": "fixture-reader",
+                    "raw_text": "Lorem",
+                    "text": "Lorem",
+                }
+            ],
+            "adjudication_status": "not_configured",
+            "adjudication_requested_model": None,
+            "adjudication_model": None,
+            "adjudication_reasoning": "",
+            "unresolved": [],
+            "adjudication_error": None,
         },
     )
     atomic_write_json(

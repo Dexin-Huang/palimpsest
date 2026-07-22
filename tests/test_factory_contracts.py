@@ -74,6 +74,38 @@ def test_validate_payload_enforces_required_fields():
         validate_payload("page_translation", {"doc_id": "d", "page_id": "p"})
 
 
+def test_page_transcription_contract_requires_dual_reader_audit():
+    payload = {
+        "doc_id": "d",
+        "page_id": "p",
+        "text": "",
+        "route": "blank",
+        "regions": [],
+        "candidate_readings": [],
+        "adjudication_status": "not_needed",
+        "adjudication_requested_model": None,
+        "adjudication_model": None,
+        "adjudication_reasoning": "",
+        "unresolved": [],
+        "adjudication_error": None,
+    }
+    validate_payload("page_transcription", payload)
+
+    for field in (
+        "candidate_readings",
+        "adjudication_status",
+        "adjudication_requested_model",
+        "adjudication_model",
+        "adjudication_reasoning",
+        "unresolved",
+        "adjudication_error",
+    ):
+        incomplete = dict(payload)
+        del incomplete[field]
+        with pytest.raises(ValueError, match=f"missing required fields.*{field}"):
+            validate_payload("page_transcription", incomplete)
+
+
 def test_validate_payload_rejects_binary_kinds():
     with pytest.raises(ValueError, match="not a JSON payload"):
         validate_payload("page_image", {})

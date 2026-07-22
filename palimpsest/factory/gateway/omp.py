@@ -1,10 +1,10 @@
-"""OMP-backed Codex provider for subscription-authenticated model calls.
+"""OMP-backed provider for slash-qualified model calls.
 
 The provider runs one ephemeral, tool-free OMP print session per request. That
-keeps factory cells stateless while letting OMP own OpenAI Codex OAuth refresh
-and subscription routing. OMP's CLI does not expose sampling temperature or a
-hard per-turn output-token limit, so those request fields are advisory here;
-structured-output and length requirements are added to the system instruction.
+keeps factory cells stateless while letting OMP own provider authentication and
+routing. OMP's CLI does not expose sampling temperature or a hard per-turn
+output-token limit, so those request fields are advisory here; structured-output
+and length requirements are added to the system instruction.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -33,25 +34,37 @@ _IMAGE_SUFFIXES = {
 }
 _MEDIA_RESOLUTIONS = frozenset({"low", "medium", "high"})
 _THINKING_LEVELS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
+_TRANSIENT_STATUS = re.compile(r"(?<!\d)(?:429|500|502|503|504)(?!\d)")
 _TRANSIENT_MARKERS = (
-    "429",
-    "connection",
+    "connection reset",
+    "connection was reset",
+    "econnreset",
     "network",
+    "overloaded",
     "rate limit",
+    "service unavailable",
     "temporarily unavailable",
     "timed out",
     "timeout",
     "too many requests",
 )
+_TRUNCATION_REASONS = {
+    "incomplete": "INCOMPLETE",
+    "length": "LENGTH",
+    "max_token": "MAX_TOKENS",
+    "max_tokens": "MAX_TOKENS",
+}
 _TIMEOUT_SECONDS = 900
 
 
 def generate(request: ModelRequest) -> ModelResponse:
-    """Execute a stateless request through OMP's OpenAI Codex provider."""
+    """Execute a stateless request through OMP."""
     _validate_request(request)
     executable = _omp_executable()
 
-    with tempfile.TemporaryDirectory(prefix="palimpsest-omp-") as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="palimpsest-omp-", ignore_cleanup_errors=True
+    ) as directory:
         request_dir = Path(directory)
         prompt_path = request_dir / "prompt.txt"
         system_path = request_dir / "system.txt"
@@ -80,40 +93,52 @@ def generate(request: ModelRequest) -> ModelResponse:
                 )
         except subprocess.TimeoutExpired as error:
             raise GatewayError(
-                f"OMP Codex call timed out after {_TIMEOUT_SECONDS} seconds",
+                f"OMP call timed out after {_TIMEOUT_SECONDS} seconds",
                 transient=True,
                 tokens_in=None,
                 tokens_out=None,
-                cost_usd=0.0,
+                cost_usd=_unreported_cost(request.model),
             ) from error
         except OSError as error:
             raise GatewayError(
-                f"Could not start OMP Codex: {error}",
+                f"Could not start OMP: {error}",
+                transient=_is_transient(str(error)),
                 tokens_in=0,
                 tokens_out=0,
-                cost_usd=0.0,
+                cost_usd=_unreported_cost(request.model),
             ) from error
 
         if completed.returncode != 0:
             detail = _failure_detail(events_path, stderr_path)
             raise GatewayError(
-                f"OMP Codex call failed: {detail}",
+                f"OMP call failed: {detail}",
                 transient=_is_transient(detail),
                 tokens_in=None,
                 tokens_out=None,
-                cost_usd=0.0,
+                cost_usd=_unreported_cost(request.model),
             )
 
-        message = _assistant_message(events_path)
-    stop_reason = str(message.get("stopReason") or "").lower()
-    if stop_reason not in {"", "stop"}:
-        detail = str(message.get("errorMessage") or stop_reason)
+        message = _assistant_message(
+            events_path, cost_usd=_unreported_cost(request.model)
+        )
+    usage = message.get("usage")
+    usage = usage if isinstance(usage, Mapping) else {}
+    prompt_tokens = sum(
+        _nonnegative_int(usage.get(field))
+        for field in ("input", "cacheRead", "cacheWrite")
+    )
+    billable_output = _nonnegative_int(usage.get("output"))
+    cost_usd = _usage_cost(request.model, usage)
+    raw_stop_reason = str(message.get("stopReason") or "").strip()
+    finish_reason = _normalized_truncation_reason(raw_stop_reason)
+    if raw_stop_reason.casefold() not in {"", "stop"} and finish_reason is None:
+        detail = str(message.get("errorMessage") or raw_stop_reason)
         raise GatewayError(
-            f"OMP Codex interaction ended with stop_reason={detail}",
+            f"OMP interaction ended with stop_reason={detail}",
             transient=_is_transient(detail),
-            tokens_in=_prompt_tokens(message),
-            tokens_out=_billable_output_tokens(message),
-            cost_usd=0.0,
+            tokens_in=prompt_tokens,
+            tokens_out=billable_output,
+            cost_usd=cost_usd,
         )
 
     text = "".join(
@@ -121,37 +146,35 @@ def generate(request: ModelRequest) -> ModelResponse:
         for part in message.get("content", ())
         if isinstance(part, Mapping) and part.get("type") == "text"
     ).strip()
-    if not text and not request.allow_empty:
+    if not text and not request.allow_empty and finish_reason is None:
         raise GatewayError(
-            "OMP Codex returned no text",
-            tokens_in=_prompt_tokens(message),
-            tokens_out=_billable_output_tokens(message),
-            cost_usd=0.0,
+            "OMP returned no text",
+            tokens_in=prompt_tokens,
+            tokens_out=billable_output,
+            cost_usd=cost_usd,
         )
 
-    usage = message.get("usage")
-    usage = usage if isinstance(usage, Mapping) else {}
     reasoning_tokens = _nonnegative_int(usage.get("reasoningTokens"))
-    billable_output = _nonnegative_int(usage.get("output"))
     return ModelResponse(
         text=text,
-        model=f"{message.get('provider', 'openai-codex')}/{message.get('model', request.model.split('/', 1)[-1])}",
-        finish_reason=None,
-        prompt_tokens=_prompt_tokens(message),
+        model=_response_model(request.model, message),
+        finish_reason=finish_reason,
+        prompt_tokens=prompt_tokens,
         output_tokens=max(0, billable_output - reasoning_tokens),
         thought_tokens=reasoning_tokens,
         total_tokens=_nonnegative_int(usage.get("totalTokens")),
-        # OMP reports API-equivalent pricing metadata, but OAuth-backed Codex
-        # subscription calls have no marginal API charge to the factory.
-        cost_usd=0.0,
+        cost_usd=cost_usd,
     )
 
 
 def _validate_request(request: ModelRequest) -> None:
-    if not request.model.startswith("openai-codex/"):
-        raise GatewayError(f"OMP Codex requires an openai-codex model: {request.model}")
+    provider, separator, model = request.model.partition("/")
+    if not separator or not provider or not model:
+        raise GatewayError(
+            f"OMP requires a slash-qualified provider/model selector: {request.model}"
+        )
     if not request.prompt:
-        raise GatewayError("OMP Codex prompt must not be empty")
+        raise GatewayError("OMP prompt must not be empty")
     if (
         isinstance(request.temperature, bool)
         or not isinstance(request.temperature, (int, float))
@@ -179,7 +202,7 @@ def _omp_executable() -> str:
     if executable is None:
         raise GatewayError(
             f"OMP command not found: {configured}. Install OMP and authenticate "
-            "the openai-codex provider first."
+            "the selected provider if required."
         )
     return executable
 
@@ -259,24 +282,30 @@ def _command(
         "json",
         "--model",
         request.model,
-        "--thinking",
-        request.thinking_level or "low",
-        "--no-session",
-        "--no-tools",
-        "--no-extensions",
-        "--no-skills",
-        "--no-rules",
-        "--no-lsp",
-        "--no-title",
-        "--system-prompt",
-        str(system_path),
-        f"@{prompt_path}",
     ]
+    if request.thinking_level is not None:
+        command.extend(("--thinking", request.thinking_level))
+    command.extend(
+        (
+            "--no-session",
+            "--no-tools",
+            "--no-extensions",
+            "--no-skills",
+            "--no-rules",
+            "--no-lsp",
+            "--no-title",
+            "--system-prompt",
+            str(system_path),
+            f"@{prompt_path}",
+        )
+    )
     command.extend(f"@{path}" for path in image_paths)
     return command
 
 
-def _assistant_message(events_path: Path) -> Mapping[str, Any]:
+def _assistant_message(
+    events_path: Path, *, cost_usd: float | None
+) -> Mapping[str, Any]:
     last_message: Mapping[str, Any] | None = None
     parse_errors = 0
     with events_path.open(encoding="utf-8", errors="replace") as events:
@@ -296,29 +325,43 @@ def _assistant_message(events_path: Path) -> Mapping[str, Any]:
     if last_message is None:
         suffix = f" ({parse_errors} malformed output lines)" if parse_errors else ""
         raise GatewayError(
-            f"OMP Codex returned no complete assistant message{suffix}",
+            f"OMP returned no complete assistant message{suffix}",
             tokens_in=None,
             tokens_out=None,
-            cost_usd=0.0,
+            cost_usd=cost_usd,
         )
     return last_message
 
 
-def _prompt_tokens(message: Mapping[str, Any]) -> int:
-    usage = message.get("usage")
-    if not isinstance(usage, Mapping):
-        return 0
-    return sum(
-        _nonnegative_int(usage.get(field))
-        for field in ("input", "cacheRead", "cacheWrite")
+def _response_model(requested_model: str, message: Mapping[str, Any]) -> str:
+    requested_provider, requested_name = requested_model.split("/", 1)
+    provider = message.get("provider")
+    model = message.get("model")
+    provider = (
+        provider if isinstance(provider, str) and provider else requested_provider
     )
+    model = model if isinstance(model, str) and model else requested_name
+    return f"{provider}/{model}"
 
 
-def _billable_output_tokens(message: Mapping[str, Any]) -> int:
-    usage = message.get("usage")
-    if not isinstance(usage, Mapping):
-        return 0
-    return _nonnegative_int(usage.get("output"))
+def _unreported_cost(requested_model: str) -> float | None:
+    return 0.0 if requested_model.startswith("openai-codex/") else None
+
+
+def _usage_cost(requested_model: str, usage: Mapping[str, Any]) -> float | None:
+    if requested_model.startswith("openai-codex/"):
+        return 0.0
+    cost = usage.get("cost")
+    if not isinstance(cost, Mapping):
+        return None
+    total = cost.get("total")
+    if isinstance(total, bool):
+        return None
+    try:
+        value = float(total)
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value >= 0 else None
 
 
 def _nonnegative_int(value: Any) -> int:
@@ -343,6 +386,13 @@ def _tail_text(path: Path, limit: int = 2000) -> str:
         return stream.read().decode("utf-8", errors="replace").strip()[-limit:]
 
 
+def _normalized_truncation_reason(stop_reason: str) -> str | None:
+    normalized = stop_reason.casefold().strip().replace("-", "_").replace(" ", "_")
+    return _TRUNCATION_REASONS.get(normalized)
+
+
 def _is_transient(detail: str) -> bool:
     lowered = detail.casefold()
-    return any(marker in lowered for marker in _TRANSIENT_MARKERS)
+    return bool(_TRANSIENT_STATUS.search(lowered)) or any(
+        marker in lowered for marker in _TRANSIENT_MARKERS
+    )

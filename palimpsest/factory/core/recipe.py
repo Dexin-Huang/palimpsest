@@ -23,8 +23,9 @@ from palimpsest.factory.core.station import Station
 
 _VAR_RE = re.compile(r"\$\{([A-Z0-9_]+)\}")
 _CONFIG_VARS = {
-    "PALIMPSEST_MODEL_VISION": config.MODEL_VISION,
     "PALIMPSEST_MODEL_READING": config.MODEL_READING,
+    "PALIMPSEST_MODEL_READING_SECONDARY": config.MODEL_READING_SECONDARY,
+    "PALIMPSEST_MODEL_ADJUDICATOR": config.MODEL_ADJUDICATOR,
 }
 _SPEC_KEYS = {"station", "variant", "model", "prompt", "params"}
 

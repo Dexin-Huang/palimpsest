@@ -17,7 +17,7 @@ IIIF manifest
 metadata + page_list
     │
     ├─ page line, parallel per page
-    │  acquire → deframe → dewatermark → flatten → segment → read
+    │  acquire → deframe → dewatermark → flatten → segment → dual read
     │          → align (recipe-dependent) → translate → assemble_page
     │
     └─ manuscript line
@@ -54,21 +54,37 @@ python -m pip install --upgrade --editable ".[dev]"
 The remaining commands assume that environment is active. Verify it after
 installation with `python -m pip check`.
 
-Direct factory model calls default to `openai-codex/gpt-5.6-luna` with low
-reasoning through OMP. Ensure `omp` is on `PATH`, start one interactive OMP
-session, and run `/login openai-codex`. OMP then owns OAuth refresh and routes
-calls through the authenticated Codex subscription; no OpenAI API key is required.
+Factory model selectors containing `/` execute through OMP. The production
+reading lane uses `openai-codex/gpt-5.6-sol` (low thinking) as its primary,
+`google/gemini-3.6-flash` (no thinking argument) as its secondary, and
+`anthropic/claude-opus-4-6` (high thinking) as its adjudicator. Ensure
+`omp` is on `PATH`, start one interactive OMP session, and run
+`/login openai-codex` and `/login anthropic` before the first run. Configure
+OMP's Google provider as well; its Google backend accepts `GEMINI_API_KEY`
+from the environment. OMP owns provider routing and OpenAI OAuth refresh for
+selectors, so no OpenAI API key is required.
 
-Copy `.env.example` to `.env` to override either model:
+Copy `.env.example` to `.env` to use or override that lane:
 
 ```env
-PALIMPSEST_MODEL_VISION=openai-codex/gpt-5.6-luna
-PALIMPSEST_MODEL_READING=openai-codex/gpt-5.6-luna
+PALIMPSEST_MODEL_READING=openai-codex/gpt-5.6-sol
+PALIMPSEST_MODEL_READING_SECONDARY=google/gemini-3.6-flash
+PALIMPSEST_MODEL_ADJUDICATOR=anthropic/claude-opus-4-6
 ```
 
-Gemini remains available by selecting a `gemini...` model and setting
-`GEMINI_API_KEY`. The `reference` and `emend` stations use the agent executor
-selected in each recipe and likewise require their selected CLI on `PATH`.
+`PALIMPSEST_MODEL_READING` selects the model for the `read`, `survey`,
+`translate`, and `reconstruct` stations. The secondary and adjudicator settings
+apply to dual-reader `read` adjudication.
+
+When migrating from `PALIMPSEST_MODEL_VISION`, rename it to
+`PALIMPSEST_MODEL_READING`. The legacy name is rejected when the new setting is
+absent; it is not accepted as an alias.
+
+`GEMINI_API_KEY` may be supplied for OMP's Google provider and is also used by
+the optional direct-provider override: set a model value to a bare `gemini...`
+selector to bypass OMP. Slash-qualified selectors always go through OMP. The
+`reference` and `emend` stations use the agent executor selected in each recipe
+and require that executor's CLI on `PATH`.
 
 ## Run a manuscript
 
@@ -98,6 +114,14 @@ python -m palimpsest adopt \
 ```bash
 python -m palimpsest run --doc-id vatican_pal_lat_1267 --workers 6
 ```
+
+Each read cell sends both readers the same full-page or tile image and prompt.
+Exact agreement after sanitization becomes the final text without another
+model call. A disagreement sends the same image and identity-blind candidate
+texts to the adjudicator under a strict JSON schema. The transcription artifact
+retains the final text, both candidate readings and their model IDs, the
+adjudication status, reasoning and unresolved items, plus combined token and
+cost usage across every call made for that reading.
 
 The conductor resumes from `library/factory.db`. Fresh cells are skipped;
 input drift reruns stale cells; configuration drift is reported as outdated

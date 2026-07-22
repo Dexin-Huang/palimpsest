@@ -67,6 +67,10 @@ def _candidate(
             "media_resolution": "low",
             "max_output_tokens": 32768,
             "thinking_level": "low",
+            "secondary_model": "google/gemini-3.6-flash",
+            "secondary_thinking_level": None,
+            "adjudicator_model": "anthropic/claude-opus-4-6",
+            "adjudicator_thinking_level": "high",
         },
         options={},
         notes=None,
@@ -116,8 +120,15 @@ def _recipe_root(
     source = Path("palimpsest/factory/recipes/latin_manuscript.yaml").read_text(
         encoding="utf-8"
     )
+    source = source.replace(
+        "${PALIMPSEST_MODEL_READING_SECONDARY}",
+        str(candidate.params["secondary_model"]),
+    ).replace(
+        "${PALIMPSEST_MODEL_ADJUDICATOR}",
+        str(candidate.params["adjudicator_model"]),
+    )
     if not retain_model_placeholder:
-        source = source.replace("${PALIMPSEST_MODEL_VISION}", candidate.model or "")
+        source = source.replace("${PALIMPSEST_MODEL_READING}", candidate.model or "")
     (root / "latin_manuscript.yaml").write_text(source, encoding="utf-8")
     return root
 
@@ -319,7 +330,7 @@ def test_manual_review_cuts_over_env_backed_moving_baseline_locally(
     )
     fixed = _candidate("read/fixed", "2", model="gemini-3.7-flash")
     root = _recipe_root(tmp_path, moving, retain_model_placeholder=True)
-    monkeypatch.setenv("PALIMPSEST_MODEL_VISION", moving.model)
+    monkeypatch.setenv("PALIMPSEST_MODEL_READING", moving.model)
     reason = f"baseline identity requires reproducibility waiver: {moving.fingerprint}"
     report = _report(
         moving,
@@ -377,7 +388,7 @@ def test_manual_review_cuts_over_env_backed_moving_baseline_locally(
     assert proposal.proposed_source[proposed_end:] == original[end:]
     changed = proposal.proposed_source[start:proposed_end]
     assert fixed.model in changed
-    assert "${PALIMPSEST_MODEL_VISION}" not in changed
+    assert "${PALIMPSEST_MODEL_READING}" not in changed
     assert proposal.waiver_fingerprint == waiver.waiver_fingerprint
 
 

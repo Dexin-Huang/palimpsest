@@ -25,6 +25,21 @@ FORMAT_SUFFIX = {"json": ".json", "jpeg": ".jpg", "epub": ".epub"}
 # have one source of truth.
 SOURCE_KINDS = ("metadata", "page_list")
 
+TRANSCRIPTION_AUDIT_FIELDS = (
+    "candidate_readings",
+    "adjudication_status",
+    "adjudication_requested_model",
+    "adjudication_model",
+    "adjudication_reasoning",
+    "unresolved",
+    "adjudication_error",
+)
+
+
+def transcription_audit(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Copy the durable reader/adjudicator evidence from a transcription."""
+    return {field: payload.get(field) for field in TRANSCRIPTION_AUDIT_FIELDS}
+
 
 @dataclass(frozen=True)
 class ArtifactContract:
@@ -86,7 +101,20 @@ _ALL = (
         "page",
         "json",
         "Diplomatic transcription; per-region texts when the page was segmented.",
-        required=("doc_id", "page_id", "text", "route", "regions"),
+        required=(
+            "doc_id",
+            "page_id",
+            "text",
+            "route",
+            "regions",
+            "candidate_readings",
+            "adjudication_status",
+            "adjudication_requested_model",
+            "adjudication_model",
+            "adjudication_reasoning",
+            "unresolved",
+            "adjudication_error",
+        ),
     ),
     ArtifactContract(
         "page_translation",
