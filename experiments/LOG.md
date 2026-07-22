@@ -115,3 +115,81 @@ Losers are deleted from the tree; this file is what remains of them.
   -> fontTools, 4KB TTF, renders via PIL). Coverage scales directly
   with label quality — the labeling ladder is now also the font ladder.
   New dep: fonttools (pure-python).  (open)
+
+- 2026-07-21  scribe_template_retrieval  frozen MX-Font feasibility gate:
+  four target-excluded page-0000 writer crops + generic Kai content
+  hypotheses, tested on 522 untouched page-0001 crops across 190 candidate
+  characters. Real-exemplar-or-Kai baseline top-1 23.75% -> 30.08% with
+  correct-writer hypotheses, paired +6.32 points, 95% line-block-bootstrap
+  CI [3.13, 9.67]. On 246 crops/108 characters absent from the entire
+  reference page, correct-writer conditioning beat no-writer by +2.44
+  points (CI [0.40, 4.61]) and wrong-style by +2.03 (CI [0.43, 3.77]).
+  Top-5 35.82% -> 43.49%; error at 80% coverage 72.25% -> 64.59%.
+  Evidence remains silver: visual failure review found binding errors,
+  seen-class top-1 regressed 2.17 points, and page 0002 geometry recovered
+  only 6/40 lines. Technical transfer signal established; human gold and
+  geometry repair remain required before a same-socket align trial.  (open)
+
+- 2026-07-21  generative_hand_font  first executable writer-adapted
+  font: 64 sparse P.3477 specimen identities train frozen MX-Font style
+  factors plus late decoder weights; a content-only residual calibration
+  selects strength 0.60 without held-out target ink. On 246 character-
+  disjoint page-0001 crops, aligned chamfer improves 17.26% over
+  unadapted MX-Font; same-writer wins 75.20% versus unadapted, 73.58%
+  versus wrong-writer adaptation, and 81.30% versus Kai. Both paired
+  character-block confidence intervals are positive. Content top-5 is
+  98.95% with no ranks worse than 20. `P3477-Generated.ttf` installs,
+  contains 225 CJK glyphs (64 authentic, 161 generated), and renders
+  phrase specimens. All machine gates pass; the 12-row blind human
+  writer-identity review remains the freeze gate.  (open)
+
+- 2026-07-21  generative_hand_font label audit: human review rejected the
+  premise of the preceding run because multiple crop-to-character bindings
+  are wrong. The dynamic cell/transcription sequence alignment supplied
+  silver hypotheses that the benchmark incorrectly treated as exact labels.
+  Therefore every model-quality number in the preceding entry is invalid;
+  the TTF proves assembly only. The failed run remains immutable. A new
+  label-independent CV pass proposes 24 training and 16 held-out boxes with
+  source context; a human must attest both the box and Unicode identity or
+  exclude the sample. `benchmark.py` and `adapt.py` now hard-fail without
+  fingerprinted human gold. FontDiffuser becomes the primary model
+  challenger only after this crop gate passes.  (blocking)
+
+- 2026-07-21  generative_hand_font continuous crop gold v2: the rejected
+  one-shot attestation is preserved under `out/runs/crop-attestation-v1/`.
+  A replacement label-independent CV pass detects columns and ink slots
+  without transcription, fuses detached stroke fragments, recovers bounds
+  from full-resolution source pixels, and queues 220 proposals per source
+  page. The lightweight local app serves one proposal at a time with a
+  draggable/resizable box, lossless live crop preview, and typed Chinese label
+  correction. It appends each decision or revision to
+  `out/crop_labels_v2.jsonl`, resumes across reloads, materializes accepted
+  crops under `out/gold_crops_v2/`, and regenerates the fingerprinted
+  `out/gold_crops_v2.json` view. `benchmark.py` now consumes only this v2 gold;
+  no v1 label can authorize training.  (blocking)
+
+- 2026-07-21  generative_hand_font generic annotation cutover: the local
+  labeling store and browser UI moved to the reusable manifest-driven
+  `palimpsest/image_labeling.py`; the experiment now only builds proposals and
+  `out/annotation_project.json`. Machine first passes remain untrusted and are
+  copied into an editable field; a typed human label wins and is recorded as an
+  override. Append-only revisions live in `out/annotation_events.jsonl`,
+  accepted native-resolution images in `out/annotation_images/`, and the
+  current fingerprinted view in `out/annotation_dataset.json`. Benchmark and
+  adaptation gates consume only a ready dataset tied to its exact project and
+  proposal fingerprints. Focused annotation/font tests pass 12/12; browser QA
+  verified both 220-item queues, native 3042x2496 source delivery, typed-label
+  override state, and crop expand/reset without submitting human evidence.
+  (blocking on human annotation)
+
+- 2026-07-22  generative_hand_font Luna first pass: the fingerprinted
+  `out/luna_first_pass.json` sidecar now supplies suggestions to the generic
+  `out/annotation_project.json` manifest. Luna values remain explicitly
+  untrusted and cannot become gold without human acceptance; a human-typed
+  character wins. Human decisions append to `out/annotation_events.jsonl`,
+  accepted pixels live in `out/annotation_images/`, and the current
+  fingerprinted view is `out/annotation_dataset.json`. Benchmarking and
+  adaptation remain blocked until that dataset contains at least 24 distinct
+  human-accepted training characters and 16 distinct human-accepted held-out
+  characters. Next action: continue review at `http://127.0.0.1:3478/`.
+  (blocking on human annotation)
