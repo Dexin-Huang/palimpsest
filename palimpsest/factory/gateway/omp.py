@@ -20,6 +20,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from palimpsest.factory.config import MODEL_TIMEOUT_SECONDS
 from palimpsest.factory.gateway.protocol import (
     GatewayError,
     ImageContent,
@@ -35,6 +36,7 @@ _IMAGE_SUFFIXES = {
 _MEDIA_RESOLUTIONS = frozenset({"low", "medium", "high"})
 _THINKING_LEVELS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 _TRANSIENT_STATUS = re.compile(r"(?<!\d)(?:429|500|502|503|504)(?!\d)")
+_SUBPROCESS_CREATION_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 _TRANSIENT_MARKERS = (
     "connection reset",
     "connection was reset",
@@ -54,7 +56,6 @@ _TRUNCATION_REASONS = {
     "max_token": "MAX_TOKENS",
     "max_tokens": "MAX_TOKENS",
 }
-_TIMEOUT_SECONDS = 900
 
 
 def generate(request: ModelRequest) -> ModelResponse:
@@ -88,13 +89,14 @@ def generate(request: ModelRequest) -> ModelResponse:
                     stdin=subprocess.DEVNULL,
                     stdout=events,
                     stderr=stderr,
-                    timeout=_TIMEOUT_SECONDS,
+                    timeout=MODEL_TIMEOUT_SECONDS,
                     check=False,
+                    creationflags=_SUBPROCESS_CREATION_FLAGS,
                 )
         except subprocess.TimeoutExpired as error:
             raise GatewayError(
-                f"OMP call timed out after {_TIMEOUT_SECONDS} seconds",
-                transient=True,
+                f"OMP call timed out after {MODEL_TIMEOUT_SECONDS} seconds",
+                transient=False,
                 tokens_in=None,
                 tokens_out=None,
                 cost_usd=_unreported_cost(request.model),

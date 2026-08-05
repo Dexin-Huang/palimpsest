@@ -25,6 +25,7 @@ _VAR_RE = re.compile(r"\$\{([A-Z0-9_]+)\}")
 _CONFIG_VARS = {
     "PALIMPSEST_MODEL_READING": config.MODEL_READING,
     "PALIMPSEST_MODEL_READING_SECONDARY": config.MODEL_READING_SECONDARY,
+    "PALIMPSEST_MODEL_EDITORIAL": config.MODEL_EDITORIAL,
     "PALIMPSEST_MODEL_ADJUDICATOR": config.MODEL_ADJUDICATOR,
 }
 _SPEC_KEYS = {"station", "variant", "model", "prompt", "params"}

@@ -138,6 +138,7 @@ class StationResult:
     tokens_in: int | None = None
     tokens_out: int | None = None
     cost_usd: float | None = None
+    process_stats: dict[str, int] | None = None
 
 
 class Station:

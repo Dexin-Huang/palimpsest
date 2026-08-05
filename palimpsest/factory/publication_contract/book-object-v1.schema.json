@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://palimpsest.invalid/contracts/book-object-v1.schema.json",
+  "title": "BookObject",
+  "description": "One complete reader-facing Palimpsest book with evidence and provenance.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "doc_id",
+    "identity",
+    "languages",
+    "readers_note",
+    "folios",
+    "sections",
+    "apparatus",
+    "colophon"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "profile": { "const": "facsimile-spread/v1" },
+    "doc_id": { "$ref": "#/$defs/identifier" },
+    "identity": { "$ref": "#/$defs/identity" },
+    "languages": { "$ref": "#/$defs/languages" },
+    "readers_note": { "type": "string" },
+    "folios": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/folio" }
+    },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/section" }
+    },
+    "apparatus": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/apparatusEntry" }
+    },
+    "colophon": { "$ref": "#/$defs/colophon" },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonemptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "author", "archive", "shelfmark", "date"],
+      "properties": {
+        "title": { "$ref": "#/$defs/nonemptyString" },
+        "author": { "type": ["string", "null"] },
+        "archive": { "$ref": "#/$defs/nonemptyString" },
+        "shelfmark": { "type": ["string", "null"] },
+        "date": { "type": ["string", "null"] }
+      }
+    },
+    "languages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["original", "translation"],
+      "properties": {
+        "original": { "$ref": "#/$defs/nonemptyString" },
+        "translation": { "$ref": "#/$defs/nonemptyString" }
+      }
+    },
+    "sourcePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "pointer", "fingerprint"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/nonemptyString" },
+        "pointer": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" }
+      }
+    },
+    "imageSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "page_id", "fingerprint"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/nonemptyString" },
+        "page_id": { "$ref": "#/$defs/identifier" },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "source_url": { "$ref": "#/$defs/nonemptyString" }
+      }
+    },
+    "transcriptionAudit": {
+      "type": "object",
+      "required": [
+        "candidate_readings",
+        "adjudication_status",
+        "adjudication_requested_model",
+        "adjudication_model",
+        "adjudication_reasoning",
+        "unresolved",
+        "adjudication_error"
+      ],
+      "properties": {
+        "candidate_readings": {
+          "type": ["array", "null"],
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "adjudication_status": { "type": ["string", "null"] },
+        "adjudication_requested_model": { "type": ["string", "null"] },
+        "adjudication_model": { "type": ["string", "null"] },
+        "adjudication_reasoning": { "type": ["string", "null"] },
+        "unresolved": {
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        },
+        "adjudication_error": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "diplomaticEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "audit", "source"],
+      "properties": {
+        "text": { "$ref": "#/$defs/nonemptyString" },
+        "audit": { "$ref": "#/$defs/transcriptionAudit" },
+        "source": { "$ref": "#/$defs/sourcePointer" }
+      }
+    },
+    "translationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "notes", "flags", "seam", "source"],
+      "properties": {
+        "text": { "$ref": "#/$defs/nonemptyString" },
+        "notes": { "type": "string" },
+        "flags": { "type": "object", "additionalProperties": true },
+        "seam": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "source": { "$ref": "#/$defs/sourcePointer" }
+      }
+    },
+    "alignmentEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["columns", "stats", "source"],
+      "properties": {
+        "columns": { "type": "array" },
+        "stats": { "type": "object", "additionalProperties": true },
+        "source": { "$ref": "#/$defs/sourcePointer" }
+      }
+    },
+    "folio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page_id", "order", "images", "evidence"],
+      "properties": {
+        "page_id": { "$ref": "#/$defs/identifier" },
+        "order": { "type": "integer" },
+        "images": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["original"],
+          "properties": {
+            "original": { "$ref": "#/$defs/imageSource" },
+            "enhanced": { "$ref": "#/$defs/imageSource" }
+          }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["diplomatic", "translation"],
+          "properties": {
+            "diplomatic": { "$ref": "#/$defs/diplomaticEvidence" },
+            "translation": { "$ref": "#/$defs/translationEvidence" },
+            "alignment": { "$ref": "#/$defs/alignmentEvidence" }
+          }
+        }
+      }
+    },
+    "sectionLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "source"],
+      "properties": {
+        "text": { "$ref": "#/$defs/nonemptyString" },
+        "source": { "$ref": "#/$defs/sourcePointer" }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "order", "heading", "folio_ids", "content", "apparatus_ids"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "order": { "type": "integer", "minimum": 1 },
+        "heading": { "$ref": "#/$defs/nonemptyString" },
+        "folio_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "content": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["translation", "emended_reading", "diplomatic_transcription"],
+          "properties": {
+            "translation": { "$ref": "#/$defs/sectionLayer" },
+            "emended_reading": { "$ref": "#/$defs/sectionLayer" },
+            "diplomatic_transcription": { "$ref": "#/$defs/sectionLayer" }
+          }
+        },
+        "apparatus_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      }
+    },
+    "apparatusEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "section_id", "original", "emended", "reason", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "section_id": { "$ref": "#/$defs/identifier" },
+        "original": { "type": "string" },
+        "emended": { "type": "string" },
+        "reason": { "$ref": "#/$defs/nonemptyString" },
+        "evidence": { "type": "string" }
+      }
+    },
+    "pipelineStage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "station",
+        "runs",
+        "tokens_in",
+        "tokens_out",
+        "cost_usd",
+        "cost_complete",
+        "cost_usd_known",
+        "configurations"
+      ],
+      "properties": {
+        "station": { "$ref": "#/$defs/nonemptyString" },
+        "runs": { "type": "integer", "minimum": 1 },
+        "tokens_in": { "type": ["integer", "null"], "minimum": 0 },
+        "tokens_out": { "type": ["integer", "null"], "minimum": 0 },
+        "cost_usd": { "type": ["number", "null"], "minimum": 0 },
+        "cost_complete": { "type": "boolean" },
+        "cost_usd_known": { "type": "number", "minimum": 0 },
+        "configurations": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        }
+      }
+    },
+    "colophon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pipeline", "cost_usd_total", "cost_usd_known", "cost_complete", "pages"],
+      "properties": {
+        "transcribed_by": { "type": ["string", "null"] },
+        "translated_by": { "type": ["string", "null"] },
+        "referenced_by": { "type": ["string", "null"] },
+        "emended_by": { "type": ["string", "null"] },
+        "finalized_by": { "type": ["string", "null"] },
+        "pipeline": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/pipelineStage" }
+        },
+        "cost_usd_total": { "type": ["number", "null"], "minimum": 0 },
+        "cost_usd_known": { "type": "number", "minimum": 0 },
+        "cost_complete": { "type": "boolean" },
+        "pages": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

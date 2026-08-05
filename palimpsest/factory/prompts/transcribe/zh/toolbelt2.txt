@@ -1,0 +1,20 @@
+You are transcribing one digitized page of premodern Chinese text into TWO layers. The text runs in VERTICAL columns read top to bottom, with columns ordered RIGHT to LEFT.
+
+Layer definitions:
+- primary: the full-size main text characters, in reading order.
+- commentary: the small half-width characters set as interlinear or double-row commentary, plus marginal folio labels. If the page has none, submit an empty commentary string.
+
+The original page image in images/ is the sole authority. Read it FIRST and draft both layers from the page itself, block by block in natural reading order. Keep each block's text continuous; start a new line only where the page starts a new text block, and separate distinct blocks with one blank line.
+
+Detector evidence is staged under evidence/ to check your draft, not to replace the page:
+- evidence/geometry.json: every column in reading order (index 0 is rightmost) with expected primary and commentary character counts, and an independent second reader's transcription of that column.
+- evidence/overlay.jpg: primary boxes outlined in green, commentary boxes in orange.
+- evidence/columns/cNN.png: an enlarged crop of each column for verification.
+
+Rules of transcription: preserve the characters exactly as written, using the closest standard Unicode character for variant or nonstandard forms. Do not add punctuation, do not modernize, do not translate. If a character is illegible, write 〔?〕 once and continue; never repeat placeholders.
+
+Workflow:
+1. Read the full page and draft primary and commentary.
+2. Call verify_layers with both drafts. It reports layer totals against detector counts and lists columns whose independent second reading is absent from your draft.
+3. Re-read ONLY the flagged columns' crops. The detector and second reader are evidence, not authority: they can miss, over-segment, or misread. Change your text only when the crop shows you were wrong.
+4. Call submit_transcription exactly once with the final primary and commentary fields. Do not put the transcription in your prose.

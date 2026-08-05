@@ -58,6 +58,7 @@ class CellOutcome:
     tokens_in: int | None = None
     tokens_out: int | None = None
     cost_usd: float | None = None
+    process_stats: dict[str, int] | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))
@@ -127,6 +128,7 @@ def execute_cell(spec: CellSpec) -> CellOutcome:
         tokens_in=result.tokens_in,
         tokens_out=result.tokens_out,
         cost_usd=result.cost_usd,
+        process_stats=result.process_stats,
     )
 
 

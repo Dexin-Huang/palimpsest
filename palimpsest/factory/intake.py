@@ -20,15 +20,121 @@ from palimpsest.factory.workspace.layout import metadata_path, page_list_path
 
 REQUEST_HEADERS = {"User-Agent": "palimpsest manuscript recovery factory"}
 TIMEOUT_SECONDS = 30.0
+LOC_MANIFEST_PATH = re.compile(r"^/item/([^/]+)/manifest\.json$")
 
 
 def fetch_manifest(url: str) -> dict[str, Any]:
     response = requests.get(url, timeout=TIMEOUT_SECONDS, headers=REQUEST_HEADERS)
-    response.raise_for_status()
-    manifest = response.json()
+    loc_record_url = _loc_record_url(url)
+    if response.status_code == 403 and loc_record_url is not None:
+        response = requests.get(
+            loc_record_url,
+            timeout=TIMEOUT_SECONDS,
+            headers=REQUEST_HEADERS,
+        )
+        response.raise_for_status()
+        manifest = _manifest_from_loc_record(response.json())
+    else:
+        response.raise_for_status()
+        manifest = response.json()
     if not isinstance(manifest, dict):
         raise ValueError("IIIF manifest must be a JSON object")
     return manifest
+
+
+def _loc_record_url(manifest_url: str) -> str | None:
+    parts = urlsplit(manifest_url)
+    if parts.hostname != "www.loc.gov":
+        return None
+    match = LOC_MANIFEST_PATH.fullmatch(parts.path.rstrip("/"))
+    if match is None:
+        return None
+    path = f"/item/{match.group(1)}/"
+    return urlunsplit((parts.scheme, parts.netloc, path, "fo=json", ""))
+
+
+def _manifest_from_loc_record(record: Any) -> dict[str, Any]:
+    if not isinstance(record, Mapping):
+        raise ValueError("Library of Congress record must be a JSON object")
+    item = record.get("item") or {}
+    if not isinstance(item, Mapping):
+        raise ValueError("Library of Congress record item must be a JSON object")
+
+    canvases: list[dict[str, Any]] = []
+    for resource in record.get("resources", []) or []:
+        if not isinstance(resource, Mapping):
+            continue
+        for files in _loc_file_groups(resource.get("files")):
+            image = _largest_loc_image(files)
+            if image is None:
+                continue
+            page_number = len(canvases) + 1
+            canvases.append(
+                {
+                    "@id": f"{resource.get('url', '')}#page={page_number}",
+                    "label": f"Page {page_number}",
+                    "width": image.get("width"),
+                    "height": image.get("height"),
+                    "images": [{"resource": {"@id": image["url"]}}],
+                }
+            )
+
+    catalog_item = item.get("item") or {}
+    creators = catalog_item.get("creators") if isinstance(catalog_item, Mapping) else []
+    contributors = (
+        creators or item.get("creators") or item.get("contributor_names") or []
+    )
+    if isinstance(contributors, str):
+        contributors = [contributors]
+    elif not creators:
+        contributors = contributors[:1]
+    metadata = [
+        {"label": "Archive", "value": "Library of Congress"},
+        {"label": "Title", "value": _text(item.get("title"))},
+        {"label": "Shelfmark", "value": _text(item.get("shelf_id"))},
+        {"label": "Creator", "value": "; ".join(map(str, contributors))},
+        {"label": "Date", "value": _text(item.get("date"))},
+        {"label": "Language", "value": _text(item.get("language"))},
+        {
+            "label": "Created/Published",
+            "value": _text(item.get("created_published")),
+        },
+    ]
+    return {
+        "label": _text(item.get("title")),
+        "description": _text(item.get("summary") or item.get("description")),
+        "metadata": [entry for entry in metadata if entry["value"]],
+        "sequences": [{"canvases": canvases}],
+    }
+
+
+def _loc_file_groups(value: Any) -> list[list[Mapping[str, Any]]]:
+    if not isinstance(value, list) or not value:
+        return []
+    if all(isinstance(entry, Mapping) for entry in value):
+        return [value]
+    return [
+        [entry for entry in group if isinstance(entry, Mapping)]
+        for group in value
+        if isinstance(group, list)
+    ]
+
+
+def _largest_loc_image(
+    files: list[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    images = [
+        entry
+        for entry in files
+        if str(entry.get("mimetype", "")).startswith("image/")
+        and str(entry.get("url", "")).lower().endswith((".jpg", ".jpeg", ".png"))
+    ]
+    if not images:
+        return None
+    return max(
+        images,
+        key=lambda entry: int(entry.get("width") or 0) * int(entry.get("height") or 0),
+    )
 
 
 def validate_records(
@@ -144,6 +250,7 @@ def _catalog(manifest: Mapping[str, Any], *, canvas_count: int) -> dict[str, Any
         "label": label or None,
         "title": title or None,
         "shelfmark": shelfmark or None,
+        "archive": fields.get("archive") or fields.get("repository") or None,
         "author": fields.get("author") or fields.get("creator") or None,
         "date": fields.get("date") or fields.get("dat") or None,
         "language": fields.get("language") or fields.get("lingua") or None,

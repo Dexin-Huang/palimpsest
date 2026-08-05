@@ -1,0 +1,17 @@
+schema_version: 1
+id: "translate/zh-han-variant-v1-auxiliary-development-v1"
+station: "translate"
+variant: "han_variant_v1_auxiliary"
+model: "openai-codex/gpt-5.6-sol"
+prompt: "translate/zh/with_brief"
+params:
+  temperature: 0.1
+  max_output_tokens: 32768
+options:
+  overlap: 1
+  trim_seam_overlap: false
+notes: >-
+  Development-only Chinese translation challenger. It retains the diplomatic
+  transcription as authoritative and adds Han variant table v1 as an explicitly
+  auxiliary semantic view. Production recipe unchanged; not qualification
+  evidence.

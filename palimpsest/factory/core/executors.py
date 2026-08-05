@@ -18,9 +18,10 @@ import json
 import subprocess
 import sys
 
+from palimpsest.factory.config import CELL_TIMEOUT_SECONDS
 from palimpsest.factory.core.cell import CellOutcome, CellSpec, execute_cell
 
-DEFAULT_TIMEOUT_SECONDS = 1800.0
+DEFAULT_TIMEOUT_SECONDS = float(CELL_TIMEOUT_SECONDS)
 
 
 class CellExecutionError(RuntimeError):

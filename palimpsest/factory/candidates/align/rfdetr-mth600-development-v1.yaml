@@ -1,0 +1,15 @@
+schema_version: 1
+id: align/rfdetr-mth600-development-v1
+station: align
+variant: rfdetr-mth600/v1
+params: {}
+options:
+  checkpoint_sha256: cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d
+  rfdetr_version: 1.8.3
+  torch_version: 2.7.0+cu118
+  torchvision_version: 0.22.0+cu118
+  tile_size: 512
+  overlap: 96
+  threshold: 0.31
+  nms_iou: 0.4
+notes: Development-only same-socket align candidate using the frozen 600-page MTHv2 RF-DETR checkpoint; not qualification evidence.

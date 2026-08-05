@@ -1,4 +1,4 @@
-name: chinese_scroll
+name: chinese_printed_book
 language: zh
 line:
   - station: acquire
@@ -38,7 +38,6 @@ line:
     model: ${PALIMPSEST_MODEL_EDITORIAL}
     prompt: translate/zh/with_brief
     overlap: 1
-    trim_seam_overlap: true
   - station: assemble_page
   - station: reconstruct
     model: ${PALIMPSEST_MODEL_EDITORIAL}

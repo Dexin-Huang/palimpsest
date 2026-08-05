@@ -1,0 +1,30 @@
+schema_version: 1
+id: deframe/efficientvit-sam-l0-hybrid-development-v3
+station: deframe
+variant: efficientvit-sam-l0-resilient-hybrid/v1
+params: {}
+options:
+  checkpoint_sha256: c4f994b01a16d48bcf2fbbb089448cfbf58fae5811edfa8113c953b8b8cc64b8
+  torch_version: 2.10.0+cu128
+  source_revision: 796cb9fddf314e6f9f1c22ac9322583d4b7833c9
+  points_per_side: 8
+  points_per_batch: 32
+  predicted_iou_threshold: 0.75
+  fallback_predicted_iou_threshold: 0.7
+  stability_threshold: 0.85
+  box_nms_threshold: 0.7
+  min_box_fraction: 0.15
+  min_mask_fraction: 0.12
+  min_box_height_fraction: 0.4
+  crop_margin: 0.0
+  frame_margin: 0.02
+  left_model_weight: 1.0
+  top_model_weight: 0.25
+  right_model_weight: 1.0
+  bottom_model_weight: 0.5
+  large_page_threshold_pixels: 5000000
+  large_left_model_weight: 0.75
+  large_top_model_weight: 0.0
+  large_right_model_weight: 0.75
+  large_bottom_model_weight: 0.5
+notes: Development-only size-conditioned hybrid with retention-first deterministic fallback after model inference failure or timeout; not qualification evidence.

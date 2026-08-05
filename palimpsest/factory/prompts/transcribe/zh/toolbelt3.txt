@@ -1,0 +1,22 @@
+You are transcribing one digitized page of premodern Chinese text into TWO layers. The text runs in VERTICAL columns read top to bottom, with columns ordered RIGHT to LEFT.
+
+Layer definitions:
+- primary: the full-size main text characters, in reading order.
+- commentary: the small half-width characters set as interlinear or double-row commentary, plus marginal folio labels. If the page has none, submit an empty commentary string.
+
+The original page image in images/ is the sole authority. Read it FIRST and draft both layers from the page itself, block by block in natural reading order. Keep each block's text continuous; start a new line only where the page starts a new text block, and separate distinct blocks with one blank line.
+
+Detector evidence is staged under evidence/ to check your draft, not to replace the page:
+- evidence/geometry.json: every register (horizontal band) and column in reading order, with expected primary and commentary character counts and an independent second reader's transcription of each column.
+- evidence/overlay.jpg: primary boxes outlined in green, commentary boxes in orange.
+- evidence/columns/rRcNN.png: an enlarged crop of each column for verification.
+
+Rules of transcription: preserve the characters exactly as written, using the closest standard Unicode character for variant or nonstandard forms. Do not add punctuation, do not modernize, do not translate. If a character is illegible, write 〔?〕 once and continue; never repeat placeholders.
+
+Workflow:
+1. Read the full page and draft primary and commentary.
+2. Call verify_layers with both drafts. It reports, deterministically: repetition loops per layer against the suite's own gate (three or more identical lines fail), layer totals against detector counts, whether the detector is trustworthy on this page, and the columns whose independent second reading is absent from your draft.
+3. Eliminate every reported repetition loop unless the page truly repeats that line three or more times; loops are almost always drafting errors on dense commentary pages.
+4. If the detector is declared untrusted, ignore counts and column flags entirely and work purely from the page image.
+5. Otherwise re-read ONLY the flagged columns' crops. The detector and second reader are evidence, not authority: change your text only when the crop shows you were wrong.
+6. Call submit_transcription exactly once with the final primary and commentary fields. Do not put the transcription in your prose.

@@ -46,6 +46,7 @@ from palimpsest.factory.workspace.io import read_json
 from palimpsest.factory.workspace.layout import page_list_path
 
 DEFAULT_WORKERS = 6
+DEFAULT_MODEL_WORKERS = 3
 WORK_HEARTBEAT_SECONDS = 15
 WORK_LEASE_SECONDS = 600
 
@@ -85,16 +86,26 @@ class Conductor:
         *,
         library_root: Path = LIBRARY_ROOT,
         workers: int = DEFAULT_WORKERS,
+        model_workers: int = DEFAULT_MODEL_WORKERS,
         refresh: frozenset[str] = frozenset(),
         executor: str = "inline",
         page_ids: tuple[str, ...] = (),
         through: str | None = None,
         recipe_loader: Callable[[str], Recipe] | None = None,
     ) -> None:
+        if isinstance(workers, bool) or not isinstance(workers, int) or workers < 1:
+            raise ValueError("workers must be a positive integer")
+        if (
+            isinstance(model_workers, bool)
+            or not isinstance(model_workers, int)
+            or model_workers < 1
+        ):
+            raise ValueError("model_workers must be a positive integer")
         self._ledger = ledger
         self._ledger_lock = threading.Lock()
         self._library_root = library_root
         self._workers = workers
+        self._model_workers = model_workers
         self._refresh = refresh
         self._executor = make_executor(executor)
         self._page_ids = page_ids
@@ -310,13 +321,21 @@ class Conductor:
         prompts: dict[str, prompt_store.Prompt],
         previous_runs: dict[tuple[str, str | None], sqlite3.Row],
     ) -> list[CellReport]:
-        if not batch:
-            return []
+        """Run page stations in line order with a barrier after each station.
 
-        def run_page(page: dict) -> list[CellReport]:
-            cells = []
-            for spec in batch:
-                cell = self._run_cell(
+        Cheap local stages use the general worker pool. Model-backed stages use
+        their smaller pool so provider saturation cannot make every request
+        slower. A failed page drops out of later stations in this batch while
+        unrelated pages continue.
+        """
+        active_pages = pages
+        cells: list[CellReport] = []
+        for spec in batch:
+            if not active_pages:
+                break
+
+            def run_page(page: dict) -> CellReport:
+                return self._run_cell(
                     doc_id,
                     spec,
                     all_pages,
@@ -324,15 +343,19 @@ class Conductor:
                     prompts=prompts,
                     previous_runs=previous_runs,
                 )
-                cells.append(cell)
-                if cell.action == "failed":
-                    break  # stop this page's chain, not the rest of the line
-            return cells
 
-        with ThreadPoolExecutor(max_workers=self._workers) as pool:
-            return [
-                cell for page_cells in pool.map(run_page, pages) for cell in page_cells
-            ]
+            worker_count = (
+                self._model_workers if spec.station.uses_model else self._workers
+            )
+            with ThreadPoolExecutor(max_workers=worker_count) as pool:
+                station_cells = tuple(pool.map(run_page, active_pages))
+            cells.extend(station_cells)
+            active_pages = tuple(
+                page
+                for page, cell in zip(active_pages, station_cells, strict=True)
+                if cell.action != "failed"
+            )
+        return cells
 
     # -- one cell -------------------------------------------------------------
 

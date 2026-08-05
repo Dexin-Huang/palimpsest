@@ -1,0 +1,15 @@
+schema_version: 1
+id: align/rfdetr-mth2156-development-v1
+station: align
+variant: rfdetr-mth600/v1
+params: {}
+options:
+  checkpoint_sha256: f77d91bba64891a79f70fbabaeaca95e104a1d94c2db46fe7d20b41012e95f8c
+  rfdetr_version: 1.8.3
+  torch_version: 2.7.0+cu128
+  torchvision_version: 0.22.0+cu128
+  tile_size: 512
+  overlap: 96
+  threshold: 0.31
+  nms_iou: 0.4
+notes: Development candidate trained for one epoch on all 2,156 valid content-unique MTHv2 training pages; official test and qualification remain untouched.

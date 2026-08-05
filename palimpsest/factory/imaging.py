@@ -207,6 +207,37 @@ def parchment_frame(
     return x + mx, y + my, x + bw - mx, y + bh - my
 
 
+def parchment_spread_frame(
+    gray: np.ndarray, *, margin_fraction: float = 0.02
+) -> tuple[int, int, int, int]:
+    """Locate the full parchment span even when a dark crease splits the leaves.
+
+    A column or row belongs to the parchment when bright pixels occupy at
+    least one fifth of the perpendicular dimension. The first and last
+    supported coordinates define one outer envelope, so unsupported interior
+    creases remain inside the crop.
+    """
+    h, w = gray.shape
+    _, bright = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    if cv2.countNonZero(bright) > 0.92 * h * w:
+        return 0, 0, w, h
+    bright = cv2.morphologyEx(
+        bright, cv2.MORPH_CLOSE, np.ones((max(3, h // 100),) * 2, np.uint8)
+    )
+    columns = np.flatnonzero(
+        np.count_nonzero(bright, axis=0) >= max(1, int(h * 0.2))
+    )
+    rows = np.flatnonzero(
+        np.count_nonzero(bright, axis=1) >= max(1, int(w * 0.2))
+    )
+    if not columns.size or not rows.size:
+        return 0, 0, w, h
+    x, y = int(columns[0]), int(rows[0])
+    bw, bh = int(columns[-1]) + 1 - x, int(rows[-1]) + 1 - y
+    mx, my = int(bw * margin_fraction), int(bh * margin_fraction)
+    return x + mx, y + my, x + bw - mx, y + bh - my
+
+
 def trim_gutter(
     gray: np.ndarray, *, search_fraction: float = 0.3, min_depth: int = 35
 ) -> tuple[int, int]:

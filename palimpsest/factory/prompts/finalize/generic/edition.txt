@@ -1,0 +1,108 @@
+# Final Edition Editor
+
+## Goal
+
+Produce the final reader-facing prose for a source-grounded bilingual edition.
+The evidence layers are finished. Your job is to make the book internally
+consistent: every English translation must translate the final emended reading,
+and the heading and reader's note must accurately describe what the evidence
+supports.
+
+You are not another paleographer and you are not a publisher. Do not alter the
+diplomatic original, emended reading, apparatus, section boundaries, or page
+membership. The deterministic publisher will combine your prose with those
+immutable layers after this task.
+
+## Evidence
+
+- `evidence/manuscript.json`: ordered sections, page membership, diplomatic
+  originals, draft translations, joins, and the draft reader's note.
+- `evidence/emendations.json`: the final reading for each section and the
+  apparatus explaining every departure from the diplomatic original.
+- `evidence/reference.json`: bounded identification and external evidence.
+- `evidence/transcription_audits.json`: page-level reading routes, candidate
+  readings, adjudication reasoning, and unresolved visual or segmentation issues.
+
+Treat the final emended reading as the authoritative text, but not as permission
+to erase surviving source uncertainty. Use the transcription audits to distinguish
+what the image readers and adjudicator actually established from what the reference
+dossier proposes. The apparatus may resolve a cited source span; otherwise retain
+an audit's unresolved graph, segmentation, damage, or alternative explicitly in
+English. Treat the reference dossier as testimony, not permission to silently
+improve the source. Never invent a name, quantity, date, connective, or continuous
+passage to make damaged writing read smoothly.
+
+## Required passes
+
+### 1. Orient
+
+Read all four evidence files before drafting. Establish the document's identity,
+genre, physical structure, and limits. Check the transcription audits before
+accepting a fluent draft reading. Check whether the draft reader's note or headings
+overstate coherence, certainty, date, authorship, or identification.
+
+### 2. Edit every section in order
+
+For section index `0`, then `1`, and so on:
+
+1. Compare its diplomatic original and draft translation in `manuscript.json`
+   with its final `reading` in `emendations.json`.
+2. Read every apparatus entry belonging to that section. Propagate every
+   meaning-bearing correction into English, especially personal and institutional
+   names, quantities, dates, commodities, negation, and the removal of false
+   continuous text.
+4. Check the relevant page in `transcription_audits.json`. If an unresolved
+   visual or segmentation issue affects the final reading and is not explicitly
+   resolved by the apparatus, preserve that uncertainty in English.
+5. Translate the final reading, not the machine draft and not the reference
+   dossier. Use the draft only when it remains supported.
+6. Preserve paragraph and list structure where the source supports it. Prefer
+   direct, readable English over commentary embedded in the translation.
+7. Preserve uncertainty explicitly and locally. Use `[?]`, alternatives, or a
+   concise bracketed description where needed; do not turn an unresolved graph,
+   damaged quantity, or uncertain segmentation into fluent prose.
+8. Give the section a concise descriptive heading justified by its actual
+   contents. A set of isolated marks is not a fragmentary continuous work.
+
+Do not omit a section, merge sections, split sections, or reorder them.
+
+### 3. Reconcile the whole edition
+
+Write a reader's note that accurately introduces the physical object, contents,
+probable context, and major limitations. Keep bounded identification distinct
+from certainty. Make terminology, units, names, tense, and uncertainty notation
+consistent across sections. Check every claim against the final readings and the
+reference dossier.
+
+### 4. Verify
+
+Before writing the artifact, verify:
+
+- there is exactly one output entry for every input section;
+- `section_index` values are consecutive integers beginning with `0`;
+- no English passage contradicts an apparatus correction;
+- deleted or rejected source text does not survive as translated prose;
+- every unresolved source span remains visibly unresolved;
+- no transcription-audit uncertainty silently becomes a definite word or event;
+- headings and the reader's note do not claim more coherence than the source;
+- no evidence layer was modified.
+
+## Output contract
+
+Write exactly one JSON object to `out/edition.json`:
+
+```json
+{
+  "readers_note": "Final reader-facing introduction.",
+  "sections": [
+    {
+      "section_index": 0,
+      "heading": "Final descriptive heading",
+      "translation": "English translation of the final emended reading."
+    }
+  ]
+}
+```
+
+No additional top-level keys are needed. Every string must be non-empty. Write
+valid UTF-8 JSON without Markdown fences.

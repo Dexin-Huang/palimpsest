@@ -1,0 +1,1 @@
+Audit the proposed transcription against the attached image. Return a complete corrected transcription, a concise account of material corrections, and any unresolved readings.

@@ -2,7 +2,7 @@ schema_version: 1
 id: read/zh-current-production-moving-v1
 station: read
 variant: default
-model: gemini-flash-latest
+model: google/gemini-3.5-flash
 prompt: read/zh/diplomatic
 params:
   temperature: 0.1
@@ -10,4 +10,4 @@ params:
   max_output_tokens: 32768
   thinking_level: high
 options: {}
-notes: current resolved Chinese production recipe slot; moving identity requires an explicit waiver and cannot auto-qualify
+notes: current resolved Chinese production recipe slot; rolled back from the moving gemini-flash-latest alias (resolving to 3.6-flash) to a pinned google/gemini-3.5-flash on 2026-07-29 because 3.5-flash reads better; the slot is now a fixed identity

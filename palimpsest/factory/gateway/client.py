@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+import threading
 from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
@@ -17,6 +18,7 @@ from typing import Any
 from jsonschema import validators
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from palimpsest.factory.config import MODEL_PROVIDER_WORKERS
 from palimpsest.factory.gateway.protocol import (
     GatewayError,
     ModelRequest,
@@ -27,13 +29,27 @@ from palimpsest.factory.usage import combine_cost
 
 MAX_ATTEMPTS = 4
 BACKOFF_BASE_SECONDS = 2.0
+_provider_slots: dict[str, threading.BoundedSemaphore] = {}
+_provider_slots_lock = threading.Lock()
+
+
+def _provider_slot(model: str) -> threading.BoundedSemaphore:
+    provider = model.partition("/")[0] if "/" in model else "google-direct"
+    with _provider_slots_lock:
+        slot = _provider_slots.get(provider)
+        if slot is None:
+            slot = threading.BoundedSemaphore(MODEL_PROVIDER_WORKERS)
+            _provider_slots[provider] = slot
+        return slot
 
 
 def generate(request: ModelRequest) -> ModelResponse:
     provider = _resolve_provider(request.model)
+    slot = _provider_slot(request.model)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            return provider(request)
+            with slot:
+                return provider(request)
         except GatewayError as error:
             if not error.transient or attempt == MAX_ATTEMPTS:
                 raise

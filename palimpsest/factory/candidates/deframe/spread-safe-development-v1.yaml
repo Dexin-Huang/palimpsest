@@ -1,0 +1,8 @@
+schema_version: 1
+id: deframe/spread-safe-development-v1
+station: deframe
+variant: spread-safe/v1
+params: {}
+options:
+  frame_margin: 0.02
+notes: Fixed spread-preserving development candidate; not qualification evidence.

@@ -37,13 +37,34 @@ def _env(key: str, default: str = "") -> str:
     return os.getenv(key) or default
 
 
+def _positive_int_env(key: str, default: int) -> int:
+    raw = os.getenv(key)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise RuntimeError(f"{key} must be a positive integer, got {raw!r}") from None
+    if value < 1:
+        raise RuntimeError(f"{key} must be a positive integer, got {raw!r}")
+    return value
+
+
 LIBRARY_ROOT = Path(_env("PALIMPSEST_LIBRARY_ROOT", str(PROJECT_ROOT / "library")))
 FACTORY_DB_PATH = Path(_env("PALIMPSEST_FACTORY_DB", str(LIBRARY_ROOT / "factory.db")))
 CATALOG_DB_PATH = Path(_env("PALIMPSEST_CATALOG_DB", str(LIBRARY_ROOT / "catalog.db")))
 
 # Model defaults used by recipe interpolation.
-MODEL_READING = _env("PALIMPSEST_MODEL_READING", "openai-codex/gpt-5.6-sol")
+MODEL_READING = _env("PALIMPSEST_MODEL_READING", "google/gemini-3.5-flash")
 MODEL_READING_SECONDARY = _env(
-    "PALIMPSEST_MODEL_READING_SECONDARY", "google/gemini-3.6-flash"
+    "PALIMPSEST_MODEL_READING_SECONDARY", "openai-codex/gpt-5.6-sol"
 )
-MODEL_ADJUDICATOR = _env("PALIMPSEST_MODEL_ADJUDICATOR", "anthropic/claude-fable-5")
+MODEL_EDITORIAL = _env("PALIMPSEST_MODEL_EDITORIAL", "openai-codex/gpt-5.6-sol")
+MODEL_ADJUDICATOR = _env("PALIMPSEST_MODEL_ADJUDICATOR", "openai-codex/gpt-5.6-sol")
+
+# Operational limits. Model calls are expensive enough that a local timeout is
+# terminal rather than retried; keep these generous and tune concurrency first.
+MODEL_PROVIDER_WORKERS = _positive_int_env("PALIMPSEST_MODEL_PROVIDER_WORKERS", 3)
+MODEL_TIMEOUT_SECONDS = _positive_int_env("PALIMPSEST_MODEL_TIMEOUT_SECONDS", 7200)
+AGENT_TIMEOUT_SECONDS = _positive_int_env("PALIMPSEST_AGENT_TIMEOUT_SECONDS", 14400)
+CELL_TIMEOUT_SECONDS = _positive_int_env("PALIMPSEST_CELL_TIMEOUT_SECONDS", 28800)

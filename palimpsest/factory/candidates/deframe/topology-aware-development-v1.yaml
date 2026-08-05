@@ -1,0 +1,11 @@
+schema_version: 1
+id: deframe/topology-aware-development-v1
+station: deframe
+variant: topology-aware/v1
+params: {}
+options:
+  frame_margin: 0.02
+  multi_span_aspect_ratio: 1.3
+  protected_band_ink_fraction: 0.1
+  topology_edge_disagreement: 0.02
+notes: Development-only deterministic topology selection with protected-edge retention; not qualification evidence.

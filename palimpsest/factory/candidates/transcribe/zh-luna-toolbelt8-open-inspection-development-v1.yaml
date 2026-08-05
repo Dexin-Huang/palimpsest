@@ -1,0 +1,19 @@
+schema_version: 1
+id: "transcribe/zh-luna-toolbelt8-open-inspection-development-v1"
+station: "transcribe"
+variant: "omp_toolbelt8_regions_open_inspection"
+model: "openai-codex/gpt-5.6-luna"
+prompt: "transcribe/zh/toolbelt3"
+params: {}
+options:
+  extension_source: |-
+    import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+
+    // Toolbelt8 owns the regional workflow and bounded inspection policy. The
+    // candidate contributes no additional tools or transcription authority.
+    export default function toolbelt8OpenInspectionPolicy(_pi: ExtensionAPI) {}
+notes: >-
+  Development-only inspection challenger over the frozen Toolbelt8 regional
+  workflow. It exposes classifier top-five and immediate-neighbor crops only
+  after coordinate and alternative validation. Luna alone writes transcription.
+  Production recipe unchanged; not qualification evidence.

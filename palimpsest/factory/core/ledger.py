@@ -132,13 +132,10 @@ class Ledger:
         if updated == 0:
             raise KeyError(f"No work order for {doc_id!r}")
 
-    def list_items(self, *, status: str | None = None) -> list[sqlite3.Row]:
-        query = "SELECT * FROM items"
-        params: tuple = ()
-        if status is not None:
-            query += " WHERE items.status = ?"
-            params = (status,)
-        return self._conn.execute(query + " ORDER BY created_at", params).fetchall()
+    def list_items(self) -> list[sqlite3.Row]:
+        return self._conn.execute(
+            "SELECT * FROM items ORDER BY created_at"
+        ).fetchall()
 
     # -- durable work-order ownership ----------------------------------------
 

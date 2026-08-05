@@ -11,14 +11,9 @@ import html
 import shutil
 from pathlib import Path
 
-from palimpsest.factory.core.artifact import content_fingerprint, read_provenance
-from palimpsest.factory.core.ledger import fingerprint
 from palimpsest.factory.config import LIBRARY_ROOT, PROJECT_ROOT
-from palimpsest.factory.workspace.io import (
-    atomic_write_json,
-    atomic_write_text,
-    read_json,
-)
+from palimpsest.factory.publication_bundle import epub_is_current, load_book
+from palimpsest.factory.workspace.io import atomic_write_json, atomic_write_text
 from palimpsest.factory.workspace.layout import artifact_path
 
 DEFAULT_SITE_ROOT = PROJECT_ROOT / "site"
@@ -54,7 +49,7 @@ def build(
     """Render the site from every doc that has a published book model.
     Returns the doc_ids shelved."""
     books = [
-        (read_json(book_path), book_path)
+        (load_book(book_path), book_path)
         for book_path in sorted(library_root.glob("*/book/book.json"))
     ]
     models = [model for model, _ in books]
@@ -70,7 +65,7 @@ def build(
         atomic_write_json(book_dir / "book.json", model)
         _publish_evidence(model, library_root, book_dir)
         epub_path = artifact_path(doc_id, "book_epub", None, library_root)
-        epub_available = _epub_is_current(book_path, epub_path)
+        epub_available = epub_is_current(book_path, epub_path)
         published_epub = book_dir / epub_path.name
         atomic_write_text(
             book_dir / "index.html",
@@ -81,18 +76,6 @@ def build(
         else:
             published_epub.unlink(missing_ok=True)
     return [model["doc_id"] for model in models]
-
-
-def _epub_is_current(book_path: Path, epub_path: Path) -> bool:
-    if not epub_path.is_file():
-        return False
-    stamp = read_provenance(epub_path)
-    return bool(
-        stamp
-        and stamp.get("station") == "render_epub"
-        and stamp.get("input_fingerprint")
-        == fingerprint(content_fingerprint(book_path))
-    )
 
 
 def _page(title: str, body: str, *, css_prefix: str = "") -> str:
@@ -108,21 +91,27 @@ def _page(title: str, body: str, *, css_prefix: str = "") -> str:
 def _shelf_html(models: list[dict]) -> str:
     cards = []
     for model in models:
-        source = model.get("source", {})
+        identity = model["identity"]
+        note = model["readers_note"]
+        if len(note) > 220:
+            boundary = note.rfind(" ", 0, 220)
+            excerpt = note[: boundary if boundary > 0 else 219].rstrip() + "…"
+        else:
+            excerpt = note
         detail = " · ".join(
             html.escape(str(part))
             for part in (
-                source.get("shelfmark"),
-                source.get("date"),
-                model.get("language", {}).get("original"),
+                identity["shelfmark"],
+                identity["date"],
+                model["languages"]["original"],
             )
             if part
         )
         cards.append(
             f"<div class='book'><h2><a href='{model['doc_id']}/'>"
-            f"{html.escape(model['title'])}</a></h2>"
+            f"{html.escape(identity['title'])}</a></h2>"
             f"<div class='folios'>{detail}</div>"
-            f"<p class='muted'>{html.escape(model.get('readers_note', '')[:220])}</p></div>"
+            f"<p class='muted'>{html.escape(excerpt)}</p></div>"
         )
     body = (
         "<h1>The Palimpsest Library</h1>"
@@ -134,79 +123,99 @@ def _shelf_html(models: list[dict]) -> str:
 
 
 def _reader_html(model: dict, *, epub_available: bool = True) -> str:
-    source = model.get("source", {})
-    colophon = model.get("colophon", {})
+    identity = model["identity"]
+    colophon = model["colophon"]
     parts = [
         "<p><a href='../'>← library</a></p>",
-        f"<h1>{html.escape(model['title'])}</h1>",
+        f"<h1>{html.escape(identity['title'])}</h1>",
     ]
-    if model.get("author"):
-        parts.append(f"<p class='muted'>{html.escape(model['author'])}</p>")
+    if identity["author"]:
+        parts.append(f"<p class='muted'>{html.escape(identity['author'])}</p>")
     detail = " · ".join(
-        html.escape(str(p)) for p in (source.get("shelfmark"), source.get("date")) if p
+        html.escape(str(part))
+        for part in (identity["shelfmark"], identity["date"])
+        if part
     )
     if detail:
         parts.append(f"<p class='folios'>{detail}</p>")
     actions = []
     if epub_available:
         actions.append(f"<a href='{model['doc_id']}.epub'>Download EPUB</a>")
-    actions.append("<button class='toggle' onclick='tgl()'>Show original text</button>")
+    actions.append(
+        "<button class='toggle' onclick='tgl()'>Show editorial layers</button>"
+    )
     parts.append(f"<p>{' &nbsp; '.join(actions)}</p>")
-    if model.get("readers_note"):
+    if model["readers_note"]:
         parts.append(f"<p class='muted'>{html.escape(model['readers_note'])}</p>")
-    for chapter in model["chapters"]:
-        parts.append(f"<h2>{html.escape(chapter['heading'])}</h2>")
+
+    apparatus_by_id = {entry["id"]: entry for entry in model["apparatus"]}
+    for section in model["sections"]:
+        content = section["content"]
+        parts.append(f"<h2>{html.escape(section['heading'])}</h2>")
         parts.append(
-            f"<div class='folios'>ff. {html.escape(chapter['pages']['from'])}–"
-            f"{html.escape(chapter['pages']['to'])}</div>"
+            f"<div class='folios'>ff. "
+            f"{html.escape(_folio_label(section['folio_ids']))}</div>"
         )
-        parts.append(_paragraphs(chapter["translation"]))
-        label = "Original"
-        original_text = chapter["original"]
-        if chapter.get("reading"):
-            label = "Original (emended reading)"
-            original_text = chapter["reading"]
-        parts.append(
-            f"<div class='original'><h3>{label}</h3>"
-            + _paragraphs(original_text)
-            + "</div>"
+        parts.append("<h3>Translation</h3>")
+        parts.append(_paragraphs(content["translation"]["text"]))
+        parts.append("<div class='original'><h3>Emended reading</h3>")
+        parts.append(_paragraphs(content["emended_reading"]["text"]))
+        parts.append("<h3>Diplomatic transcription</h3>")
+        parts.append(_paragraphs(content["diplomatic_transcription"]["text"]))
+        section_apparatus = [
+            apparatus_by_id[apparatus_id] for apparatus_id in section["apparatus_ids"]
+        ]
+        if section_apparatus:
+            parts.append("<h3>Apparatus</h3>")
+            for entry in section_apparatus:
+                parts.append(
+                    f"<p class='muted'>{html.escape(entry['original'])} → "
+                    f"{html.escape(entry['emended'])} — "
+                    f"<i>{html.escape(entry['reason'])}</i></p>"
+                )
+        parts.append("</div>")
+        links = " · ".join(
+            f"<a href='evidence/{html.escape(page_id)}.html'>"
+            f"source {html.escape(page_id)}</a>"
+            for page_id in section["folio_ids"]
         )
-        source_pages = chapter.get("source_pages", [])
-        if source_pages:
-            links = " · ".join(
-                f"<a href='evidence/{html.escape(page_id)}.html'>"
-                f"source {html.escape(page_id)}</a>"
-                for page_id in source_pages
-            )
-            parts.append(f"<div class='sources'>Source evidence: {links}</div>")
-    if model.get("apparatus"):
-        parts.append("<h2>Apparatus</h2>")
-        for entry in model["apparatus"]:
-            parts.append(
-                f"<p class='muted'>{html.escape(entry['original'])} → "
-                f"{html.escape(entry['emended'])} — "
-                f"<i>{html.escape(entry['reason'])}</i></p>"
-            )
+        parts.append(f"<div class='sources'>Source evidence: {links}</div>")
+
     parts.append(
         "<div class='colophon'>"
         f"<p>{_production_credit(colophon)} · "
-        f"{colophon.get('pages', 0)} pages · {_cost_text(colophon)}.</p></div>"
+        f"{colophon['pages']} pages · {_cost_text(colophon)}.</p></div>"
     )
-    return _page(model["title"], "".join(parts), css_prefix="../")
+    return _page(identity["title"], "".join(parts), css_prefix="../")
 
 
 def _publish_evidence(model: dict, library_root: Path, book_dir: Path) -> None:
     evidence_dir = book_dir / "evidence"
     shutil.rmtree(evidence_dir, ignore_errors=True)
     evidence_dir.mkdir()
-    for page in model.get("evidence", {}).get("pages", []):
-        page_id = page["page_id"]
-        image_path = artifact_path(
-            model["doc_id"], "page_image_clean", page_id, library_root
+    for folio in model["folios"]:
+        page_id = folio["page_id"]
+        images = folio["images"]
+        original = images["original"]
+        original_path = artifact_path(
+            model["doc_id"], original["kind"], page_id, library_root
         )
-        published_image = evidence_dir / f"{page_id}{image_path.suffix}"
-        shutil.copyfile(image_path, published_image)
-        alignment = page.get("alignment")
+        published_original = evidence_dir / f"{page_id}{original_path.suffix}"
+        shutil.copyfile(original_path, published_original)
+
+        enhanced = images.get("enhanced")
+        published_enhanced = None
+        if enhanced:
+            enhanced_path = artifact_path(
+                model["doc_id"], enhanced["kind"], page_id, library_root
+            )
+            published_enhanced = (
+                evidence_dir / f"{page_id}.enhanced{enhanced_path.suffix}"
+            )
+            shutil.copyfile(enhanced_path, published_enhanced)
+
+        evidence = folio["evidence"]
+        alignment = evidence.get("alignment")
         if alignment:
             atomic_write_json(
                 evidence_dir / f"{page_id}.alignment.json",
@@ -220,20 +229,35 @@ def _publish_evidence(model: dict, library_root: Path, book_dir: Path) -> None:
             evidence_dir / f"{page_id}.html",
             _evidence_page_html(
                 model,
-                page,
-                image_name=published_image.name,
+                folio,
+                original_image_name=published_original.name,
+                enhanced_image_name=(
+                    published_enhanced.name if published_enhanced else None
+                ),
                 has_alignment=bool(alignment),
             ),
         )
 
 
 def _evidence_page_html(
-    model: dict, page: dict, *, image_name: str, has_alignment: bool
+    model: dict,
+    folio: dict,
+    *,
+    original_image_name: str,
+    enhanced_image_name: str | None,
+    has_alignment: bool,
 ) -> str:
-    page_id = page["page_id"]
-    alignment = page.get("alignment") or {}
+    identity = model["identity"]
+    page_id = folio["page_id"]
+    evidence = folio["evidence"]
+    alignment = evidence.get("alignment") or {}
     stats = alignment.get("stats") or {}
-    links = [f"<a href='{html.escape(page['source_image_url'])}'>Archive image</a>"]
+    links = [
+        f"<a href='{html.escape(folio['images']['original']['source_url'])}'>"
+        "Archive image</a>"
+    ]
+    if enhanced_image_name:
+        links.append(f"<a href='{html.escape(enhanced_image_name)}'>Enhanced image</a>")
     if has_alignment:
         links.append(
             f"<a href='{html.escape(page_id)}.alignment.json'>Alignment JSON</a>"
@@ -246,18 +270,24 @@ def _evidence_page_html(
         )
     body = (
         "<p><a href='../'>← book</a></p>"
-        f"<h1>{html.escape(model['title'])}: {html.escape(page_id)}</h1>"
+        f"<h1>{html.escape(identity['title'])}: {html.escape(page_id)}</h1>"
         f"<p>{' · '.join(links)}</p>"
-        f"<img class='source-image' src='{html.escape(image_name)}' "
-        f"alt='Cleaned manuscript page {html.escape(page_id)}'>"
+        f"<img class='source-image' src='{html.escape(original_image_name)}' "
+        f"alt='Original manuscript page {html.escape(page_id)}'>"
         f"{coverage}<h2>Diplomatic transcription</h2>"
-        f"{_paragraphs(page['diplomatic'])}"
+        f"{_paragraphs(evidence['diplomatic']['text'])}"
     )
     return _page(
-        f"{model['title']}: {page_id}",
+        f"{identity['title']}: {page_id}",
         body,
         css_prefix="../../",
     )
+
+
+def _folio_label(folio_ids: list[str]) -> str:
+    if len(folio_ids) == 1:
+        return folio_ids[0]
+    return f"{folio_ids[0]}–{folio_ids[-1]}"
 
 
 def _production_credit(colophon: dict) -> str:
@@ -266,6 +296,7 @@ def _production_credit(colophon: dict) -> str:
         ("translated", colophon.get("translated_by")),
         ("referenced", colophon.get("referenced_by")),
         ("emended", colophon.get("emended_by")),
+        ("finalized", colophon.get("finalized_by")),
     ]
     return " · ".join(
         f"{label} by {html.escape(str(model))}" for label, model in credits if model

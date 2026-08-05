@@ -19,6 +19,7 @@ from palimpsest.factory.config import (
     FACTORY_DB_PATH,
     FACTORY_ROOT,
     LIBRARY_ROOT,
+    MODEL_PROVIDER_WORKERS,
 )
 from palimpsest.factory.core.ledger import Ledger
 
@@ -51,6 +52,14 @@ def add_commands(subparsers) -> None:
     site = subparsers.add_parser(
         "site", help="Rebuild the hosted library from all published books"
     )
+    export_library_command = subparsers.add_parser(
+        "export-library",
+        help="Export validated books and reader assets without a presentation layer",
+    )
+    rig = subparsers.add_parser(
+        "rig", help="Export and import immutable agent harness bundles"
+    )
+    _add_rig_commands(rig)
     bench = subparsers.add_parser(
         "bench", help="Verify, run, report, and promote immutable evaluations"
     )
@@ -72,7 +81,19 @@ def add_commands(subparsers) -> None:
     adopt.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
 
     run.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
-    run.add_argument("--workers", type=int, default=None)
+    run.add_argument(
+        "--workers",
+        type=_positive_int,
+        default=None,
+        help="Maximum concurrent local page cells (default: 6)",
+    )
+    run.add_argument(
+        "--model-workers",
+        type=_positive_int,
+        default=None,
+        help="Maximum concurrent model-backed page cells "
+        "(default: min(--workers, PALIMPSEST_MODEL_PROVIDER_WORKERS))",
+    )
     run.add_argument(
         "--refresh",
         action="append",
@@ -120,6 +141,10 @@ def add_commands(subparsers) -> None:
 
     site.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     site.add_argument("--site-root", type=Path, default=None)
+    export_library_command.add_argument(
+        "--library-root", type=Path, default=LIBRARY_ROOT
+    )
+    export_library_command.add_argument("--output", type=Path, required=True)
 
     for parser, handler in (
         (init_db, cmd_init_db),
@@ -131,6 +156,7 @@ def add_commands(subparsers) -> None:
         (preview, cmd_preview),
         (tune, cmd_tune),
         (site, cmd_site),
+        (export_library_command, cmd_export_library),
     ):
         parser.set_defaults(func=handler)
 
@@ -141,6 +167,7 @@ _SUITES_ROOT = FACTORY_ROOT / "evaluation" / "suites"
 _EVALUATION_ASSETS_ROOT = FACTORY_ROOT / "evaluation"
 _RUNS_ROOT = LIBRARY_ROOT / "evaluations" / "runs"
 _OBJECT_ROOT = LIBRARY_ROOT / "evaluations" / "objects"
+_RIGS_ROOT = LIBRARY_ROOT / "rigs"
 
 
 def _positive_int(value: str) -> int:
@@ -169,6 +196,30 @@ def _add_record_roots(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--suites-root", type=Path, default=_SUITES_ROOT)
     parser.add_argument("--asset-root", type=Path, default=_EVALUATION_ASSETS_ROOT)
     parser.add_argument("--object-root", type=Path, default=_OBJECT_ROOT)
+
+
+def _add_rig_commands(rig: argparse.ArgumentParser) -> None:
+    commands = rig.add_subparsers(dest="rig_command", required=True)
+
+    export = commands.add_parser(
+        "export", help="Export one fixed-model candidate as a portable rig"
+    )
+    export.add_argument("--candidate", type=Path, required=True)
+    export.add_argument("--output", type=Path, required=True)
+    export.set_defaults(func=cmd_rig_export)
+
+    import_command = commands.add_parser(
+        "import", help="Verify and install a portable rig"
+    )
+    import_command.add_argument("bundle", type=Path)
+    import_command.add_argument(
+        "--expected-sha256",
+        required=True,
+        metavar="SHA256",
+        help="Archive digest received through a trusted channel",
+    )
+    import_command.add_argument("--store-root", type=Path, default=_RIGS_ROOT)
+    import_command.set_defaults(func=cmd_rig_import)
 
 
 def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
@@ -246,6 +297,12 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
     canary_source.add_argument("--canary", metavar="DOC")
     canary_source.add_argument("--canary-evidence", type=Path)
     promote.add_argument("--canary-evidence-output", type=Path, default=None)
+    promote.add_argument(
+        "--waive-unknown-canary-cost",
+        metavar="REASON",
+        default=None,
+        help="Approve unknown cost on retained terminal canary evidence",
+    )
     promote.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     promote.add_argument("--canary-root", type=Path, default=None)
     promote.add_argument(
@@ -342,6 +399,41 @@ def _resolve_candidates(root: Path) -> tuple[object, ...]:
     from palimpsest.factory.evaluation.candidate import load_candidate
 
     return tuple(load_candidate(path) for path in _tracked_yaml(root))
+
+
+def _load_candidate_reference(path: Path) -> object:
+    if path.suffix.lower() == ".palrig":
+        from palimpsest.factory.rig import load_rig_candidate
+
+        return load_rig_candidate(path)
+    from palimpsest.factory.evaluation.candidate import load_candidate
+
+    return load_candidate(path)
+
+
+def cmd_rig_export(args: argparse.Namespace) -> None:
+    from palimpsest.factory.rig import export_rig
+
+    bundle = export_rig(args.candidate, args.output)
+    print(
+        f"exported rig={bundle.rig_fingerprint} "
+        f"candidate={bundle.candidate.fingerprint} "
+        f"archive_sha256={bundle.archive_sha256} path={bundle.archive_path}"
+    )
+
+
+def cmd_rig_import(args: argparse.Namespace) -> None:
+    from palimpsest.factory.rig import import_rig
+
+    bundle = import_rig(
+        args.bundle,
+        args.store_root,
+        expected_archive_sha256=args.expected_sha256,
+    )
+    print(
+        f"imported rig={bundle.rig_fingerprint} "
+        f"candidate={bundle.candidate.fingerprint} path={bundle.archive_path}"
+    )
 
 
 def _resolve_suites(
@@ -595,7 +687,6 @@ def cmd_bench_fetch(args: argparse.Namespace) -> None:
 
 
 def cmd_bench_run(args: argparse.Namespace) -> None:
-    from palimpsest.factory.evaluation.candidate import load_candidate
     from palimpsest.factory.evaluation.runner import (
         filesystem_asset_resolver,
         run_evaluation,
@@ -611,8 +702,8 @@ def cmd_bench_run(args: argparse.Namespace) -> None:
         judges_root=_JUDGES_ROOT,
         asset_root=args.asset_root,
     )
-    baseline = load_candidate(args.baseline)
-    challenger = load_candidate(args.challenger)
+    baseline = _load_candidate_reference(args.baseline)
+    challenger = _load_candidate_reference(args.challenger)
     selected = None
     if args.cases is not None:
         by_id = {case.case_id: case for case in suite.cases}
@@ -666,7 +757,6 @@ def cmd_bench_report(args: argparse.Namespace) -> None:
 
 
 def cmd_bench_propose(args: argparse.Namespace) -> None:
-    from palimpsest.factory.evaluation.candidate import load_candidate
     from palimpsest.factory.evaluation.promotion import (
         load_reproducibility_waiver,
         propose_recipe_change,
@@ -674,8 +764,8 @@ def cmd_bench_propose(args: argparse.Namespace) -> None:
     )
     from palimpsest.factory.evaluation.store import EvaluationStore
 
-    baseline = load_candidate(args.baseline)
-    challenger = load_candidate(args.challenger)
+    baseline = _load_candidate_reference(args.baseline)
+    challenger = _load_candidate_reference(args.challenger)
     waiver = None if args.waiver is None else load_reproducibility_waiver(args.waiver)
     with EvaluationStore(args.db) as store:
         report = _indexed_report(store, args.run)
@@ -710,6 +800,7 @@ def cmd_bench_promote(args: argparse.Namespace) -> None:
         create_promotion_record,
         load_canary_evidence,
         load_recipe_proposal,
+        record_canary_cost_waiver,
         save_canary_evidence,
     )
 
@@ -724,6 +815,10 @@ def cmd_bench_promote(args: argparse.Namespace) -> None:
         ]
         if missing:
             raise ValueError(f"--canary requires {' and '.join(missing)}")
+    if args.waive_unknown_canary_cost is not None and args.canary is not None:
+        raise ValueError(
+            "--waive-unknown-canary-cost requires reviewed --canary-evidence"
+        )
     proposal = load_recipe_proposal(args.proposal)
     if args.canary_evidence is not None:
         canary = load_canary_evidence(args.canary_evidence)
@@ -741,11 +836,23 @@ def cmd_bench_promote(args: argparse.Namespace) -> None:
             workers=args.workers,
         )
         save_canary_evidence(args.canary_evidence_output, canary)
+    decision_at = _utc_now()
+    cost_waiver = (
+        None
+        if args.waive_unknown_canary_cost is None
+        else record_canary_cost_waiver(
+            canary_fingerprint=canary.canary_fingerprint,
+            approved_by=args.approved_by,
+            reason=args.waive_unknown_canary_cost,
+            created_at=decision_at,
+        )
+    )
     record = create_promotion_record(
         proposal,
         canary=canary,
         approved_by=args.approved_by,
-        created_at=_utc_now(),
+        created_at=decision_at,
+        cost_waiver=cost_waiver,
     )
     artifact = commit_recipe_decision(
         proposal,
@@ -758,7 +865,6 @@ def cmd_bench_promote(args: argparse.Namespace) -> None:
 
 
 def cmd_bench_rollback(args: argparse.Namespace) -> None:
-    from palimpsest.factory.evaluation.candidate import load_candidate
     from palimpsest.factory.evaluation.promotion import (
         commit_recipe_decision,
         create_rollback_proposal,
@@ -769,8 +875,8 @@ def cmd_bench_rollback(args: argparse.Namespace) -> None:
     )
 
     promotion = load_promotion_record(args.promotion)
-    current = load_candidate(args.current)
-    previous = load_candidate(args.previous)
+    current = _load_candidate_reference(args.current)
+    previous = _load_candidate_reference(args.previous)
     proposal = create_rollback_proposal(
         promotion,
         recipe_root=args.recipe_root,
@@ -844,11 +950,18 @@ def cmd_adopt(args: argparse.Namespace) -> None:
 def cmd_run(args: argparse.Namespace) -> None:
     from palimpsest.factory.core.conductor import DEFAULT_WORKERS, Conductor
 
+    workers = args.workers or DEFAULT_WORKERS
+    model_workers = (
+        args.model_workers
+        if args.model_workers is not None
+        else min(workers, MODEL_PROVIDER_WORKERS)
+    )
     with Ledger(args.db) as ledger:
         conductor = Conductor(
             ledger,
             library_root=args.library_root,
-            workers=args.workers or DEFAULT_WORKERS,
+            workers=workers,
+            model_workers=model_workers,
             refresh=frozenset(args.refresh),
             executor=args.executor,
             page_ids=tuple(args.page),
@@ -911,6 +1024,18 @@ def cmd_tune(args: argparse.Namespace) -> None:
     for row in rows:
         print("  ".join(f"{str(row.get(h, '')):>10}" for h in header))
     print(f"strips: {DEFAULT_OUT_DIR / args.doc_id}")
+
+
+def cmd_export_library(args: argparse.Namespace) -> None:
+    from palimpsest.factory.publication_bundle import export_library
+
+    library = export_library(args.library_root, args.output)
+    doc_ids = [book.doc_id for book in library.books]
+    print(
+        f"publication Library rebuilt with {len(doc_ids)} Book object(s): "
+        f"{', '.join(doc_ids) or '—'}"
+    )
+    print(f"{library.bundle_id}  {args.output / 'library.json'}")
 
 
 def cmd_site(args: argparse.Namespace) -> None:
