@@ -1,0 +1,66 @@
+{
+  "doc_id": "gallica_pelliot_chinois_3609",
+  "source": {
+    "kind": "iiif",
+    "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8302534z/manifest.json"
+  },
+  "source_catalog": {
+    "label": "BnF. Département des Manuscrits. Pelliot chinois 3609",
+    "title": "Pelliot chinois 3609",
+    "shelfmark": "Bibliothèque nationale de France. Département des Manuscrits. Pelliot chinois 3609",
+    "archive": null,
+    "author": null,
+    "date": "0501-0600",
+    "language": "chinois",
+    "description": "Pelliot chinois 3609",
+    "canvas_count": 8,
+    "metadata_entries": [
+      {
+        "label": "Repository",
+        "value": ""
+      },
+      {
+        "label": "Digitised by",
+        "value": "Bibliothèque nationale de France"
+      },
+      {
+        "label": "Source Images",
+        "value": "https://gallica.bnf.fr/ark:/12148/btv1b8302534z"
+      },
+      {
+        "label": "Metadata Source",
+        "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b8302534z"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "Bibliothèque nationale de France. Département des Manuscrits. Pelliot chinois 3609"
+      },
+      {
+        "label": "Title",
+        "value": "Pelliot chinois 3609"
+      },
+      {
+        "label": "Date",
+        "value": "0501-0600"
+      },
+      {
+        "label": "Language",
+        "value": "chinois"
+      },
+      {
+        "label": "Format",
+        "value": "Rouleau de 4 ff. de 34,1 à 34,9 cm. Pap. homogène, beige. Verg. 6 par cm. Plusieurs échancrures et traces d'humidité. Le texte du verso transparaît au recto. - 24,8 × 138,3 cm"
+      },
+      {
+        "label": "Relation",
+        "value": "Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc120256s"
+      },
+      {
+        "label": "Type",
+        "value": "Manuscrit"
+      }
+    ]
+  },
+  "created_at": "2026-07-26T04:07:43.035227+00:00",
+  "updated_at": "2026-07-26T04:07:43.035227+00:00"
+}

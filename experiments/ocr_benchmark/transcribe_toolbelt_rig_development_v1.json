@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "transcribe-toolbelt-rig-development-v1",
+  "station": "transcribe",
+  "stage": "development",
+  "state": "completed",
+  "created_at": "2026-07-28T20:14:59Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight_record": "experiments/ocr_benchmark/transcribe_toolbelt_rig_preflight_v1.json",
+  "hypothesis": "Host-staged detector evidence plus a deterministic verify_counts tool lets the same model produce a finished transcription with lower character error than the evidence-free full-image baseline, without violating any suite hard limit.",
+  "production_state": "unchanged",
+  "decision": "The tool-bearing Rig is validated end to end. One request produced one finished, provenance-complete transcription through an agent that genuinely drove the host tools: 43 assistant turns and 41 tool calls against 7 turns and 5 calls for the baseline. Paired on the same run, character error fell from 0.766571 to 0.533141 and invented characters fell from 0.271100 to 0.121294, converting the one hard limit the evidence-free baseline violates into a pass. Adopt the omp_toolbelt harness as the Exodia campaign's tool-bearing challenger lane; the campaign loop can now search pure-policy candidates on top of it.",
+  "rig_runs": {
+    "exodia-toolbelt-rig-dev-1": {
+      "status": "infrastructure failure on the challenger side",
+      "cause": "the evaluation runner isolates each side's library root, so the station's default checkpoint path missed; PALIMPSEST_RFDETR_OBJECT_ROOT is the designed override and was unset",
+      "baseline_observation": "succeeded: character_error_rate 0.662824, cost 0.175552 USD",
+      "cost_usd": 0.175552
+    },
+    "exodia-toolbelt-rig-dev-2": {
+      "status": "completed",
+      "report": "library/evaluations/runs/exodia-toolbelt-rig-dev-2/report.json",
+      "report_fingerprint_source": "report.json report_fingerprint field",
+      "suite_fingerprint": "4bf47c30420b7753938ce79f8a5d11d273456021a832504b0ff29c32aee2f888",
+      "case": "vat-borg-cin-361-f004r-transcribe-development",
+      "paired_observations": {
+        "character_error_rate": {"baseline": 0.7665706051873199, "challenger": 0.5331412103746398},
+        "invented_character_rate": {"baseline": 0.2710997442455243, "challenger": 0.12129380053908356},
+        "page_completeness": {"baseline": 1.0, "challenger": 1.0},
+        "contamination_rate": {"baseline": 0.0, "challenger": 0.0},
+        "empty_output_rate": {"baseline": 0.0, "challenger": 0.0},
+        "repetition_rate": {"baseline": 0.0, "challenger": 0.0}
+      },
+      "process_stats": {
+        "baseline": {"assistant_turns": 7, "tool_calls": 5, "output_tokens": 18561},
+        "challenger": {"assistant_turns": 43, "tool_calls": 41, "output_tokens": 27840}
+      },
+      "latency_seconds": {"baseline": 347.3, "challenger": 610.4},
+      "cost_usd": {"baseline": 0.1506678, "challenger": 0.4214756},
+      "finished_output": {
+        "path": "library/evaluations/runs/exodia-toolbelt-rig-dev-2/cases/case-741e007e41f367d1/attempts/attempt-0001/challenger/vatican_borg_cin_361/page_transcription_draft/f004r.json",
+        "output_fingerprint": "db92328ad6dc0601",
+        "finish_reason": "submit_transcription",
+        "toolbelt_evidence": {
+          "detected_boxes": 416,
+          "columns": 31,
+          "geometry_sha256": "dc2e4d3f9f199c006737fe26b9201e87c9baad85944989452d497f74dd6ef02c",
+          "inference_seconds": 7.009318900003564
+        }
+      }
+    }
+  },
+  "harness_identity": {
+    "station_variant": "transcribe/omp_toolbelt",
+    "station_fingerprint": "d625aec3c10e40dd",
+    "implementation": "palimpsest/factory/stations/transcribe_omp_toolbelt.py",
+    "prompt": "transcribe/zh/toolbelt",
+    "prompt_sha256": "8e2e6ff4a1baf299589d05f91b77e4c20064a8e13ae6454914dc0921447c0f2c",
+    "detector_checkpoint_sha256": "cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d",
+    "tools": ["read (images/ and evidence/ only)", "verify_counts", "submit_transcription (single use, sealed)"],
+    "model_ref": "openai-codex/gpt-5.6-luna",
+    "baseline_candidate_fingerprint": "62d518151671499c86c482aaed090a2a74ce5c36d97a2ebecc2e1b45e8ec7124",
+    "challenger_candidate_fingerprint": "6df0807bac2a57f4193da011e7f70522623f41ba1258046ba6381792039c0ef5",
+    "seed_policy": "identical empty no-op extensions on both sides, so the paired delta measures the host harness alone"
+  },
+  "gate_status": {
+    "finished_output": "pass: exactly one sealed submit_transcription artifact",
+    "quality": "pass: challenger 0.533141 below baseline 0.766571 on the shared case",
+    "hard_limits": "pass: all four suite limits pass on the challenger; the baseline itself fails invented_character_rate at 0.271100 against the 0.15 maximum",
+    "budget_stop": "pass: total observed spend 0.747695 USD of 6.00"
+  },
+  "verification": {
+    "targeted_tests": "105 passed: station dependency pages and manuscript suites, evaluation records, runner workflow, read resources",
+    "suite_verified": "bench verify: cases=1 objects=35 candidates=37 judges=1 reports=47"
+  },
+  "cost": {
+    "run_dev_1_usd": 0.175552,
+    "run_dev_2_usd": 0.5721434,
+    "total_usd": 0.7476954,
+    "budget_usd": 6.0,
+    "paid_gpu": "none"
+  },
+  "limitations": [
+    "One development case, two evaluation repeats short of the campaign's aggregation policy; single-case model variance is visible in the baseline's 0.663 versus 0.767 across runs, so only the same-run paired delta is evidence.",
+    "The development suite is qualification_eligible false by design; nothing here authorizes promotion.",
+    "The toolbelt detector was tuned on printed pages; f004r is a handwritten spread, so absolute CER remains high even though the paired delta is large.",
+    "The exodia campaign loop still pins harnessConfig to the omp_extension bundle; adopting the toolbelt lane in the search loop is a new campaign identity by design."
+  ],
+  "next_permitted_action": "Wire the toolbelt lane into the exodia campaign as a new campaign identity (challenger extension bundle on the omp_toolbelt variant), set PALIMPSEST_RFDETR_OBJECT_ROOT in the campaign environment, and let the proposer search pure-policy candidates on top of the tool-bearing harness with repeats per the variance policy."
+}

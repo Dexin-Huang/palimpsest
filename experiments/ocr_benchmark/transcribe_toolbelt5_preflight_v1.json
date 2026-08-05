@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "transcribe-toolbelt5-preflight-v1",
+  "station": "transcribe",
+  "state": "ready",
+  "created_at": "2026-07-29T18:54:44Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Wire the validated glyph-adjudication instrument (fix rate 0.8135, break rate 0.0355, patched recall 0.8468 to 0.9402 with gold boxes) into the harness production-legally, and measure how much of the instrument ceiling survives gold-free operation: RF-DETR detector boxes for localization, triggers from second-reader disagreements plus a frozen 128-character mutual-pair watchlist, blind seeded forced choice per crop, primary layer patched deterministically after the agent seals.",
+  "hypothesis": "v5 lifts deterministic gold recall materially above the v2 champion (instrument ceiling 0.94; production localization and trigger coverage will land in between) without regressing judged answer recovery, at bounded cost (adjudication capped at 160 calls per page, about 0.35 USD ceiling per page, typical well under).",
+  "production_state": "unchanged",
+  "station_variant": {
+    "module": "palimpsest/factory/stations/transcribe_omp_toolbelt5.py",
+    "variant": "omp_toolbelt5",
+    "agent_surface": "identical to omp_toolbelt3 (same task, extension bytes, prompt transcribe/zh/toolbelt3, evidence bytes)",
+    "post_pass": "deterministic: align sealed primary against per-column second readings (stdlib difflib, no new production dependency); triggers = CJK replace pairs (disagreements, alternative = reader char) then watchlist chars at equal positions (alternative = frozen counterpart); localize via detector boxes (exact when reader length matches box count, proportional otherwise); blind A/B forced choice (gemini-3.6-flash, temperature 0, seeded assignment); patch primary only; keep draft on neither, illegible, or gateway failure; telemetry and adjudication cost recorded in the station result",
+    "watchlist_provenance": "128 chars, 64 mutual families, derived from the 931 measured champion disagreements (families seen >= 2), base-rate filter freq <= 8x family count, mutual-counterpart filter; frozen as code so the implementation fingerprint carries it",
+    "watchlist_risk": "derived from MTHv2 development evidence; may overfit MTHv2 annotation conventions - recorded, and cross-suite behavior stays a named follow-up"
+  },
+  "candidates": {
+    "model_ref": "openai-codex/gpt-5.6-luna",
+    "baseline_v2_champion": {
+      "candidate": "scratch/exodia-rig/candidates/b57a514efd96281f8bc92ddfb01fc680db269c83488ce2b0d775124a7275374a.candidate.yaml",
+      "note": "fingerprint rotates with the station-implementation change, as measured in the v4 run; behavior delta for baseline is nil"
+    },
+    "challenger_v5": {
+      "candidate": "scratch/exodia-rig/candidates/a084eb53abbad3e65567e0bb037748f437808c4c084eb559e715169050068850.candidate.yaml",
+      "fingerprint": "29f8831a59dd9108ce4693a0d36123b1301fba60eefe4d8e48e0b1e1dcf40f75",
+      "seed_source_sha256": "98b10a2993776759678c41af4f54f3e4fd7dbc1094556211be3f2c91136631c8"
+    }
+  },
+  "execution": {
+    "smoke_run_id": "toolbelt5-mthv2-smoke4-v1",
+    "smoke_cases": [
+      "mthv2-mth1200-GL-1054-1-12-transcribe-development",
+      "mthv2-mth1200-GL-1054-1-13-transcribe-development",
+      "mthv2-mth1200-GL-1047-1-5-transcribe-development",
+      "mthv2-mth1200-GL-1048-1-25-transcribe-development"
+    ],
+    "full_run_ids": ["toolbelt5-mthv2-dev24-c1", "toolbelt5-mthv2-dev24-c2", "toolbelt5-mthv2-dev24-c3", "toolbelt5-mthv2-dev24-c4"],
+    "policy": "Smoke the same four Gaoli pages as v4 for comparability; proceed to the full 24 only if all four v5 sessions seal, adjudication telemetry is present with nonzero calls, and v5 deterministic gold recall beats the stored v2 value on at least 3 of 4. After the full run, score both lenses (deterministic gold recall via the temporary rapidfuzz scorer, answer-key judge) and validate records.",
+    "environment": "PALIMPSEST_RFDETR_OBJECT_ROOT=D:/Projects/palimpsest/library/evaluations/objects",
+    "workers": 2
+  },
+  "gates": {
+    "smoke_finished_outputs": "4 of 4 v5 sessions sealed with adjudication telemetry",
+    "smoke_recall": "v5 beats stored v2 recall (0.2492, 0.3455, 0.7487, 0.7855) on at least 3 of 4",
+    "full_recall": "v5 mean deterministic gold recall >= 0.88 (v2 champion 0.8466) and v5 wins at least 16 of 23 shared pairs",
+    "judged_non_regression": "v5 judged answer recovery not below the v2 baseline side beyond noise",
+    "adjudication_health": "zero pages where the pass patched more than 40 percent of primary characters (runaway guard, audited post hoc)",
+    "budget_stop": "bench run --max-cost per chunk; adjudication capped at 160 calls per page in code"
+  },
+  "budget": {
+    "smoke_maximum_usd": 5.0,
+    "full_maximum_usd": 16.0,
+    "judge_maximum_usd": 2.0,
+    "total_maximum_usd": 23.0,
+    "paid_gpu": "none"
+  },
+  "allowed_changes": [
+    "palimpsest/factory/stations/transcribe_omp_toolbelt5.py",
+    "palimpsest/factory/stations/__init__.py (registration)",
+    "D:/Projects/exodia/research/palimpsest-transcription/seeds/harness-toolbelt5.ts",
+    "experiments/ocr_benchmark/transcribe_toolbelt5_preflight_v1.json",
+    "experiments/ocr_benchmark/transcribe_toolbelt5_development_v1.json",
+    "experiments/LOG.md",
+    "scratch/ocr_benchmark/runs/gold-judge-eval-v1/ (appended v5 scores and judgments)",
+    "library/evaluations/runs (run records produced by bench run)"
+  ],
+  "non_goals": [
+    "Do not edit production recipes, suites, or gold.",
+    "Do not run bench propose or promote.",
+    "No commentary-layer adjudication in this iteration (scope recorded)."
+  ],
+  "next_permitted_action": "Run the four-case Gaoli smoke, evaluate the smoke gates, then the full 24 and both evaluation lenses under the declared budget."
+}

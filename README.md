@@ -21,14 +21,15 @@ metadata + page_list
     │          → align (recipe-dependent) → translate → assemble_page
     │
     └─ manuscript line
-       survey → reconstruct → reference → emend → publish → render_epub
+       survey → reconstruct → reference → emend → finalize_edition → publish → render_epub
 ```
 
 The page line preserves the evidence layer: source image, cleaned image,
 diplomatic transcription, translation, and their provenance remain separate.
 The manuscript line reconstructs continuity, checks received readings, records
-editorial changes in an apparatus, and publishes without mutating the
-diplomatic transcription.
+editorial changes in an apparatus, then gives a Sol agent the explicit goal of
+reconciling every reader-facing translation and heading against the final
+emended text. Publication never mutates the diplomatic transcription.
 
 ## Install
 
@@ -55,26 +56,28 @@ The remaining commands assume that environment is active. Verify it after
 installation with `python -m pip check`.
 
 Factory model selectors containing `/` execute through OMP. The production
-reading lane uses `openai-codex/gpt-5.6-sol` (low thinking) as its primary,
-`google/gemini-3.6-flash` (no thinking argument) as its secondary, and
-`anthropic/claude-fable-5` (high thinking) as its adjudicator. Ensure
-`omp` is on `PATH`, start one interactive OMP session, and run
-`/login openai-codex` and `/login anthropic` before the first run. Configure
-OMP's Google provider as well; its Google backend accepts `GEMINI_API_KEY`
-from the environment. OMP owns provider routing and OpenAI OAuth refresh for
-selectors, so no OpenAI API key is required.
+reading lane uses `google/gemini-3.5-flash` as its primary and
+`openai-codex/gpt-5.6-sol` as its independent secondary. A second Codex call
+adjudicates disagreements with high reasoning. The editorial lane uses Codex
+for survey, translation, and reconstruction. Ensure `omp` is on `PATH`. Start
+one interactive OMP session and run `/login openai-codex` before the first run.
+Configure OMP's Google provider too. Its Google backend accepts
+`GEMINI_API_KEY` from the environment. OMP owns provider routing and OpenAI
+OAuth refresh, so no OpenAI API key is required.
 
 Copy `.env.example` to `.env` to use or override that lane:
 
 ```env
-PALIMPSEST_MODEL_READING=openai-codex/gpt-5.6-sol
-PALIMPSEST_MODEL_READING_SECONDARY=google/gemini-3.6-flash
-PALIMPSEST_MODEL_ADJUDICATOR=anthropic/claude-fable-5
+PALIMPSEST_MODEL_READING=google/gemini-3.5-flash
+PALIMPSEST_MODEL_READING_SECONDARY=openai-codex/gpt-5.6-sol
+PALIMPSEST_MODEL_EDITORIAL=openai-codex/gpt-5.6-sol
+PALIMPSEST_MODEL_ADJUDICATOR=openai-codex/gpt-5.6-sol
 ```
 
-`PALIMPSEST_MODEL_READING` selects the model for the `read`, `survey`,
-`translate`, and `reconstruct` stations. The secondary and adjudicator settings
-apply to dual-reader `read` adjudication.
+`PALIMPSEST_MODEL_READING` selects the primary `read` model. The secondary and
+adjudicator settings apply to dual-reader adjudication.
+`PALIMPSEST_MODEL_EDITORIAL` selects the model for `survey`, `translate`, and
+`reconstruct`.
 
 When migrating from `PALIMPSEST_MODEL_VISION`, rename it to
 `PALIMPSEST_MODEL_READING`. The legacy name is rejected when the new setting is
@@ -83,8 +86,8 @@ absent; it is not accepted as an alias.
 `GEMINI_API_KEY` may be supplied for OMP's Google provider and is also used by
 the optional direct-provider override: set a model value to a bare `gemini...`
 selector to bypass OMP. Slash-qualified selectors always go through OMP. The
-`reference` and `emend` stations use the agent executor selected in each recipe
-and require that executor's CLI on `PATH`.
+`reference`, `emend`, and `finalize_edition` use the agent executor selected in
+each recipe and require that executor's CLI on `PATH`.
 
 ## Run a manuscript
 
@@ -112,16 +115,28 @@ python -m palimpsest adopt \
 ### 2. Run the line
 
 ```bash
-python -m palimpsest run --doc-id vatican_pal_lat_1267 --workers 6
+python -m palimpsest run \
+  --doc-id vatican_pal_lat_1267 \
+  --workers 6 \
+  --model-workers 3
 ```
 
-Each read cell sends both readers the same full-page or tile image and prompt.
-Exact agreement after sanitization becomes the final text without another
-model call. A disagreement sends the same image and identity-blind candidate
-texts to the adjudicator under a strict JSON schema. The transcription artifact
-retains the final text, both candidate readings and their model IDs, the
-adjudication status, reasoning and unresolved items, plus combined token and
-cost usage across every call made for that reading.
+The conductor completes each page station across the selected pages before
+advancing to the next. `--workers` controls local image and assembly work;
+`--model-workers` separately limits expensive model-backed page cells. The
+default model limit is `min(3, --workers)`, which avoids the provider
+oversubscription that makes nominally higher concurrency slower.
+
+Each read cell launches its independent primary and secondary readers
+concurrently. Calls are bounded per provider by
+`PALIMPSEST_MODEL_PROVIDER_WORKERS` (default `3`), so different providers can
+work in parallel without flooding either one. Exact agreement after
+sanitization becomes the final text without another model call. A disagreement
+sends the same image and identity-blind candidate texts to the adjudicator
+under a strict JSON schema. The transcription artifact retains the final text,
+both candidate readings and their model IDs, the adjudication status, reasoning
+and unresolved items, plus combined token and cost usage across every attempted
+call.
 
 The conductor resumes from `library/factory.db`. Fresh cells are skipped;
 input drift reruns stale cells; configuration drift is reported as outdated
@@ -151,6 +166,14 @@ reuses their fresh cells.
 
 Use `--executor subprocess` to isolate each cell in a fresh Python process.
 The station contract and artifacts are identical under either executor.
+
+Long-running work uses generous, configurable hard deadlines:
+`PALIMPSEST_MODEL_TIMEOUT_SECONDS=7200`,
+`PALIMPSEST_AGENT_TIMEOUT_SECONDS=14400`, and
+`PALIMPSEST_CELL_TIMEOUT_SECONDS=28800`. A model deadline is terminal rather
+than automatically repeating an expensive call whose provider-side completion
+is unknown. Raise these positive-integer values in `.env` for unusually long
+folios; lower them only when a faster failure is preferable.
 
 ### 3. Inspect and publish
 
@@ -204,8 +227,42 @@ records absent from a completed refresh are tombstoned rather than deleted.
 | `tune` | Tune segmentation offline without network or ledger writes |
 | `site` | Rebuild the static library from published book models |
 | `bench` | Verify, run, report, canary, promote, and roll back immutable evaluations |
+| `rig` | Export or import one fixed-model agent harness |
 
 Run `python -m palimpsest <command> --help` for command-specific options.
+
+### Portable agent rigs
+
+Export one candidate as a `.palrig` archive:
+
+```bash
+python -m palimpsest rig export \
+  --candidate palimpsest/factory/candidates/transcribe/example.yaml \
+  --output example.palrig
+```
+
+Copy the archive SHA-256 from the export output through a trusted channel. Then
+import the archive into the local content-addressed rig store:
+
+```bash
+python -m palimpsest rig import example.palrig \
+  --expected-sha256 ARCHIVE_SHA256
+```
+
+The archive contains the candidate, skill prompt, implementation source
+closure, and exact local runtime versions. Import verifies all hashes. It also
+checks the installed prompt, source closure, packages, Python version, and OMP
+version when the rig uses OMP.
+
+Import does not execute the rig or install its source snapshots. SHA-256 proves
+origin only when the expected value came through a trusted channel. A later
+benchmark executes the extensions declared by the candidate, so review the rig
+before you run it.
+
+The archive does not include credentials, remote model weights, evaluation
+cases, gold, or reports. A benchmark can use the stored `rig.palrig` path as a
+candidate. The runner treats an imported rig as untracked, so it cannot qualify
+for promotion.
 
 ## Operating protocols
 
@@ -241,6 +298,7 @@ The repository currently ships:
 
 - `latin_manuscript`
 - `chinese_scroll`
+- `chinese_printed_book`
 
 Recipe keys are strict. Unknown parameters or station options fail during load,
 before a network request or paid model call.

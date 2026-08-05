@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "glyph-classifier-mth2156-exemplars-v1-preflight",
+  "station": "transcribe",
+  "stage": "development",
+  "state": "ready",
+  "created_at": "2026-07-31T01:44:35Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Train a compact local glyph classifier as a fourth, independent evidence channel for crop-level adjudication before a paid multimodal call.",
+  "hypothesis": "A compact ImageNet-initialized ResNet-18 trained on every valid MTHv2 train-side character crop plus high/medium-certainty Dunhuang exemplars will beat the existing Gemini 3.6 Flash forced-choice crop adjudicator on the frozen 1,131-instance MTHv2 test-side adjudication pack while retaining at least 95 percent pack coverage.",
+  "baseline": {
+    "system": "gemini-3.6-flash blind forced-choice crop adjudicator",
+    "instances": 1131,
+    "accuracy": 0.8196286472148541,
+    "accuracy_by_kind": {
+      "control": 0.95,
+      "disagreement": 0.7916219119226638
+    },
+    "accuracy_by_corpus": {
+      "MTH1000": 0.7939698492462312,
+      "MTH1200": 0.8567119155354449,
+      "TKH": 0.7472118959107806
+    },
+    "observed_cost_usd": 2.4972345,
+    "source": "scratch/ocr_benchmark/runs/glyph-adjudication-v1/adjudications.jsonl"
+  },
+  "challenger": {
+    "architecture": "torchvision ResNet-18",
+    "initialization": "ImageNet-1K DEFAULT",
+    "input": "64x64 RGB crop",
+    "training": {
+      "seed": 361004,
+      "epochs": 8,
+      "batch_size": 512,
+      "optimizer": "AdamW",
+      "learning_rate": 0.0003,
+      "weight_decay": 0.01,
+      "schedule": "3 percent linear warmup then cosine decay",
+      "loss": "cross entropy with 0.05 label smoothing and capped inverse-square-root class weights",
+      "ema_decay": 0.9995
+    }
+  },
+  "data_contract": {
+    "training": "All 2,156 valid content-unique MTHv2 train-side pages after the frozen 80-page-per-corpus development reserve, plus only high/medium-certainty labels from exemplar-labeling-development-v1 whose literal codepoint occurs in the training vocabulary.",
+    "development": "The disjoint 240-page MTHv2 train-side development reserve. It may select the epoch but may not change labels or preprocessing after the run starts.",
+    "held_out_probe": "The 1,131 crop adjudication instances drawn from MTHv2 official test-800 pages. Crops and gold metadata remain local and are never sent to RunPod.",
+    "official_test_training": "forbidden",
+    "normalization": "No Unicode codepoint normalization or variant merging.",
+    "source_terms": "MTHv2 non-commercial academic research; acknowledged by the user for this research run."
+  },
+  "acceptance": {
+    "development_observations": [
+      "top-1 accuracy",
+      "top-5 accuracy",
+      "macro top-1 accuracy"
+    ],
+    "held_out_hard_gates": {
+      "minimum_vocabulary_coverage": 0.95,
+      "minimum_forced_choice_accuracy": 0.85,
+      "minimum_control_accuracy": 0.95,
+      "minimum_delta_per_protected_corpus": -0.01
+    },
+    "paired_uncertainty": "10,000-sample paired bootstrap confidence interval against Gemini correctness on covered instances",
+    "decision_rule": "Accept only if every held-out hard gate passes. A development score alone cannot accept the classifier."
+  },
+  "resource_contract": {
+    "provider": "RunPod Secure Cloud",
+    "gpu": "one RTX 4090-class GPU with at least 24 GB VRAM",
+    "image": "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404",
+    "workspace_limit_gb": 100,
+    "hard_terminate_after_hours": 8,
+    "maximum_approved_spend_usd": 8.0,
+    "paid_call_authorization": "User explicitly requested the RunPod workflow on 2026-07-30."
+  },
+  "source_fingerprints": {
+    "dataset_builder_sha256": "361e063a3b6dedf018b18f426bcaa035c486b81c2aa1cd791e12f2dea4abbf91",
+    "trainer_sha256": "180239871c7187e10698afb99c8049df8afd9776309c6bcc007b533ce034927a",
+    "scorer_sha256": "9e463b45049ee11eb7ff7d2f2f08bac158ba9574483a008956204d8b73d5e85e"
+  },
+  "allowed_changes": [
+    "experiments/ocr_benchmark/glyph_classifier_*.py",
+    "experiments/ocr_benchmark/glyph_classifier_*_v1.json",
+    "scratch/ocr_benchmark/glyph-classifier-v1/**",
+    "library/evaluations/objects/** for accepted immutable checkpoint artifacts",
+    "experiments/LOG.md after the decision"
+  ],
+  "non_goals": [
+    "No production recipe, candidate, suite, or gold edits.",
+    "No bench propose, promote, or canary.",
+    "No official test crop leaves the local workstation.",
+    "No station integration before the held-out gate passes."
+  ],
+  "next_permitted_action": "Build the full train/development shards on a cost-guarded RunPod pod, train the frozen challenger, retrieve the checkpoint, delete the pod, and score locally on the sealed probe."
+}

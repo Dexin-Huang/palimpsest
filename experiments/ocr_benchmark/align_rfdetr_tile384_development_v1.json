@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "align-rfdetr-tile384-development-v1",
+  "station": "align",
+  "state": "completed",
+  "created_at": "2026-07-28T04:30:59Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Test whether magnifying small and faint characters by reducing the RF-DETR inference tile from 512 to 384 pixels improves development localization.",
+  "hypothesis": "A 384-pixel tile exposes more pixels per small character and recovers the small-character misses observed in the official-test audit without an unacceptable false-positive increase.",
+  "production_state": "unchanged",
+  "baseline": {
+    "candidate": "align/rfdetr-mth2156-development-v1",
+    "checkpoint_sha256": "f77d91bba64891a79f70fbabaeaca95e104a1d94c2db46fe7d20b41012e95f8c",
+    "tile_size": 512,
+    "overlap": 96,
+    "threshold": 0.31,
+    "nms_iou": 0.4
+  },
+  "challenger": {
+    "candidate": "align/rfdetr-mth2156-tile384-development-v1",
+    "checkpoint_sha256": "f77d91bba64891a79f70fbabaeaca95e104a1d94c2db46fe7d20b41012e95f8c",
+    "tile_size": 384,
+    "overlap": 96,
+    "threshold": 0.31,
+    "nms_iou": 0.4
+  },
+  "evidence": {
+    "development_cases": 36,
+    "manifest_path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-tile384-development-v1/smoke36.jsonl",
+    "manifest_sha256": "999de7f8c048b60d9ce850d036cb55581ff533f2d3bf773de6b493af5124b5aa",
+    "baseline_report_path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-tile384-development-v1/report-baseline-tile512-smoke36.json",
+    "baseline_report_sha256": "5ce38ba18991389b8084272b40f6d790c28f46b411cf7cb1bba617d21dfce283",
+    "challenger_predictions_path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-tile384-development-v1/predictions-smoke36.jsonl",
+    "challenger_predictions_sha256": "58108a6bf7a763fac279f402b45a0486461606c0ef5a407090fe7e027055e9bc",
+    "challenger_report_path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-tile384-development-v1/report-smoke36.json",
+    "challenger_report_sha256": "41249b4f03da89a19ef9cd7759cab5740584cbb60fc8a3e0d1302b501e05add2"
+  },
+  "result": {
+    "baseline": {
+      "true_positives": 12252,
+      "false_positives": 129,
+      "false_negatives": 80,
+      "precision": 0.989581,
+      "recall": 0.993513,
+      "f1": 0.991543,
+      "ap50": 0.992711
+    },
+    "challenger": {
+      "true_positives": 12254,
+      "false_positives": 664,
+      "false_negatives": 78,
+      "precision": 0.948599,
+      "recall": 0.993675,
+      "f1": 0.970614,
+      "ap50": 0.991849
+    },
+    "summary_delta": {
+      "true_positives": 2,
+      "false_positives": 535,
+      "false_negatives": -2,
+      "precision": -0.040982,
+      "recall": 0.000162,
+      "f1": -0.020929,
+      "ap50": -0.000862
+    },
+    "confidence_sweep": {
+      "best_threshold": 0.5,
+      "best_f1": 0.98987,
+      "baseline_f1": 0.991543
+    },
+    "decision": "rejected",
+    "reason": "Magnification recovered only two additional true positives at the declared threshold while adding 535 false positives; no swept confidence threshold exceeded the 512-pixel baseline."
+  },
+  "cost": {
+    "known_usd": 0.0,
+    "unknown": false,
+    "execution": "local RTX 2060"
+  },
+  "next_permitted_action": "Keep the 512-pixel candidate unchanged. Test a model-level OCR challenger on the independently prepared AncientDoc development corpus instead of further tile-size tuning."
+}

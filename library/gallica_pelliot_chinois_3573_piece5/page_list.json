@@ -1,0 +1,16 @@
+{
+  "doc_id": "gallica_pelliot_chinois_3573_piece5",
+  "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83049020/manifest.json",
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "page_0000",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83049020/canvas/f1",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83049020/f1/full/max/0/default.jpg",
+      "order": 1,
+      "width": 829,
+      "height": 2212,
+      "label": "NP"
+    }
+  ]
+}

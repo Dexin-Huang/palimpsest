@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "read-kimivl-a3b-ancientdoc-development-v1",
+  "station": "read",
+  "stage": "development-smoke",
+  "state": "rejected",
+  "created_at": "2026-07-28T15:26:49Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight_record": "experiments/ocr_benchmark/read_kimivl_a3b_ancientdoc_preflight_v1.json",
+  "production_state": "unchanged",
+  "hypothesis": "Kimi-VL-A3B-Instruct's native-resolution vision encoder and direct page transcription reduce AncientDoc character error and avoid the catastrophic repetition observed in the PaddleOCR-VL full pipeline.",
+  "challenger": {
+    "repository": "moonshotai/Kimi-VL-A3B-Instruct",
+    "revision": "398eede0903cd983a2bfa0cc634e9ac1d843f375",
+    "weight_bytes": 32815315552,
+    "weight_shards_sha256": [
+      "a5ef3ebd9727f82e34417a778317d2cc9c08762fe0bc4a2ee333b8a52cf7c1a5",
+      "45ecd00decdad65e7d3f494028ed0c79d0cd56f145adae077ffa78b5b8ff95c0",
+      "b9ba98f01e22eea43da8cfbf6f09ff0857616cd9e1df4603a735c111755109ef",
+      "8f7eb3fc5c12481fd1a81d2708fa4a299ff4c207a5dbafb5b8bef25ab9fd8b23",
+      "db83e896b3d75f4bc51f621ae90ad61e8f6f7901f49a06b5c40348b839057206",
+      "abed41982a3f9c7d05f69bb560dad7bcb93cfa764c77a2b59127f35dc787983c",
+      "2e2ddd33f2b4f472898482860585bd6d73d4397c8c833ed9d00a2024443f7a77"
+    ],
+    "dtype": "bfloat16",
+    "generation": {
+      "do_sample": false,
+      "temperature": 0.0,
+      "max_new_tokens": 8192
+    },
+    "prompt_sha256": "b41b0b10dd629df9ef201b7731ba485987e9f03ceb80c38264822fcaef29e6e5"
+  },
+  "runtime": {
+    "torch": "2.5.1+cu124",
+    "transformers": "4.50.3",
+    "accelerate": "1.6.0",
+    "python": "3.11.10",
+    "device": "NVIDIA A40"
+  },
+  "evidence": {
+    "dataset_repository": "ByteDance/AncientDoc",
+    "dataset_revision": "149c447ebff66792cee28e02000682820858f17b",
+    "development_inputs_sha256": "6ae65f855eb518894ec846046d753252ad03382f23b446ead78a861a584164f7",
+    "development_gold_sha256": "4c361f937624e25d868cfe06cf1be000f06bb4891c051d9d2bba33dae4d37683",
+    "predictions_path": "scratch/ocr_benchmark/runs/kimi-vl-a3b-ancientdoc-development-v1/predictions-smoke4.jsonl",
+    "predictions_sha256": "950f7b32877d18fc55125283fc840a941535ef41ac7edb0c105e0911d8467e25",
+    "smoke_cases": 4,
+    "completed_cases": 4,
+    "empty_outputs": 0,
+    "full_28_page_screen_executed": false
+  },
+  "metrics": {
+    "name": "normalized_character_error_rate",
+    "normalization": "Unicode NFC and CRLF or bare CR to LF; no whitespace or punctuation stripping",
+    "scorer": "rapidfuzz 3.14.3 Levenshtein distance using the repository metric's normalization and denominator",
+    "kimi": {
+      "macro_mean": 12.373511515953213,
+      "macro_median": 6.136383009994121,
+      "micro": 10.98820754716981
+    },
+    "paddleocrvl16_on_identical_cases": {
+      "macro_mean": 2.365300200784297,
+      "macro_median": 1.2908304780551476,
+      "micro": 3.7317216981132075
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ancientdoc/842e8e51bb029848",
+      "slice": "天文算法类",
+      "kimi_cer": 12.04642857142857,
+      "paddleocrvl16_cer": 6.794047619047619,
+      "output_tokens": 8192,
+      "predicted_characters": 10243,
+      "reference_characters": 840,
+      "output_to_reference_ratio": 12.19404761904762,
+      "latency_seconds": 490.114469,
+      "observation": "Generation repeated 已初一刻 until the token ceiling and emitted a Markdown fence despite the prompt."
+    },
+    {
+      "case_id": "ancientdoc/93fd600a07b5d640",
+      "slice": "楚辞类",
+      "kimi_cer": 37.140969162995596,
+      "paddleocrvl16_cer": 2.39647577092511,
+      "output_tokens": 8192,
+      "predicted_characters": 8498,
+      "reference_characters": 227,
+      "output_to_reference_ratio": 37.436123348017624,
+      "latency_seconds": 460.480461,
+      "observation": "Generation repeated a long textual sequence until the token ceiling."
+    },
+    {
+      "case_id": "ancientdoc/6f37af436505879a",
+      "slice": "小说家类",
+      "kimi_cer": 0.08031088082901554,
+      "paddleocrvl16_cer": 0.08549222797927461,
+      "output_tokens": 417,
+      "predicted_characters": 404,
+      "reference_characters": 386,
+      "output_to_reference_ratio": 1.0466321243523315,
+      "latency_seconds": 25.050606
+    },
+    {
+      "case_id": "ancientdoc/6877397c5cc94e07",
+      "slice": "艺术类",
+      "kimi_cer": 0.22633744855967078,
+      "paddleocrvl16_cer": 0.18518518518518517,
+      "output_tokens": 251,
+      "predicted_characters": 238,
+      "reference_characters": 243,
+      "output_to_reference_ratio": 0.9794238683127572,
+      "latency_seconds": 14.945454
+    }
+  ],
+  "smoke_gate": {
+    "completed_cases": "pass",
+    "empty_outputs": "pass",
+    "maximum_output_to_reference_ratio": "fail",
+    "declared_limit": 2.0,
+    "observed_maximum": 37.436123348017624
+  },
+  "runpod": {
+    "pod_id": "0yiwgq2xk7tj8t",
+    "image": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+    "gpu": "NVIDIA A40",
+    "hourly_rate_usd": 0.44,
+    "starting_balance_usd": 145.3081177412,
+    "ending_balance_usd": 145.0861987302,
+    "observed_cost_usd": 0.221919011,
+    "active_pods_after_cleanup": 0,
+    "current_spend_per_hour_usd": 0.0
+  },
+  "decision": "Reject direct full-page Kimi-VL-A3B-Instruct before the 28-page development screen. It improved one ordinary page slightly but reproduced and amplified the generative repetition failure on both declared hard cases.",
+  "next_permitted_action": "Test a bounded column-crop transcription path that uses the proven RF-DETR localization output, rather than another unconstrained full-page generative VLM run."
+}

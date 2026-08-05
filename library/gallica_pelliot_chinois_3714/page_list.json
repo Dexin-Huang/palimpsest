@@ -1,0 +1,259 @@
+{
+  "doc_id": "gallica_pelliot_chinois_3714",
+  "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/manifest.json",
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "page_0000",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f1",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f1/full/max/0/default.jpg",
+      "order": 1,
+      "width": 3428,
+      "height": 2618,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0001",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f2",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f2/full/max/0/default.jpg",
+      "order": 2,
+      "width": 3256,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0002",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f3",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f3/full/max/0/default.jpg",
+      "order": 3,
+      "width": 3320,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0003",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f4",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f4/full/max/0/default.jpg",
+      "order": 4,
+      "width": 3304,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0004",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f5",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f5/full/max/0/default.jpg",
+      "order": 5,
+      "width": 3432,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0005",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f6",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f6/full/max/0/default.jpg",
+      "order": 6,
+      "width": 3392,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0006",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f7",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f7/full/max/0/default.jpg",
+      "order": 7,
+      "width": 3328,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0007",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f8",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f8/full/max/0/default.jpg",
+      "order": 8,
+      "width": 3296,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0008",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f9",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f9/full/max/0/default.jpg",
+      "order": 9,
+      "width": 3380,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0009",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f10",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f10/full/max/0/default.jpg",
+      "order": 10,
+      "width": 3432,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0010",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f11",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f11/full/max/0/default.jpg",
+      "order": 11,
+      "width": 3420,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0011",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f12",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f12/full/max/0/default.jpg",
+      "order": 12,
+      "width": 3304,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0012",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f13",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f13/full/max/0/default.jpg",
+      "order": 13,
+      "width": 3328,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0013",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f14",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f14/full/max/0/default.jpg",
+      "order": 14,
+      "width": 1282,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0014",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f15",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f15/full/max/0/default.jpg",
+      "order": 15,
+      "width": 3564,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0015",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f16",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f16/full/max/0/default.jpg",
+      "order": 16,
+      "width": 3168,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0016",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f17",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f17/full/max/0/default.jpg",
+      "order": 17,
+      "width": 3320,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0017",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f18",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f18/full/max/0/default.jpg",
+      "order": 18,
+      "width": 3528,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0018",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f19",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f19/full/max/0/default.jpg",
+      "order": 19,
+      "width": 3416,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0019",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f20",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f20/full/max/0/default.jpg",
+      "order": 20,
+      "width": 3488,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0020",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f21",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f21/full/max/0/default.jpg",
+      "order": 21,
+      "width": 3300,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0021",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f22",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f22/full/max/0/default.jpg",
+      "order": 22,
+      "width": 3476,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0022",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f23",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f23/full/max/0/default.jpg",
+      "order": 23,
+      "width": 3332,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0023",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f24",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f24/full/max/0/default.jpg",
+      "order": 24,
+      "width": 3484,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0024",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f25",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f25/full/max/0/default.jpg",
+      "order": 25,
+      "width": 3204,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0025",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f26",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f26/full/max/0/default.jpg",
+      "order": 26,
+      "width": 3472,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0026",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f27",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f27/full/max/0/default.jpg",
+      "order": 27,
+      "width": 3460,
+      "height": 2280,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0027",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/canvas/f28",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/f28/full/max/0/default.jpg",
+      "order": 28,
+      "width": 1320,
+      "height": 2280,
+      "label": "NP"
+    }
+  ]
+}

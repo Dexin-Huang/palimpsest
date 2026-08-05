@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "read-kimivl-a3b-ancientdoc-preflight-v1",
+  "station": "read",
+  "state": "ready",
+  "created_at": "2026-07-28T14:54:44Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Test a layout-free general vision-language OCR challenger separately from PaddleOCR-VL's PP-DocLayoutV3 pipeline on the same AncientDoc development evidence.",
+  "hypothesis": "Kimi-VL-A3B-Instruct's native-resolution vision encoder and direct page transcription reduce AncientDoc character error and avoid the catastrophic repetition observed in the PaddleOCR-VL full pipeline.",
+  "production_state": "unchanged",
+  "baseline": {
+    "record": "experiments/ocr_benchmark/read_paddleocrvl16_ancientdoc_development_v1.json",
+    "predictions_sha256": "949cd17e9bf3c2f352d9031a00c4709b8e1a399848f70df5d79d2377d892ce98",
+    "macro_cer_mean": 0.7388913119185435,
+    "macro_cer_median": 0.31482298881796367,
+    "micro_cer": 1.0673629242819844
+  },
+  "challenger": {
+    "repository": "moonshotai/Kimi-VL-A3B-Instruct",
+    "revision": "398eede0903cd983a2bfa0cc634e9ac1d843f375",
+    "license": "MIT",
+    "total_parameters": 16000000000,
+    "activated_language_parameters": 2800000000,
+    "weight_bytes": 32815315552,
+    "torch_dtype": "bfloat16",
+    "transformers": "4.50.3",
+    "trust_remote_code": true,
+    "generation": {
+      "do_sample": false,
+      "temperature": 0.0,
+      "max_new_tokens": 8192
+    },
+    "prompt": "You are a diplomatic transcription engine for premodern Chinese printed pages. Transcribe every visible character exactly once in natural reading order: read each vertical column from top to bottom and order columns from right to left. Preserve visible punctuation, Latin letters, and digits. Do not translate, summarize, explain, infer missing text, add headings, emit Markdown, or use code fences. Return only the transcription. Represent each unreadable character as 〓.",
+    "prompt_sha256": "b41b0b10dd629df9ef201b7731ba485987e9f03ceb80c38264822fcaef29e6e5"
+  },
+  "evidence": {
+    "dataset_repository": "ByteDance/AncientDoc",
+    "dataset_revision": "149c447ebff66792cee28e02000682820858f17b",
+    "development_cases": 28,
+    "protected_slices": "all 14 semantic categories",
+    "development_inputs_sha256": "6ae65f855eb518894ec846046d753252ad03382f23b446ead78a861a584164f7",
+    "development_gold_sha256": "4c361f937624e25d868cfe06cf1be000f06bb4891c051d9d2bba33dae4d37683",
+    "smoke_cases": [
+      "ancientdoc/842e8e51bb029848",
+      "ancientdoc/93fd600a07b5d640",
+      "ancientdoc/6f37af436505879a",
+      "ancientdoc/6877397c5cc94e07"
+    ]
+  },
+  "smoke_gate": {
+    "completed_cases": 4,
+    "maximum_empty_outputs": 0,
+    "maximum_output_to_reference_ratio": 2.0,
+    "decision": "Run all 28 development cases only if every gate passes."
+  },
+  "full_screen_decision": {
+    "primary_metric": "normalized_character_error_rate",
+    "direction": "minimize",
+    "required_comparisons": [
+      "macro mean versus PaddleOCR-VL",
+      "macro median versus PaddleOCR-VL",
+      "micro CER versus PaddleOCR-VL",
+      "all 14 semantic categories",
+      "catastrophic repetition cases",
+      "latency and observed cost"
+    ]
+  },
+  "budget": {
+    "maximum_runpod_cost_usd": 2.0,
+    "maximum_runtime_hours": 4,
+    "maximum_hourly_rate_usd": 0.5,
+    "automatic_termination_required": true
+  },
+  "allowed_changes": [
+    "experiments/ocr_benchmark/read_kimivl_a3b_ancientdoc_preflight_v1.json",
+    "experiments/ocr_benchmark/read_kimivl_a3b_ancientdoc_development_v1.json",
+    "experiments/LOG.md",
+    "scratch/ocr_benchmark/runs/kimi-vl-a3b-ancientdoc-development-v1"
+  ],
+  "non_goals": [
+    "Do not edit the production recipe.",
+    "Do not use qualification-reserve cases.",
+    "Do not tune against MTHv2 official-test evidence.",
+    "Do not promote or propose the challenger."
+  ],
+  "next_permitted_action": "Provision one cost-bounded 48 GB RunPod GPU, run the four declared smoke cases, and stop before the full screen if any smoke gate fails."
+}

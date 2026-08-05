@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "glyph-classifier-topk-evidence-v1-development",
+  "station": "transcribe",
+  "stage": "development",
+  "state": "completed",
+  "created_at": "2026-07-31T02:43:29Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight": "experiments/ocr_benchmark/glyph_classifier_evidence_preflight_v1.json",
+  "question": "Is the frozen classifier fit as a non-authoritative top-k evidence channel for agent-selected glyph inspection?",
+  "answer": "Yes. Gold-form vocabulary coverage was 98.59 percent; exact top-1 identification was 93.72 percent; top-5 identification was 99.28 percent; and protected-corpus top-1 ranged from 90.23 to 96.43 percent. Every predeclared hard gate passed. On the stricter subset where both literal forms existed, pairwise accuracy remained 96.92 percent. This authorizes classifier suggestions inside inspect_glyph, not automatic transcription changes.",
+  "candidate": {
+    "checkpoint_sha256": "69a98458b50bf0d28081223ff1528ced20a264328bdd97d113d43df387c6d849",
+    "architecture": "ResNet-18",
+    "classes": 4693,
+    "epoch": 8
+  },
+  "observations": {
+    "instances": 1131,
+    "eligible": 1115,
+    "coverage": 0.9858532272325375,
+    "top1": 0.9372197309417041,
+    "top5": 0.9928251121076234,
+    "by_kind": {
+      "control": {"instances": 200, "top1": 0.99, "top5": 0.995},
+      "disagreement": {"instances": 915, "top1": 0.9256830601092896, "top5": 0.9923497267759562}
+    },
+    "by_corpus": {
+      "MTH1000": {"instances": 196, "top1": 0.9642857142857143, "top5": 0.9948979591836735},
+      "MTH1200": {"instances": 653, "top1": 0.9433384379785605, "top5": 0.9954058192955589},
+      "TKH": {"instances": 266, "top1": 0.9022556390977443, "top5": 0.9849624060150376}
+    },
+    "pairwise_instances": 1071,
+    "pairwise_accuracy": 0.969187675070028,
+    "ineligible": 16
+  },
+  "gates": {
+    "coverage": "PASS (0.98585 >= 0.98)",
+    "top1": "PASS (0.93722 >= 0.90)",
+    "top5": "PASS (0.99283 >= 0.97)",
+    "protected_corpora": "PASS (minimum 0.90226 >= 0.85)"
+  },
+  "decision": "accepted",
+  "decision_detail": "The model is accepted only as a crop-local evidence channel. Toolbelt7 must expose top-k output beside the actual glyph crop and independent second-reader evidence, state that suggestions are not authority, and never rewrite text without the agent's visual decision.",
+  "artifacts": {
+    "scorer_sha256": "5bf92c3a2a0432940136e41aef214b6b50af2376892917d0be7747a427065c99",
+    "predictions_sha256": "534392af5e07ac378304c432ab9027b8238c86bae1e182e79bcbfa6d58da3ef5",
+    "ineligible_sha256": "322878f83c5a729996a2cf254913c38f40969f76e11425758b5f90a68cde8722"
+  },
+  "production_state": "unchanged",
+  "next_permitted_action": "Export the accepted EMA checkpoint to a deterministic ONNX object, verify numerical agreement with PyTorch on real crops, retain the ONNX and literal class list by hash, then freeze the separate toolbelt7 candidate preflight."
+}

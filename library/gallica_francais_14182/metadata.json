@@ -1,0 +1,65 @@
+{
+  "doc_id": "gallica_francais_14182",
+  "source": {
+    "kind": "iiif",
+    "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b9007637k/manifest.json"
+  },
+  "source_catalog": {
+    "label": "BnF. Département des Manuscrits. Français 14182",
+    "title": "« Journal, et suitte de celuy du 31 décembre 1742, de ce que d'autres et moy ont fait, ou veu faire, à commensser du 1er du mois de janvier 1743, à Ingolstat ».",
+    "shelfmark": "Bibliothèque nationale de France. Département des Manuscrits. Français 14182",
+    "author": null,
+    "date": "1701-1800",
+    "language": "français",
+    "description": "« Journal, et suitte de celuy du 31 décembre 1742, de ce que d'autres et moy ont fait, ou veu faire, à commensser du 1er du mois de janvier 1743, à Ingolstat ».",
+    "canvas_count": 317,
+    "metadata_entries": [
+      {
+        "label": "Repository",
+        "value": ""
+      },
+      {
+        "label": "Digitised by",
+        "value": "Bibliothèque nationale de France"
+      },
+      {
+        "label": "Source Images",
+        "value": "https://gallica.bnf.fr/ark:/12148/btv1b9007637k"
+      },
+      {
+        "label": "Metadata Source",
+        "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b9007637k"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "Bibliothèque nationale de France. Département des Manuscrits. Français 14182"
+      },
+      {
+        "label": "Title",
+        "value": "« Journal, et suitte de celuy du 31 décembre 1742, de ce que d'autres et moy ont fait, ou veu faire, à commensser du 1er du mois de janvier 1743, à Ingolstat »."
+      },
+      {
+        "label": "Date",
+        "value": "1701-1800"
+      },
+      {
+        "label": "Language",
+        "value": "français"
+      },
+      {
+        "label": "Format",
+        "value": "Papier. - 626 pages. - 200 × 165 mm. - Reliure veau gr"
+      },
+      {
+        "label": "Relation",
+        "value": "Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc44795c"
+      },
+      {
+        "label": "Type",
+        "value": "Manuscrit"
+      }
+    ]
+  },
+  "created_at": "2026-07-24T01:39:16.524523+00:00",
+  "updated_at": "2026-07-24T01:39:16.524523+00:00"
+}

@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "transcribe-toolbelt-rig-preflight-v1",
+  "station": "transcribe",
+  "state": "ready",
+  "created_at": "2026-07-28T19:48:59Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Stand up the Exodia tool-bearing Rig: a new omp_toolbelt transcribe variant whose OMP agent drives host-authored geometry tools (detector evidence, column crops, deterministic count verification) to produce one finished transcription, evaluated paired against the pure-policy omp_extension baseline on the visible Borg.cin.361 f004r case.",
+  "hypothesis": "Host-staged detector evidence plus a deterministic verify_counts tool lets the same model produce a finished transcription with lower character error than the evidence-free full-image baseline, without violating any suite hard limit.",
+  "production_state": "unchanged",
+  "rig": {
+    "concept": "Exodia Rig = immutable model reference + immutable harness. Here the harness is the omp_toolbelt station: task, skill prompt, host extension with read/verify_counts/submit_transcription grants, and pinned detector evidence staging. The candidate extension is an empty no-op policy on both sides, so the paired delta measures the host harness alone.",
+    "model_ref": "openai-codex/gpt-5.6-luna",
+    "baseline": {
+      "candidate": "scratch/exodia-rig/candidates/8508b4c933eecb2033d12bdae9cf289601d8f7e4575aa0ba2ee15d2a1f6ddd25.candidate.yaml",
+      "fingerprint": "62d518151671499c86c482aaed090a2a74ce5c36d97a2ebecc2e1b45e8ec7124",
+      "variant": "omp_extension",
+      "prompt": "transcribe/zh/full_image",
+      "extension_source_sha256": "6e116f668581cd88020085085ed52eda183e40253bce53c2ebf34cac6fed4b87"
+    },
+    "challenger": {
+      "candidate": "scratch/exodia-rig/candidates/05adfeb383eb3bb65120478da456334d7c1e99f878090d8926fbc3f69ab4db54.candidate.yaml",
+      "fingerprint": "6df0807bac2a57f4193da011e7f70522623f41ba1258046ba6381792039c0ef5",
+      "variant": "omp_toolbelt",
+      "prompt": "transcribe/zh/toolbelt",
+      "extension_source_sha256": "0505310cd4aef4c42e5df3f52fce9ded2a563977fcb92747e7fe699e92cf528c"
+    },
+    "seed_sources": "D:/Projects/exodia/research/palimpsest-transcription/seeds/"
+  },
+  "toolbelt_harness": {
+    "implementation": "palimpsest/factory/stations/transcribe_omp_toolbelt.py",
+    "detector": {
+      "checkpoint_sha256": "cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d",
+      "settings": "production align pins: tile 512, overlap 96, threshold 0.31, nms 0.4, rfdetr 1.8.3, torch 2.7.0+cu118",
+      "torchvision_note": "pinned 0.22.0+cu118 to match installed runtime metadata; the recipe writes the abbreviated 0.22.0",
+      "runtime": "one-shot align_rfdetr_runtime.py under PALIMPSEST_RFDETR_PYTHON"
+    },
+    "staged_evidence": [
+      "evidence/geometry.json with right-to-left column map and per-column counts",
+      "evidence/overlay.jpg with every detection outlined",
+      "evidence/columns/cNN.png padded column crops"
+    ],
+    "tools": "read (images/ and evidence/ only), verify_counts (deterministic count comparison), submit_transcription (single use)",
+    "partition_compliance": "Tool-bearing Rigs are evaluated on R_train cases per the Exodia partition; vatican_borg_cin_361 f004r is the visible R_train transcription case."
+  },
+  "evaluation": {
+    "suite": "transcribe/omp-extension-development/v1",
+    "cases": 1,
+    "verified": "bench verify passed: cases=1 objects=35 candidates=37 judges=1 reports=47",
+    "primary_metrics": ["character_error_rate minimize", "page_completeness maximize"],
+    "hard_limits": {
+      "contamination_rate": 0.0,
+      "empty_output_rate": 0.0,
+      "invented_character_rate": 0.15,
+      "repetition_rate": 0.1
+    },
+    "run_id": "exodia-toolbelt-rig-dev-1",
+    "executor": "inline development execution; subprocess isolation reserved for any decisive rerun"
+  },
+  "gates": {
+    "finished_output": "the challenger session ends with exactly one accepted submit_transcription artifact",
+    "quality": "challenger character_error_rate at or below the baseline's on the shared case",
+    "hard_limits": "all four suite hard limits pass on the challenger",
+    "budget_stop": "bench run --max-cost aborts further dispatch at the ceiling"
+  },
+  "budget": {
+    "maximum_run_cost_usd": 6.0,
+    "paid_gpu": "none; RF-DETR runs on the local workstation GPU"
+  },
+  "allowed_changes": [
+    "palimpsest/factory/stations/transcribe_omp_toolbelt.py",
+    "palimpsest/factory/stations/__init__.py",
+    "palimpsest/factory/evaluation/inline_extension.py",
+    "palimpsest/factory/prompts/transcribe/zh/toolbelt.txt",
+    "D:/Projects/exodia/research/palimpsest-transcription/seeds/",
+    "experiments/ocr_benchmark/transcribe_toolbelt_rig_preflight_v1.json",
+    "experiments/ocr_benchmark/transcribe_toolbelt_rig_development_v1.json",
+    "experiments/LOG.md",
+    "scratch/exodia-rig/",
+    "library/evaluations (run records produced by bench run)"
+  ],
+  "non_goals": [
+    "Do not edit production recipes.",
+    "Do not modify the exodia campaign loop, partition, or archive.",
+    "Do not run bench propose or promote.",
+    "Do not touch sealed evaluation families."
+  ],
+  "next_permitted_action": "Run the paired evaluation under the declared budget, inspect the finished transcription and report, then record the result."
+}

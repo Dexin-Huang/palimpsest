@@ -99,6 +99,24 @@ A model name alone is not a candidate. Changing the prompt, temperature,
 preprocessing option, implementation source, or any other behavior-bearing
 field creates a different candidate fingerprint.
 
+#### 2.3.1 Agent rig
+
+An agent rig is the resolved execution harness for one model-backed candidate:
+
+```text
+fixed model
++ skill prompt
++ parameters and station options
++ tool and extension implementation
++ station execution protocol
++ local runtime versions
+= rig fingerprint
+```
+
+The candidate fingerprint identifies the Palimpsest behavior record. The rig
+fingerprint also covers the complete source closure and local runtime manifest.
+The evaluation suite, cases, gold, and reports are not part of the rig.
+
 ### 2.4 Evaluation suite
 
 A versioned specification containing benchmark cases, metrics, slices,
@@ -308,6 +326,54 @@ Rules:
 An operator may create an ephemeral candidate from CLI overrides for development
 runs. Ephemeral candidates may produce reports but cannot be promoted until
 materialized as an immutable tracked candidate file.
+
+#### 6.1.1 Portable agent-rig bundle
+
+The `rig export` command writes one `.palrig` ZIP archive. Its canonical
+`manifest.json` has these fields:
+
+```text
+schema_version
+record_kind
+candidate
+runtime
+files
+rig_fingerprint
+```
+
+The file table identifies `candidate.yaml`, `prompt.txt`, and each package
+source in the station implementation closure. Each entry records its path,
+role, byte count, and SHA-256 digest.
+
+The runtime manifest records the Python version and each direct Palimpsest
+runtime package version. It also records the OMP version when the station source
+closure includes the OMP agent executor.
+
+The exporter accepts only a model-backed candidate with a fixed model identity.
+It writes members in a stable order with fixed ZIP metadata. Two exports from
+the same rig therefore produce identical archive bytes in the same runtime.
+
+The importer applies these checks before it writes to the rig store:
+
+1. compare the archive with an operator-supplied SHA-256 digest;
+2. reject duplicate, encrypted, oversized, non-regular, or unsafe members;
+3. require canonical JSON and the exact declared member set;
+4. verify every size, member digest, and the rig fingerprint;
+5. resolve the candidate against the installed station registry;
+6. compare the installed prompt and full source closure byte for byte;
+7. compare the installed Python, package, and applicable OMP versions.
+
+The expected archive digest must come through a trusted channel. A self-declared
+digest proves integrity, not origin.
+
+The importer writes only after all checks pass. It does not execute the rig or
+install bundled implementation snapshots. The store path is
+`library/rigs/<rig_fingerprint>/rig.palrig`. A later benchmark can execute the
+extensions declared in the candidate record.
+
+An imported rig resolves as an untracked candidate. It can produce development
+evidence, but it cannot authorize qualification or promotion. An operator must
+materialize and review a tracked candidate before qualification.
 
 ### 6.2 Station variant
 
@@ -1476,6 +1542,14 @@ Tests defend behavior, not source text or mere field presence.
 - Do not promote a candidate whose advantage exists only in judge prose and not
   in declared observations.
 - Prefer the current candidate when evidence is inconclusive.
+- An automated pass may alter transcription text only on crop-local evidence:
+  a character patch must be justified by that character's own image region
+  (its detector-box crop), never by language plausibility alone. Passes
+  without crop evidence are review-only. (Adopted 2026-07-30 from the
+  Vesuvius Challenge's sub-letter receptive-field rule; the glyph
+  adjudication instrument measured why: language-prior "fixes" overcorrect
+  in both directions, while blind crop decisions fix 81 percent and break
+  under 4.)
 
 ## 18. Definition of done
 

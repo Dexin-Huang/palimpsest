@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "transcribe-toolbelt-ancientdoc-development-v1",
+  "station": "transcribe",
+  "stage": "development-smoke",
+  "state": "completed",
+  "created_at": "2026-07-28T21:37:50Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight_record": "experiments/ocr_benchmark/transcribe_toolbelt_ancientdoc_preflight_v1.json",
+  "hypothesis": "On printed pages where the detector is strong, host-staged geometry evidence and deterministic count verification lower character error versus the image-only baseline of the same model, keep repetition at zero, and hold invented characters within the scope-adjusted allowance on both protected scope slices.",
+  "production_state": "unchanged",
+  "decision": "Withhold the full 28-case run and iterate the harness first. The declared smoke gates all passed (4 of 4 pairs sealed, zero repetition, budget held), so the full run was permitted, but the smoke evidence already answers the question it would have bought: toolbelt v1 wins decisively on its design case, the dense table (CER 1.349 to 0.873 with invented characters collapsing 0.380 to exactly 0.000), and loses everywhere the volume's gold excludes commentary, because the harness instructs the agent to account for every detected box (Chu Ci 0.604 to 2.000 with invented 0.595; the two ordinary pages regressed roughly twofold). This is the measured AncientDoc scope inconsistency resurfacing inside the rig. The next spend belongs to rig v2 with layered submission, not to confirming a predictable mean.",
+  "runs": {
+    "toolbelt-ancientdoc-smoke4-v1": {
+      "status": "stopped after one case by the unknown-cost policy",
+      "cause": "the image-only baseline flaked with two submit_transcription calls; its cost became unknown and the runner conservatively stopped dispatch",
+      "salvaged_observation": "toolbelt on the table page: CER 0.864286, invented 0.007153, repetition 0, 53 turns and 51 tool calls, sealed",
+      "cost_usd": 0.4997962
+    },
+    "toolbelt-ancientdoc-smoke4-v2": {
+      "status": "completed",
+      "report": "library/evaluations/runs/toolbelt-ancientdoc-smoke4-v2/report.json",
+      "observed_cases": 4,
+      "completed_cases": 4,
+      "paired_observations": [
+        {"case": "842e8e51bb029848 astronomical table", "baseline_cer": 1.3488, "toolbelt_cer": 0.8726, "baseline_invented": 0.3796, "toolbelt_invented": 0.0, "toolbelt_tool_calls": 42},
+        {"case": "6f37af436505879a novel page", "baseline_cer": 0.1192, "toolbelt_cer": 0.2306, "toolbelt_tool_calls": 31},
+        {"case": "93fd600a07b5d640 chu ci commentary", "baseline_cer": 0.6035, "toolbelt_cer": 2.0, "toolbelt_invented": 0.5954, "toolbelt_tool_calls": 55},
+        {"case": "6877397c5cc94e07 art page", "baseline_cer": 0.0823, "toolbelt_cer": 0.1728, "toolbelt_tool_calls": 33}
+      ],
+      "aggregate_hard_limits": "all four pass on the challenger (invented 0.194218 against the 0.5 scope allowance; repetition 0)",
+      "cost_usd": 1.8938
+    }
+  },
+  "findings": [
+    "The anti-hallucination property is real and large: geometry anchoring drove invented characters to exactly zero on the page where the same model invents 38 percent of its output unaided.",
+    "Repetition stayed zero on every session of both sides; the runaway class remains structurally absent under both harnesses for this model.",
+    "Box-complete transcription is the wrong target on scope_primary volumes: the count-verification loop pushes the agent to transcribe commentary the gold excludes, converting geometry fidelity into insertions.",
+    "Crop-first reading degrades ordinary pages for this model as it did for Gemini column-mode; page context remains load-bearing.",
+    "The image-only baseline is fragile on hard pages: one duplicate-submission flake in five sessions across the two runs."
+  ],
+  "gate_status": {
+    "smoke_finished_outputs": "pass: 4 of 4 challenger sessions sealed in v2",
+    "smoke_budget": "pass: 2.393596 USD observed against 4.00",
+    "full_quality": "not run: withheld on smoke evidence; the paired smoke mean favors the baseline 0.5385 to 0.8190",
+    "full_hard_limits": "not run",
+    "budget_stop": "pass: v1 demonstrated the unknown-cost stop working as designed"
+  },
+  "cost": {
+    "smoke_v1_usd": 0.4997962,
+    "smoke_v2_usd": 1.8938,
+    "total_usd": 2.3935962,
+    "budget_usd": 20.0,
+    "paid_gpu": "none"
+  },
+  "suite_assets": {
+    "suite_sha256": "6e9a717b8f08d6ee71bb1f59052fe2163093324a71ae15d4994a8b1dd2d2ed6a",
+    "cases_sha256": "0a42e513b79c2a0f54a4fb63727ad8cae93647255b507e522f1723bf0267c481",
+    "note": "The suite, cases, gold, and seeded objects are durable assets independent of this decision; the full 28-case run remains available to any future candidate pair."
+  },
+  "limitations": [
+    "Four smoke cases, one repeat; per-case deltas are directional, not confidence-bounded.",
+    "Gold is dataset-provided, single-source, development_non_qualifying; scope flags are development-derived.",
+    "gpt-5.6-luna baseline CER on this corpus is not comparable with the Gemini numbers from the read-station experiments; only same-run pairs are evidence."
+  ],
+  "next_permitted_action": "Build toolbelt v2 as a new immutable harness: layered submission (primary and commentary fields) with scope-aware verify_counts that checks primary text against primary-layer boxes only, full-page-first reading with crops reserved for verification, then run the four-case smoke and, on passing paired quality, the full 28 under the remaining budget."
+}

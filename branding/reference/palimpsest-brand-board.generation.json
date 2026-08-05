@@ -1,0 +1,31 @@
+{
+  "command": "generate",
+  "prompt": "Premium identity board for \"PALIMPSEST\", a provenance-first system that recovers readable books from photographed manuscripts without erasing evidence. Use the supplied Chinese manuscript prominently. Core mark: one simple layered-folio P with an open-book negative-space seam, repeated consistently. World: scholarly, calm conservation studio, archival art-book publishing, museum-grade not generic SaaS. Show logo cover, geometric construction, our split reader with dark facsimile left and mineral-paper translation right plus bottom-divider control pill, exact tagline \"RECOVERY WITHOUT ERASURE\", palette Ink Vault #17252C / Mineral Paper #F2F0E9 / Parchment #C9B99A / Seal Vermilion #9C3F35 / Oxidized Slate #405054, typography pairing refined editorial serif, neutral metadata sans, and elegant traditional Chinese Noto Serif TC, archival folder with seal, manuscript detail, evidence-link and folio controls. Exact wordmark \"PALIMPSEST\" only; never print prompt phrases such as premium, 3x3, cultural archive, or app icon. Sparse dark presentation canvas, strong gutters, high negative space, one vermilion accent, no quill, crest, sparkle, fake dashboard, gradients, rounded-card clutter, or tiny paragraphs.",
+  "fullPrompt": "Create a square high-end brand identity showcase board for the following brand:\n\nPremium identity board for \"PALIMPSEST\", a provenance-first system that recovers readable books from photographed manuscripts without erasing evidence. Use the supplied Chinese manuscript prominently. Core mark: one simple layered-folio P with an open-book negative-space seam, repeated consistently. World: scholarly, calm conservation studio, archival art-book publishing, museum-grade not generic SaaS. Show logo cover, geometric construction, our split reader with dark facsimile left and mineral-paper translation right plus bottom-divider control pill, exact tagline \"RECOVERY WITHOUT ERASURE\", palette Ink Vault #17252C / Mineral Paper #F2F0E9 / Parchment #C9B99A / Seal Vermilion #9C3F35 / Oxidized Slate #405054, typography pairing refined editorial serif, neutral metadata sans, and elegant traditional Chinese Noto Serif TC, archival folder with seal, manuscript detail, evidence-link and folio controls. Exact wordmark \"PALIMPSEST\" only; never print prompt phrases such as premium, 3x3, cultural archive, or app icon. Sparse dark presentation canvas, strong gutters, high negative space, one vermilion accent, no quill, crest, sparkle, fake dashboard, gradients, rounded-card clutter, or tiny paragraphs.\n\nDesign a polished modular grid of multiple tiles, each showing a different application of one cohesive visual identity system. CRITICAL — one tile MUST be dedicated to the canonical brand mark, isolated and vector-ready: a single tile labeled 'PRIMARY MARK / VECTOR ASSET' that contains ONLY the canonical mark — large, perfectly centered, in the brand's actual color, on a pure solid white background, with generous padding on all four sides, with crisp razor-sharp vector-clean edges, no shadows, no gradients, no halos, no texture, no overlay text, no surrounding chrome — the mark exactly as a designer would hand it to a developer to be exported as SVG. The other tiles cover the typical brand assets: wordmark lockups (the mark paired with the brand name), app icon at multiple sizes, editorial posters, product cards, landing page hero fragment, typography specimens, terminal output mockup or interface snippet, color palette presentation with hex codes, sticker concepts, business card mockup, t-shirt or laptop sticker mockup. NEVER include a 'mark explorations' or 'logo variations' tile — there is exactly ONE canonical mark and it appears identically wherever it's shown. Every tile should feel different in format and purpose, but all should clearly belong to the same brand world. The mark should be the same shape across every tile that shows it. Composition: square format, tightly arranged 4-column modular grid, multiple distinct tiles, dense but elegant layout, clean spacing, sharp alignment, strong typographic hierarchy. The final result should feel original, professionally composed, and extremely polished — like a real branding case study from a top studio (think COLLINS, Pentagram, Order, Bielke&Yang), not generic AI graphics. Output: square canvas, crisp at any zoom, premium presentation quality, cohesive identity system across every tile.\n\nDO NOT INCLUDE:\n- generic AI graphics\n- low-resolution tiles\n- incoherent palette across tiles\n- different mark in different tiles\n- mark explorations grid\n- logo variations tile\n- multiple mark variants on one tile\n- Lorem ipsum text\n- obvious template look\n- stock-photo people\n- watermarks\n- blurred or pixelated text",
+  "style": "brand-board",
+  "mods": [],
+  "refs": [
+    "library/gallica_pelliot_chinois_3364/page_image/page_0000.jpg"
+  ],
+  "no": [
+    "generic AI graphics",
+    "low-resolution tiles",
+    "incoherent palette across tiles",
+    "different mark in different tiles",
+    "mark explorations grid",
+    "logo variations tile",
+    "multiple mark variants on one tile",
+    "Lorem ipsum text",
+    "obvious template look",
+    "stock-photo people",
+    "watermarks",
+    "blurred or pixelated text"
+  ],
+  "size": "2K",
+  "ratio": "1:1",
+  "quality": "high",
+  "provider": "openai",
+  "model": "gpt-image-2",
+  "flagged": false,
+  "ts": "2026-07-26T15:45:06.957Z"
+}

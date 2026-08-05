@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "transcribe-toolbelt2-mthv2-development-v1",
+  "station": "transcribe",
+  "stage": "development",
+  "state": "completed",
+  "created_at": "2026-07-29T05:19:41Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight_record": "experiments/ocr_benchmark/transcribe_toolbelt2_mthv2_preflight_v1.json",
+  "hypothesis": "On professionally annotated full-scope gold the rig's paired advantage persists under the print-perfect invented allowance of 0.15, repetition stays zero, and absolute CER lands materially below the AncientDoc numbers because gold-scope confounds are absent.",
+  "production_state": "unchanged",
+  "decision": "The rig's advantage holds on real human gold and the absolute numbers confirm that much of the AncientDoc residue was gold-side: v2 macro CER 0.209306 versus baseline 0.268503 (median 0.187500 versus 0.271468, 16 of 23 pairs), invented characters collapse to 0.009600 mean under the print-perfect 0.15 limit, and every protected corpus slice improves. Two findings feed the next harness iteration: repetition is not fully dead at case grain (two dense MTH1200 Gaoli commentary pages measured 0.1739 and 0.2273 case-level repetition inside a passing aggregate), and the image-only baseline flaked a second duplicate submission in about sixty sessions while the toolbelt has never flaked, so the sealed layered submission contract is also the more reliable one.",
+  "smoke_run": {
+    "run_id": "toolbelt2-mthv2-smoke4-v1",
+    "cases": 4,
+    "paired_mean": {"baseline": 0.2485, "v2": 0.186350},
+    "cost_usd": 1.4156
+  },
+  "full_run": {
+    "run_ids": [
+      "toolbelt2-mthv2-dev24-c1",
+      "toolbelt2-mthv2-dev24-c2",
+      "toolbelt2-mthv2-dev24-c3",
+      "toolbelt2-mthv2-dev24-c4"
+    ],
+    "report_sha256": {
+      "c1": "80139ae3f3e923e299a2fe8136010b305274b7d16c5892e50af8d8360690dad2",
+      "c2": "dff12360061c03882b17ccd1d943ff45d7f272f1509283e0a354d32fd7d61422",
+      "c3": "89207b31c1e607101334d3706e7f80ee9933a8c596f67a208b972bef8b976e36",
+      "c4": "fa725a39671e3b287f6e0fd1a27126741064a5e11f533280846916364eda6bf4"
+    },
+    "paired_cases": 23,
+    "baseline_failures": [
+      {
+        "case": "mthv2-tkh-0001-002-28-03-transcribe-development",
+        "cause": "second observed duplicate-submission flake of the image-only baseline; the challenger side was never dispatched in that pair"
+      }
+    ],
+    "baseline_macro_cer": 0.268503,
+    "v2_macro_cer": 0.209306,
+    "baseline_median_cer": 0.271468,
+    "v2_median_cer": 0.1875,
+    "v2_wins": "16 of 23",
+    "invented_mean": {"baseline": 0.0411, "v2": 0.0096},
+    "corpus_slices": {
+      "mth1000": {"cases": 8, "baseline": 0.1547, "v2": 0.1071},
+      "mth1200": {"cases": 8, "baseline": 0.3789, "v2": 0.3354},
+      "tkh": {"cases": 7, "baseline": 0.2724, "v2": 0.182}
+    },
+    "hard_limits": "all four pass in every chunk",
+    "case_level_repetition_finding": [
+      {"case": "mthv2-mth1200-GL-1054-1-12", "repetition": 0.173913, "v2_cer": 0.4919},
+      {"case": "mthv2-mth1200-GL-1054-1-13", "repetition": 0.227273, "v2_cer": 0.5204}
+    ],
+    "best_pages": [
+      {"case": "mthv2-mth1000-01-V086P0669", "v2_cer": 0.0816},
+      {"case": "mthv2-mth1000-008", "v2_cer": 0.0836},
+      {"case": "mthv2-mth1000-01-V021P0004", "v2_cer": 0.0929}
+    ],
+    "cost_usd": 8.475
+  },
+  "cross_suite_context": {
+    "ancientdoc_v2_macro": 0.371389,
+    "mthv2_v2_macro": 0.209306,
+    "reading": "Same immutable rig, same model: the 0.16 macro gap between suites is dominated by gold provenance and material difficulty, quantifying how much measured error is evidence-side. Real-gold measurement is the only trustworthy compass."
+  },
+  "gate_status": {
+    "smoke_finished_outputs": "pass: 4 of 4 sealed",
+    "smoke_quality": "pass: 0.186350 versus 0.248500",
+    "smoke_budget": "pass: 1.4156 USD of 4.00",
+    "full_quality": "pass: 0.209306 versus 0.268503 with every corpus slice improving",
+    "full_hard_limits": "pass in all four chunks",
+    "budget_stop": "pass: never triggered; observed spend 9.8906 USD of 17.00"
+  },
+  "cost": {
+    "smoke_usd": 1.4156,
+    "full_usd": 8.475,
+    "total_usd": 9.8906,
+    "budget_usd": 17.0,
+    "paid_gpu": "none"
+  },
+  "limitations": [
+    "MTHv2 annotations are a single published human source; development_non_qualifying until our double-transcription adjudication protocol covers them.",
+    "One baseline pair is missing from the merged statistics because the baseline side flaked before challenger dispatch.",
+    "23 pairs at one repeat; per-case deltas carry single-run variance.",
+    "Case-level repetition on two dense Gaoli commentary pages shows the count anchors do not yet fully bind two-register layouts."
+  ],
+  "next_permitted_action": "Harness v3 targets, in evidence order: bind repetition at case grain on dense two-register pages (per-register count anchors or a repetition check inside verify_layers), diagnose the MTH1200 residue class (0.34 slice mean, the current hardest real-gold slice), and adopt the sealed submission contract for the baseline lane too so reliability comparisons stay clean. Then point the exodia campaign at the rig and let the proposer iterate policies against these three standing gates."
+}

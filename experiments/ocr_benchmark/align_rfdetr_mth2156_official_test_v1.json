@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "align-rfdetr-mth2156-official-test-v1",
+  "station": "align",
+  "state": "completed",
+  "created_at": "2026-07-28T04:30:59Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Audit the frozen 2,156-page RF-DETR character-localization checkpoint on every scorable page in the sealed MTHv2 official-test asset set.",
+  "hypothesis": "The larger, content-unique training set improves official-test localization over the frozen 600-page predecessor without regressing any corpus slice.",
+  "production_state": "unchanged",
+  "candidate": {
+    "id": "align/rfdetr-mth2156-development-v1",
+    "checkpoint_path": "library/evaluations/objects/f77d91bba64891a79f70fbabaeaca95e104a1d94c2db46fe7d20b41012e95f8c",
+    "checkpoint_sha256": "f77d91bba64891a79f70fbabaeaca95e104a1d94c2db46fe7d20b41012e95f8c",
+    "tile_size": 512,
+    "overlap": 96,
+    "threshold": 0.31,
+    "nms_iou": 0.4
+  },
+  "baseline": {
+    "id": "align/rfdetr-mth600-development-v3",
+    "report_path": "scratch/ocr_benchmark/runs/rfdetr-mth600-official-test800-image-only-v1/report.json"
+  },
+  "evidence": {
+    "manifest_path": "scratch/ocr_benchmark/mthv2/test-800-image-only-v1/localization/gold.jsonl",
+    "manifest_sha256": "8b5ffabfc0abcf2da95bab1f32b0016a407ccf4773f8560eada9751ffa09bca0",
+    "declared_assets": 800,
+    "scorable_cases": 796,
+    "excluded_malformed_annotations": 4,
+    "predictions_path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-official-test800-image-only-v1/predictions-scorable796.jsonl",
+    "predictions_sha256": "8698e279b99bb9e9079d5278c80d229367fb137c202771b50e627ffc283df577",
+    "report_path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-official-test800-image-only-v1/report.json",
+    "report_sha256": "d108bb5a24c7ecb5fd24d72af78a6a44c2b4784232c613af77e2c9da0f3e2ead",
+    "audit_sheet_path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-official-test800-image-only-v1/audit-worst20/worst-pages.png"
+  },
+  "result": {
+    "candidate": {
+      "precision": 0.98958,
+      "recall": 0.99139,
+      "f1": 0.990484,
+      "ap50": 0.990674
+    },
+    "baseline": {
+      "precision": 0.986369,
+      "recall": 0.989414,
+      "f1": 0.987889,
+      "ap50": 0.988299
+    },
+    "summary_delta": {
+      "precision": 0.003211,
+      "recall": 0.001976,
+      "f1": 0.002595,
+      "ap50": 0.002375
+    },
+    "protected_slices": {
+      "MTH1000": {"f1": 0.987535},
+      "MTH1200": {"f1": 0.991587},
+      "TKH": {"f1": 0.992578}
+    },
+    "decision": "pass"
+  },
+  "residual_diagnosis": {
+    "dominant_modes": [
+      "Small or faint interlinear and marginal characters are missed.",
+      "Small non-character marks and annotation-scope mismatches create false positives.",
+      "Sparse pages and extremely dense or multi-panel pages underperform medium-density pages."
+    ],
+    "density_f1": {
+      "under_100_gold_boxes": 0.981758,
+      "100_to_299": 0.989655,
+      "300_to_599": 0.991506,
+      "600_or_more": 0.985687
+    },
+    "worst_20_error_share": 0.1761
+  },
+  "cost": {
+    "known_usd": 0.0,
+    "unknown": false,
+    "execution": "local RTX 2060"
+  },
+  "next_permitted_action": "Use development cases only for any geometry or threshold tuning; do not retune against this official-test evidence."
+}

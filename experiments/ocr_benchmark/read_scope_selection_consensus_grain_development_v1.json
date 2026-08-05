@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "read-scope-selection-consensus-grain-development-v1",
+  "station": "read",
+  "stage": "development",
+  "state": "completed",
+  "created_at": "2026-07-28T19:20:22Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight_record": "experiments/ocr_benchmark/read_scope_selection_consensus_grain_preflight_v1.json",
+  "hypothesis": "Choosing scope per book from development evidence lands macro CER near the 0.355552 per-page oracle, identifying which AncientDoc volumes annotate commentary into gold; and character-grain agreement within paired columns restores at least 0.80 recall of healthy-page gold while holding at least 0.96 precision.",
+  "production_state": "unchanged",
+  "decision": "Adopt per-book scope flags as the AncientDoc evaluation policy for any future suite: selection from two development pages per book scores 0.358035 macro, within 0.002483 of the per-page oracle, and cleanly partitions the corpus into nine primary-scope and five full-scope volumes, converting the gold-scope confound into recorded metadata. Adopt character-grain consensus within the column pairing as the verification signal: it recovers 91.07 percent recall of healthy-page gold at 0.946730 micro and 0.964114 macro precision against 37.75 percent recall at the column-exact point, giving the verification architecture a measured two-point precision-coverage frontier. The remaining precision drag on healthy pages concentrates in one dense worn-print page where both channels agree on the same misreadings, which no agreement rule can detect and only a third independent channel or human sample can catch.",
+  "scope_selection_results": {
+    "selected_macro": 0.358035201145896,
+    "selected_median": 0.3051396720461469,
+    "full_page_macro": 0.443085684656424,
+    "layered_macro": 0.38517920684625334,
+    "oracle_page_macro": 0.35555240370978997,
+    "selection_regret": 0.0024827974361060034,
+    "books_choosing_primary": [
+      "山海經廣註",
+      "楚辭朱註",
+      "武經七書講義全彙合参",
+      "淮南子",
+      "湖海集",
+      "瀋國勉學書院集",
+      "醫館略述四書",
+      "隨園詩話五",
+      "高弧日景表細草"
+    ],
+    "books_choosing_full": [
+      "六子全書",
+      "晏子春秋",
+      "画禅室随笔",
+      "花史左编",
+      "藝文類聚"
+    ],
+    "transfer_limitation": "Qualification-reserve books are disjoint, so these flags do not transfer; reserve books need their own derivation or versioned gold correction before qualification use."
+  },
+  "consensus_grain_results": {
+    "healthy_pages": 12,
+    "character_grain": {
+      "precision_micro_healthy": 0.9467304625199362,
+      "precision_macro_mean_healthy": 0.9641142207462868,
+      "recall_micro_healthy": 0.9107088063823259,
+      "coverage_of_paired_healthy": 0.9534671532846716,
+      "healthy_precision_range": [0.8539156626506024, 1.0]
+    },
+    "column_exact_reference_point": {
+      "precision_micro_healthy": 0.968266253869969,
+      "recall_micro_healthy": 0.37748943874471935
+    },
+    "frontier_reading": "Column-exact agreement trades 53 recall points for 2.2 precision points over character grain. Both operating points sit far above the 0.62-0.75 accuracy of any single channel.",
+    "residual": "The healthy-page precision floor is 0.853916 on the dense 藝文類聚 spread where both channels repeat identical misreadings of small worn print; same-error agreement is invisible to any two-channel rule."
+  },
+  "gate_status": {
+    "scope_macro": "pass: 0.358035 at or below 0.40",
+    "consensus_recovery": "partial: recall 0.910709 passes 0.80; precision 0.964114 macro passes 0.96 while 0.946730 micro falls short",
+    "immutability": "pass: every consumed artifact hash matches the preflight; no prior artifact modified"
+  },
+  "evidence": {
+    "run_root": "scratch/ocr_benchmark/runs/scope-selection-consensus-grain-v1",
+    "report": "scratch/ocr_benchmark/runs/scope-selection-consensus-grain-v1/report.json",
+    "report_sha256": "ca694c7592777ba476638b67ed403b7086ef6505def83d6029e932bccb960d59",
+    "inputs": "as fingerprinted in the preflight record",
+    "scorer": "rapidfuzz 3.14.3 Levenshtein distance and opcodes, installed for scoring and removed afterward"
+  },
+  "cost": {
+    "total_usd": 0.0,
+    "paid_gpu": "none"
+  },
+  "limitations": [
+    "Development evidence on 28 cases and 14 books, two pages per book; scope flags are development-derived metadata, not model improvements.",
+    "Character-grain consensus inherits the pairing's line-column alignment; alignment mistakes surface as reduced coverage, not as false agreement.",
+    "Same-error agreement remains unmeasurable from two channels alone."
+  ],
+  "next_permitted_action": "The next paid experiment is the redesigned disagreement pass: show the full page with each disputed span highlighted in context and adjudicate only non-consensus residue, targeting the 5-9 percent of healthy-page characters outside consensus. Scope-flag metadata and any gold change for reserve books follow the gold-correction protocol with a new version."
+}

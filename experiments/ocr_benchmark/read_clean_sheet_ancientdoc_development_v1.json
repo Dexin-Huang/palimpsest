@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "read-clean-sheet-ancientdoc-development-v1",
+  "station": "read",
+  "stage": "development-smoke",
+  "state": "rejected",
+  "created_at": "2026-07-28T16:23:36Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight_record": "experiments/ocr_benchmark/read_clean_sheet_ancientdoc_preflight_v1.json",
+  "hypothesis": "Removing parchment, illustration, gutter, and non-character background while preserving every detected character at its source coordinate reduces Kimi-VL-A3B-Instruct character error and keeps every smoke output below twice the gold length.",
+  "production_state": "unchanged",
+  "decision": "Reject same-layout clean-sheet preprocessing as a solution to full-page generative OCR repetition. It produces visually clean pages, but both catastrophic cases still reached the 8192-token ceiling, the maximum output/reference ratio was 31.68, and CER increased on both ordinary pages.",
+  "transform": {
+    "implementation": "experiments/ocr_benchmark/clean_sheet.py",
+    "implementation_sha256": "b97065da2a5b1a5886bdae4e7b4f13d7c5771d82cbddb3ecbfb15a23e4526e1b",
+    "operation": "Lift centered connected ink components from every RF-DETR character crop to the same source coordinates on a white canvas.",
+    "pad_fraction": 0.08,
+    "detected_boxes": 1857,
+    "rendered_boxes": 1857,
+    "blank_boxes": 0,
+    "render_rate": 1.0,
+    "white_fraction_range": [
+      0.8245769805538741,
+      0.9359601477329038
+    ],
+    "visual_audit": {
+      "astronomical_table": "Parchment, gutter, and page boundary were removed while the printed table remained legible at its original coordinates.",
+      "dense_chu_ci": "Parchment was removed, but rule, underline, and adjacent connected strokes centered within detections remained; the dense two-register layout was preserved.",
+      "finding": "The transform removes background distraction without removing layout complexity or all non-character connected strokes."
+    }
+  },
+  "detector": {
+    "candidate_id": "align/rfdetr-mth2156-development-v1",
+    "checkpoint_sha256": "f77d91bba64891a79f70fbabaeaca95e104a1d94c2db46fe7d20b41012e95f8c",
+    "tile_size": 512,
+    "overlap": 96,
+    "threshold": 0.31,
+    "nms_iou": 0.4,
+    "detections_sha256": "dea855df791743f620f77d980f03b69d05082056f257d44aded05b9a42b9b174"
+  },
+  "ocr": {
+    "repository": "moonshotai/Kimi-VL-A3B-Instruct",
+    "revision": "398eede0903cd983a2bfa0cc634e9ac1d843f375",
+    "weights_verified": true,
+    "weight_shard_sha256": [
+      "a5ef3ebd9727f82e34417a778317d2cc9c08762fe0bc4a2ee333b8a52cf7c1a5",
+      "45ecd00decdad65e7d3f494028ed0c79d0cd56f145adae077ffa78b5b8ff95c0",
+      "b9ba98f01e22eea43da8cfbf6f09ff0857616cd9e1df4603a735c111755109ef",
+      "8f7eb3fc5c12481fd1a81d2708fa4a299ff4c207a5dbafb5b8bef25ab9fd8b23",
+      "db83e896b3d75f4bc51f621ae90ad61e8f6f7901f49a06b5c40348b839057206",
+      "abed41982a3f9c7d05f69bb560dad7bcb93cfa764c77a2b59127f35dc787983c",
+      "2e2ddd33f2b4f472898482860585bd6d73d4397c8c833ed9d00a2024443f7a77"
+    ],
+    "torch_dtype": "bfloat16",
+    "transformers": "4.50.3",
+    "generation": {
+      "do_sample": false,
+      "temperature": 0.0,
+      "max_new_tokens": 8192
+    },
+    "prompt_sha256": "b41b0b10dd629df9ef201b7731ba485987e9f03ceb80c38264822fcaef29e6e5",
+    "runner_sha256": "7cfd55ce2b0ec753f8b38bdb52dac5db15ca2bf92bc06039532e6e3106db5264"
+  },
+  "evidence": {
+    "cases": 4,
+    "case_coverage": 1.0,
+    "unique_completed_cases": 4,
+    "empty_outputs": 0,
+    "token_ceiling_cases": 2,
+    "maximum_output_to_reference_ratio": 31.68281938325991,
+    "total_latency_seconds": 986.7735165152699,
+    "predictions_path": "scratch/ocr_benchmark/runs/clean-sheet-ancientdoc-smoke4-v1/predictions-kimi.jsonl",
+    "predictions_sha256": "3ae2127c6c4945e619f707af4364ee28f37e852c9b31378f457a5c95d10797da",
+    "comparison_path": "scratch/ocr_benchmark/runs/clean-sheet-ancientdoc-smoke4-v1/comparison.json",
+    "original_predictions_sha256": "950f7b32877d18fc55125283fc840a941535ef41ac7edb0c105e0911d8467e25",
+    "render_index_path": "scratch/ocr_benchmark/runs/clean-sheet-ancientdoc-smoke4-v1/rendered/index.jsonl",
+    "render_index_sha256": "781935289077c2ecf0ca5fa6b5fd746865954635b67039bc6b13c70725d90346",
+    "metric": "normalized_character_error_rate",
+    "normalization": "Unicode NFC and CRLF or bare CR to LF; no stripping",
+    "clean_sheet": {
+      "macro_cer_mean": 11.002643227242437,
+      "macro_cer_median": 6.200169018224574,
+      "micro_cer": 10.257665094339623,
+      "total_errors": 17397,
+      "total_predicted_characters": 18100
+    },
+    "original_page": {
+      "macro_cer_mean": 12.373511515953213,
+      "macro_cer_median": 6.136383009994121,
+      "micro_cer": 10.98820754716981,
+      "total_errors": 18636,
+      "total_predicted_characters": 19383
+    },
+    "per_case": [
+      {
+        "case_id": "ancientdoc/842e8e51bb029848",
+        "kind": "astronomical_table",
+        "reference_characters": 840,
+        "clean_characters": 10243,
+        "clean_cer": 12.04642857142857,
+        "original_cer": 12.04642857142857,
+        "cer_delta": 0.0,
+        "clean_output_to_reference_ratio": 12.19404761904762,
+        "output_tokens": 8192
+      },
+      {
+        "case_id": "ancientdoc/6f37af436505879a",
+        "kind": "ordinary_novel_page",
+        "reference_characters": 386,
+        "clean_characters": 408,
+        "clean_cer": 0.10362694300518134,
+        "original_cer": 0.08031088082901554,
+        "cer_delta": 0.023316062176165803,
+        "clean_output_to_reference_ratio": 1.0569948186528497,
+        "output_tokens": 413
+      },
+      {
+        "case_id": "ancientdoc/93fd600a07b5d640",
+        "kind": "dense_two-register_chu_ci",
+        "reference_characters": 227,
+        "clean_characters": 7192,
+        "clean_cer": 31.506607929515418,
+        "original_cer": 37.140969162995596,
+        "cer_delta": -5.634361233480176,
+        "clean_output_to_reference_ratio": 31.68281938325991,
+        "output_tokens": 8192
+      },
+      {
+        "case_id": "ancientdoc/6877397c5cc94e07",
+        "kind": "ordinary_art_page",
+        "reference_characters": 243,
+        "clean_characters": 257,
+        "clean_cer": 0.35390946502057613,
+        "original_cer": 0.22633744855967078,
+        "cer_delta": 0.12757201646090535,
+        "clean_output_to_reference_ratio": 1.0576131687242798,
+        "output_tokens": 221
+      }
+    ]
+  },
+  "gate_status": {
+    "completed_cases": "pass",
+    "empty_outputs": "pass",
+    "maximum_output_to_reference_ratio": "fail",
+    "catastrophic_repetition_prevented": "fail",
+    "macro_cer_non_regression": "pass",
+    "ordinary_page_non_regression": "fail",
+    "overall": "rejected"
+  },
+  "runpod": {
+    "gpu": "NVIDIA A40",
+    "hourly_rate_usd": 0.44,
+    "pod_id": "hy0brhi6izvxcf",
+    "pod_deleted": true,
+    "active_pods_after_cleanup": 0,
+    "current_spend_per_hour_after_cleanup": 0,
+    "final_client_balance_usd": 144.8707701487,
+    "maximum_balance_delta_since_prior_recorded_cleanup_usd": 0.4373475925,
+    "cost_note": "The balance delta is a conservative upper bound because no run-start balance was captured; it remains below the declared 0.50 USD budget."
+  },
+  "limitations": [
+    "This is four-case development evidence, not qualification evidence.",
+    "The transform cannot recover characters missed by the detector.",
+    "Centered non-character connected strokes can survive when they overlap a detected box.",
+    "The experiment tests same-layout full-page OCR only; it does not test bounded column crops."
+  ],
+  "next_permitted_action": "Use RF-DETR boxes to form bounded single-column or short-region crops, transcribe each crop independently with a strict output-length ceiling, then assemble text deterministically from geometry. Do not run another unconstrained full-page Kimi experiment."
+}

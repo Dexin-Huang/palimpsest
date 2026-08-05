@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "read-scope-selection-consensus-grain-preflight-v1",
+  "station": "read",
+  "state": "ready",
+  "created_at": "2026-07-28T19:18:16Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Zero-cost deterministic rescore of frozen artifacts: quantify per-book scope selection between the layered primary channel and the full-page champion, and re-measure dual-channel consensus at character grain inside the existing column pairing to recover coverage at the improved precision.",
+  "hypothesis": "Choosing scope per book from development evidence lands macro CER near the 0.355552 per-page oracle, identifying which AncientDoc volumes annotate commentary into gold; and character-grain agreement within paired columns restores at least 0.80 recall of healthy-page gold while holding at least 0.96 precision.",
+  "production_state": "unchanged",
+  "method": {
+    "scope_selection": "Group the 28 development pages by volume title (second stratum). For each of the 14 books compare mean page CER of the layered primary channel (with the recorded one-layer empty-primary repair) against the full-page champion transcription; select the lower-mean scope for the whole book, ties to full-page. Scope flags are development-derived suite metadata: qualification-reserve books are disjoint, so any future use requires per-book derivation there or versioned gold correction.",
+    "consensus_grain": "For every paired line-column operation in the frozen pairing, take equal blocks of the character-level minimum-edit alignment between the no-space line and no-space column texts as agreed characters; whole-column agreement is the existing special case. Score agreed text against no-space gold by the same equal-block method. Lines without a paired column contribute nothing.",
+    "no_model_calls": true
+  },
+  "inputs": {
+    "development_gold_sha256": "4c361f937624e25d868cfe06cf1be000f06bb4891c051d9d2bba33dae4d37683",
+    "layered_sha256": "95cc2a35bf893a5bb1b9ab89284f5dec62d3e20ca97df253088c686dffadf965",
+    "full_page_transcriptions_sha256": "2fff81e77bc8b0a1ef55d81f46a7b4c36b7d3c33b2f36ae16497623d8f633f9e",
+    "columns_sha256": "b2effb33e32ca1d225aa36d6d75ba23cadc237f64b34a2f3e9c677b9bd7d7a21",
+    "pairing_sha256": "1239a5e725be3279a96cafb025f04273ed87c43282fdc06d8be81455e1935ca4",
+    "disputes_sha256": "6ba9bd76870deb7106cb37d0af21aab4972a83b21f4a758aeb48c4a489995c3d",
+    "layers_sha256": "c526b1e6cf502463c0d2cc2afb9f8bd41875c7587402d2d8a3c4a195a05eaab4"
+  },
+  "gates": {
+    "scope_macro": "per-book scope selection macro CER at or below 0.40",
+    "consensus_recovery": "character-grain consensus reaches at least 0.80 recall of healthy-page gold at precision at least 0.96",
+    "immutability": "every consumed artifact hash matches this record; no prior artifact is modified"
+  },
+  "budget": {
+    "maximum_gemini_cost_usd": 0.0,
+    "paid_gpu": "none"
+  },
+  "allowed_changes": [
+    "experiments/ocr_benchmark/read_scope_selection_consensus_grain_preflight_v1.json",
+    "experiments/ocr_benchmark/read_scope_selection_consensus_grain_development_v1.json",
+    "experiments/LOG.md",
+    "scratch/ocr_benchmark/runs/scope-selection-consensus-grain-v1"
+  ],
+  "non_goals": [
+    "No model calls of any kind.",
+    "Do not modify prior run artifacts or gold.",
+    "Do not promote or propose any candidate from this evidence."
+  ],
+  "next_permitted_action": "Run the deterministic rescore, write the report and result record, and stop."
+}

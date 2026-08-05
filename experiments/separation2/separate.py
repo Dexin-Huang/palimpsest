@@ -15,7 +15,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 HERE = Path(__file__).parent
@@ -95,8 +94,8 @@ def margin(gray_crop: np.ndarray) -> float | None:
 MARGIN_FLOOR = 0.019  # p5 of attested P.3477 crops in v2 space
 
 
-def separate(raw_image: np.ndarray) -> dict:
-    page, info = prep.prepare(raw_image)
+def separate(raw_image: np.ndarray, *, prepare_fn=prep.prepare) -> dict:
+    page, info = prepare_fn(raw_image)
     if page is None:
         return {"blank": True, "prep": info, "kept": 0, "junked": 0,
                 "cells": [], "glyph_h": 0.0, "columns": 0,

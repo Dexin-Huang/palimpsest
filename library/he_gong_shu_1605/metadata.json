@@ -1,0 +1,50 @@
+{
+  "doc_id": "he_gong_shu_1605",
+  "source": {
+    "kind": "iiif",
+    "manifest_url": "https://www.loc.gov/item/2012402413/manifest.json"
+  },
+  "source_catalog": {
+    "label": "He gong shu : yi juan",
+    "title": "He gong shu : yi juan",
+    "shelfmark": "http://lccn.loc.gov/2012402413",
+    "archive": "Library of Congress",
+    "author": "Lü, Kun, 1536-1618",
+    "date": "1605",
+    "language": "chinese",
+    "description": "According to the end note, this book was printed in winter of 1605 in Ningling County; the contents imply that the author was Lü Kun, a contemporary scholar; not cited in the county history, but mentioned in 'Lü si kou song de bei ji' by Meng Yanghao.",
+    "canvas_count": 23,
+    "metadata_entries": [
+      {
+        "label": "Archive",
+        "value": "Library of Congress"
+      },
+      {
+        "label": "Title",
+        "value": "He gong shu : yi juan"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "http://lccn.loc.gov/2012402413"
+      },
+      {
+        "label": "Creator",
+        "value": "Lü, Kun, 1536-1618"
+      },
+      {
+        "label": "Date",
+        "value": "1605"
+      },
+      {
+        "label": "Language",
+        "value": "chinese"
+      },
+      {
+        "label": "Created/Published",
+        "value": "Ningling Xian : [publisher not identified], Ming Wanli yi si [33 nian, 1605]"
+      }
+    ]
+  },
+  "created_at": "2026-07-24T16:21:40.122966+00:00",
+  "updated_at": "2026-07-24T22:16:40.423960+00:00"
+}

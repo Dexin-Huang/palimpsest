@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "glyph-classifier-export-development-v1",
+  "station": "transcribe",
+  "stage": "development",
+  "state": "completed",
+  "created_at": "2026-07-31T04:57:30Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight": "experiments/ocr_benchmark/glyph_classifier_evidence_preflight_v1.json",
+  "development_verdict": "experiments/ocr_benchmark/glyph_classifier_evidence_development_v1.json",
+  "source": {
+    "path": "experiments/ocr_benchmark/glyph_classifier_export.py",
+    "sha256": "abda62b962f1748f59d221670bb41e3f6a5561191cb24d0ece75e2c9cb20cc15"
+  },
+  "input_checkpoint": {
+    "path": "scratch/ocr_benchmark/glyph-classifier-retrieved-v1/palimpsest-run/glyph-classifier-mth2156-exemplars-v1/train/best.pt",
+    "sha256": "69a98458b50bf0d28081223ff1528ced20a264328bdd97d113d43df387c6d849"
+  },
+  "outputs": {
+    "onnx": {
+      "path": "library/evaluations/objects/edd81d3fcc089488fc79571701bdf2fdeb23bed50850bd8d911f9dc71c361f75",
+      "sha256": "edd81d3fcc089488fc79571701bdf2fdeb23bed50850bd8d911f9dc71c361f75",
+      "bytes": 54326598,
+      "opset": 17,
+      "dynamic_batch": true
+    },
+    "classes": {
+      "path": "library/evaluations/objects/a53da8698ee4b191d1f41860750b8d0efd216b421c0a72b169488aed1301a5a3",
+      "sha256": "a53da8698ee4b191d1f41860750b8d0efd216b421c0a72b169488aed1301a5a3",
+      "bytes": 32997,
+      "count": 4693
+    }
+  },
+  "numerical_validation": {
+    "source": "scratch/ocr_benchmark/runs/glyph-classifier-topk-evidence-v1/export/export_report.json",
+    "source_sha256": "3a9422506b2f9b005f9ba89689e5bdb3b2f805c1928df5ea9cf15cf9111dc4b9",
+    "real_eval_crops": 32,
+    "maximum_absolute_logit_difference": 9.5367431640625e-06,
+    "mean_absolute_logit_difference": 1.3762129356109654e-06,
+    "top1_agreement": 1.0
+  },
+  "gates": {
+    "checkpoint_identity": true,
+    "onnx_retained_by_hash": true,
+    "classes_retained_by_hash": true,
+    "top1_agreement": true,
+    "maximum_absolute_logit_difference_below_0_0001": true
+  },
+  "decision": "accepted",
+  "production_state": "unchanged",
+  "next_permitted_action": "Use these exact content-addressed objects only in the separately fingerprinted toolbelt7 development candidate."
+}

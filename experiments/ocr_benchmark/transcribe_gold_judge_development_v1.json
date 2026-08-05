@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "transcribe-gold-judge-development-v1",
+  "station": "transcribe",
+  "stage": "development",
+  "state": "completed",
+  "created_at": "2026-07-29T14:24:59Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight_record": "experiments/ocr_benchmark/transcribe_gold_judge_preflight_v1.json",
+  "hypothesis": "Under the gold-anchored lens the rig's advantage persists or widens, because its faithful extra text (commentary layers, table cells, marginalia) was previously punished as insertions; the judge's missing/incorrect findings localize the true residue.",
+  "production_state": "unchanged",
+  "decision": "Adopt gold-anchored grading as the operator's decision lens: deterministic insertion-free gold recall plus an answer-key judge, no mechanical hard gates. Under this lens the rig's advantage widens everywhere and the absolute numbers finally describe what the operator asked for: on MTHv2 real human gold the v2 rig recovers a judged 0.959100 of the answer on average (median 0.981200) with 4 perfect and 15 near_perfect of 24 pages, zero poor, winning 21 of 23 pairs; on AncientDoc it recovers 0.835300 (median 0.883900), winning 26 of 28. Across all 111 judgments the judge flagged ZERO outputs with suspicious extra text: everything the rig read beyond the reference looked like faithful page text, confirming the extra-is-free premise. The catalog page the retired mechanical gate condemned was judged perfect at 1.0, closing the repetition question: the answer key, not an absolute threshold, is the arbiter. The v1 zero-repetition plan and the proposed suite revision are dropped as superseded.",
+  "method": {
+    "deterministic_gold_recall": "matched gold characters / gold length from a minimum-edit alignment of no-space NFC strings; insertions free",
+    "judge": "gemini-3.6-flash, low thinking, given gold plus both output layers, never the image or side identity; schema-bound verdicts; candidates framed as untrusted data",
+    "implementation": "experiments/ocr_benchmark/gold_judge.py",
+    "no_new_transcriptions": true
+  },
+  "deterministic_results": {
+    "ancientdoc": {
+      "baseline_gold_recall_mean": 0.5882,
+      "v2_gold_recall_mean": 0.7178,
+      "v2_median": 0.8616,
+      "v2_wins": "23 of 28"
+    },
+    "mthv2": {
+      "baseline_gold_recall_mean": 0.7773,
+      "v2_gold_recall_mean": 0.8468,
+      "v2_median": 0.9093,
+      "v2_wins": "20 of 23"
+    },
+    "recall_sha256": "002b184da7b851b8ed0a0c97110f79e50f38fbc2facd814519063b65003768af"
+  },
+  "judged_results": {
+    "judgments": 111,
+    "failed": 0,
+    "suspicious_extra_text": 0,
+    "ancientdoc": {
+      "baseline": {"mean": 0.6076, "median": 0.5635, "verdicts": {"perfect": 0, "near_perfect": 7, "partial": 14, "poor": 7}},
+      "v2": {"mean": 0.8353, "median": 0.8839, "verdicts": {"perfect": 0, "near_perfect": 13, "partial": 14, "poor": 1}},
+      "v2_wins": "26 of 28, 1 tie"
+    },
+    "mthv2": {
+      "baseline": {"mean": 0.8287, "median": 0.82, "verdicts": {"perfect": 0, "near_perfect": 7, "partial": 16, "poor": 0}},
+      "v2": {"mean": 0.9591, "median": 0.9812, "verdicts": {"perfect": 4, "near_perfect": 15, "partial": 5, "poor": 0}},
+      "v2_wins": "21 of 23"
+    },
+    "v3_smoke": {"mean": 0.9645, "verdicts": {"perfect": 1, "near_perfect": 2, "partial": 1, "poor": 0}},
+    "catalog_page_vindication": "mthv2-mth1200-GL-1054-1-12, condemned by the absolute repetition gate, judged perfect 1.0 with the answer key",
+    "judgments_sha256": "fcc0f44ee92bdefd714ab685c86b21c7a34d8d8b498ebf81d28be1111cea8e4a"
+  },
+  "gate_status": {
+    "note": "Per operator direction this lens carries no mechanical gates; the recorded suite hard limits in prior reports remain as archival evidence only.",
+    "budget_stop": "pass: judge spend 0.5533 USD of 3.00"
+  },
+  "cost": {
+    "judge_usd": 0.5533,
+    "total_usd": 0.5533,
+    "budget_usd": 3.0,
+    "paid_gpu": "none"
+  },
+  "limitations": [
+    "The judge holds the answer but not the image, so it grades gold recovery and the plausibility of extra text, not the correctness of extra text against the page; the second-reader channel and future image-grounded audits cover that side.",
+    "Judged fractions are model estimates; the deterministic gold recall is the reproducible floor and the two lenses agree on every ranking reported here.",
+    "Single judge identity; qualification-grade use would calibrate the judge against adjudicated samples per the evaluation contract."
+  ],
+  "next_permitted_action": "Make gold-anchored recall plus the answer-key judge the standing evaluation for all future rig iterations; drop the v3.1 repetition-gate plan; next improvements target the judged residue directly: the missing_from_output snippets now name exactly which gold passages each page loses, starting with the AncientDoc poor page and the MTH1200 partial class."
+}

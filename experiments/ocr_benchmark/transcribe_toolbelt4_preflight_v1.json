@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "transcribe-toolbelt4-preflight-v1",
+  "station": "transcribe",
+  "state": "ready",
+  "created_at": "2026-07-29T14:44:37Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Close the dominant measured residue class on the road to perfect answer recovery: the character-level autopsy of all 24 MTHv2 v2 outputs showed 12.1 percent of gold characters rendered wrong versus 3.6 percent missing, and the top confusions are uniformly variant-normalization pairs (縁 to 緣, 巳 to 已, 爲 to 為, 寳 to 寶, 来 to 來, 従 to 從, 礼 to 禮, 𡻕 to 歲) that our own prompt instructed by demanding the closest standard Unicode character. v4 is the exact-form identity: the same omp_toolbelt3 host harness with a codepoint-faithful prompt plus a completeness sweep for the 27 percent of missing characters that are small interlinear text.",
+  "hypothesis": "Codepoint-faithful transcription converts the bulk of the wrong class into matches, lifting deterministic gold recall dramatically on the Gaoli catalog pages (0.2492 and 0.3455 today) without hurting judged answer recovery anywhere; the completeness sweep reduces the missing class on dense pages.",
+  "production_state": "unchanged",
+  "autopsy": {
+    "pages": 24,
+    "gold_characters": 7724,
+    "wrong": {"count": 936, "rate": 0.1212},
+    "missing": {"count": 279, "rate": 0.0361, "small_fraction_of_located": 0.273},
+    "top_confusions": ["縁->緣 34", "巳->已 24", "爲->為 23", "寳->寶 20", "来->來 18", "従->從 14", "别->別 12", "丗->世 11", "圎->圓 11", "衆->眾 11", "礼->禮 11", "𡻕->歲 10"],
+    "interpretation": "The reader sees correctly and normalizes because instructed to; MTHv2 gold preserves exact variant glyphs, which is also the diplomatic standard. The judge lens already forgives these, which is why judged and deterministic lenses diverged on the catalog pages."
+  },
+  "candidates": {
+    "model_ref": "openai-codex/gpt-5.6-luna",
+    "baseline_v2": {
+      "candidate": "scratch/exodia-rig/candidates/b57a514efd96281f8bc92ddfb01fc680db269c83488ce2b0d775124a7275374a.candidate.yaml",
+      "fingerprint": "6d37a51b036bd095bc66784ad216ee1ec39cc24ebf130c7354347b00a4a63769",
+      "variant": "omp_toolbelt2",
+      "prompt": "transcribe/zh/toolbelt2"
+    },
+    "challenger_v4": {
+      "candidate": "scratch/exodia-rig/candidates/268196d2501354f4e5cb41b78af2bb149fa6fd62e2db625704d116372799b3f9.candidate.yaml",
+      "fingerprint": "973a478bd3f8de5a8198f841b6d83dd8682564d4bd3624b91d10c2c516c02ae8",
+      "variant": "omp_toolbelt3",
+      "prompt": "transcribe/zh/toolbelt4",
+      "seed_source_sha256": "ec429bf331ad0e3eaaed5403f821fe4dd974e42b6d7c58cd3ac2df082b6bb0d4",
+      "identity_note": "No new station code: v4 is a prompt identity on the v3 host harness, so the paired delta measures the exact-form policy and sweeps alone."
+    }
+  },
+  "execution": {
+    "smoke_run_id": "toolbelt4-mthv2-smoke4-v1",
+    "smoke_cases": [
+      "mthv2-mth1200-GL-1054-1-12-transcribe-development",
+      "mthv2-mth1200-GL-1054-1-13-transcribe-development",
+      "mthv2-mth1200-GL-1047-1-5-transcribe-development",
+      "mthv2-mth1200-GL-1048-1-25-transcribe-development"
+    ],
+    "smoke_design": "The four worst deterministic-recall pages, all Gaoli, where the variant class concentrates.",
+    "full_run_ids": ["toolbelt4-mthv2-dev24-c1", "toolbelt4-mthv2-dev24-c2", "toolbelt4-mthv2-dev24-c3", "toolbelt4-mthv2-dev24-c4"],
+    "policy": "Smoke first; start the full 24 only if all four v4 sessions seal and v4's deterministic gold recall beats v2's stored recall on at least 3 of the 4 smoke pages. After the full run, evaluate BOTH lenses: deterministic gold recall and the answer-key judge.",
+    "environment": "PALIMPSEST_RFDETR_OBJECT_ROOT=D:/Projects/palimpsest/library/evaluations/objects",
+    "workers": 2
+  },
+  "gates": {
+    "smoke_finished_outputs": "4 of 4 v4 sessions sealed",
+    "smoke_recall": "v4 deterministic gold recall beats v2's stored value on at least 3 of 4 smoke pages",
+    "full_recall": "v4 mean deterministic gold recall above v2's 0.8468, with the Gaoli pages materially lifted",
+    "judged_non_regression": "v4 judged answer recovery not below v2's 0.9591 mean beyond noise",
+    "budget_stop": "bench run --max-cost aborts dispatch at the ceiling"
+  },
+  "budget": {
+    "smoke_maximum_usd": 4.0,
+    "full_maximum_usd": 12.0,
+    "judge_maximum_usd": 2.0,
+    "total_maximum_usd": 18.0,
+    "paid_gpu": "none"
+  },
+  "allowed_changes": [
+    "palimpsest/factory/prompts/transcribe/zh/toolbelt4.txt",
+    "D:/Projects/exodia/research/palimpsest-transcription/seeds/harness-toolbelt4.ts",
+    "experiments/ocr_benchmark/transcribe_toolbelt4_preflight_v1.json",
+    "experiments/ocr_benchmark/transcribe_toolbelt4_development_v1.json",
+    "experiments/LOG.md",
+    "scratch/ocr_benchmark/runs/gold-judge-eval-v1 (appended v4 scores and judgments)",
+    "library/evaluations/runs (run records produced by bench run)"
+  ],
+  "non_goals": [
+    "Do not edit production recipes.",
+    "Do not modify suites or gold.",
+    "Do not run bench propose or promote."
+  ],
+  "next_permitted_action": "Run the four-case Gaoli smoke, evaluate the recall gate, then the full 24 and both evaluation lenses under the declared budget."
+}

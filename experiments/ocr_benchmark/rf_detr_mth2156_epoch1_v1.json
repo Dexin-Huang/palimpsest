@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded_experiment",
+  "experiment_id": "rf_detr_mth2156_valid_unique_data_scale_epoch1_seed361004_v1",
+  "station": "align",
+  "objective": "unlabeled_character_localization",
+  "state": "frozen-development-winner",
+  "hypothesis": "Increasing deterministic in-domain MTHv2 training coverage from 600 pages to every 2,156 valid content-unique page among the 2,159 eligible official training pages improves held-out development character-box localization without changing architecture, initialization, training duration, inference thresholds, or the align artifact socket.",
+  "production_state": "unchanged",
+  "qualification_authorized": false,
+  "official_test_authorized": false,
+  "baseline": {
+    "candidate_id": "rf_detr/mth600-control-epoch1-seed361004-v1",
+    "checkpoint_sha256": "cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d",
+    "development_predictions": "scratch/ocr_benchmark/runs/kuzushiji-transfer-gate-v1/control/full240/predictions.jsonl",
+    "development_cases": 240,
+    "development_f1": 0.986953
+  },
+  "challenger": {
+    "candidate_id": "rf_detr/mth2156-valid-unique-data-scale-epoch1-seed361004-v1",
+    "variant": "rfdetr-mth600/v1",
+    "initialization": "RF-DETR Nano pretrained weights",
+    "pretrained_weights_sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+    "dataset": {
+      "source": "MTHv2 official train.txt",
+      "source_commit": "c9bd9b1b4ee999dd0acafd226a8a901a7088d980",
+      "selection": "SHA-256-ranked source paths after the first 80 development pages in each corpus; exclude only malformed positive-area character annotations and duplicate content identities",
+      "requested_pages": 2159,
+      "pages": 2156,
+      "pages_by_corpus": {
+        "TKH": 669,
+        "MTH1000": 695,
+        "MTH1200": 792
+      },
+      "training_manifest_sha256": "50e73287e4f35bfaa5103fc99b3107344280c08d526c206eb0eedeb84cd9cc51",
+      "development_manifest_sha256": "fff0b14b23ad8b02956ca58205200ccee69f768186415098e2f03be33aa36a7b",
+      "exclusions": [
+        {
+          "source_path": "/home/maweihong/dataset/dzj/TKH/img/0001_021_28_03.jpg",
+          "reason": "invalid MTHv2 character box at line 6: '# 52 890 76 890'"
+        },
+        {
+          "source_path": "/home/maweihong/dataset/dzj/MTH1000/img/03-V048P0150.png",
+          "reason": "invalid MTHv2 character box at line 545: '# 1192.00 439.00 1192.00 463.00'"
+        },
+        {
+          "source_path": "/home/maweihong/dataset/dzj/MTH1000/img/24-V009P0379.png",
+          "reason": "duplicate image identity with an earlier development or training page: 4a857a2cef48dcb0db516a07eb55c1d267f033d2891784dbd4b930b79762ea7e"
+        }
+      ],
+      "development_pages": 240,
+      "development_pages_by_corpus": 80,
+      "official_test_pages": 0
+    },
+    "training": {
+      "model": "RF-DETR Nano 1.8.3",
+      "seed": 361004,
+      "epochs": 1,
+      "batch_size": 1,
+      "gradient_accumulation_steps": 8,
+      "learning_rate": 0.0001,
+      "encoder_learning_rate": 0.00015,
+      "early_stopping": false,
+      "resolution": 512,
+      "tile_overlap": 96,
+      "minimum_box_visibility": 0.8,
+      "augmentation": null
+    },
+    "inference": {
+      "threshold": 0.31,
+      "nms_iou": 0.4
+    }
+  },
+  "evaluation": {
+    "development_manifest": "scratch/ocr_benchmark/mthv2/train-all-valid-after-dev80-v1/manifests/development.jsonl",
+    "smoke_cases": 36,
+    "full_cases": 240,
+    "metric": "per-case detection F1 at one-to-one IoU >= 0.5",
+    "bootstrap_samples": 10000,
+    "bootstrap_seed": 361004,
+    "protected_slices": ["MTH1000", "MTH1200", "TKH"],
+    "smoke_gate": "coverage = 1.0 and no protected-corpus F1 delta below -0.01",
+    "full_acceptance": "coverage = 1.0, paired mean F1 delta >= 0.0015, bootstrap 95% CI lower bound > 0, and no protected-corpus regression",
+    "downstream_probe": "same-socket align integration remains unchanged; no production or qualification run in this experiment"
+  },
+  "resource_contract": {
+    "provider": "RunPod Secure Cloud",
+    "gpu": "one RTX 4090-class GPU with at least 24 GB VRAM",
+    "workspace_limit_gb": 100,
+    "hard_terminate_after_hours": 6,
+    "maximum_approved_spend_usd": 10.0,
+    "paid_call_authorization": "approved by user on 2026-07-27"
+  },
+  "source_evidence": {
+    "fetch_sha256": "d7dbb7d202da097eea7522227cedd0d0204d9922a19d4c4b85ff4d706f769d3a",
+    "dataset_builder_sha256": "41615ee85ec8521b468fc87ffb8b63c1465ad3c424726ed691532d3779ef346b",
+    "candidate_source_sha256": "94c5291e0da54ae1e674e9791b2099eb371ee7a17f31345198060445a90e070d",
+    "scorer_sha256": "9daa1126bb25e9708340c2dbad865344e0ffa4e4cb7ff2412796547f650ee903"
+  },
+  "runpod": {
+    "pod_id": "09vsyth40fp3c8",
+    "image": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+    "run_directory": "/workspace/palimpsest-run/rf-detr-mth2159-data-scale-epoch1-seed361004-v1",
+    "hard_terminate_utc": "2026-07-28T01:32:34Z",
+    "observed_cost_usd": 4.212015,
+    "replaced_pod_id": "opmu0q6z2jzoo1",
+    "replacement_reason": "Initial Norway host never reached container uptime or SSH readiness and was deleted before any inputs were transferred."
+  },
+  "result": {
+    "decision": {
+      "winner": "rf_detr/mth2156-valid-unique-data-scale-epoch1-seed361004-v1",
+      "baseline": "rf_detr/mth600-control-epoch1-seed361004-v1",
+      "reason": "The challenger cleared the smoke and full 240-page development gates, its paired F1 confidence intervals excluded zero, and every protected corpus improved.",
+      "qualification": "not_run",
+      "official_test": "not_run",
+      "production": "unchanged"
+    },
+    "formal_candidate": {
+      "path": "palimpsest/factory/candidates/align/rfdetr-mth2156-development-v1.yaml",
+      "fingerprint": "8a950a70b3f8023459e5d3092cf447cd6715664ddbb1fabadcf2129481ba830e"
+    },
+    "dataset": {
+      "acquisition_record": "scratch/ocr_benchmark/mthv2/train-all-valid-after-dev80-v1/dataset.json",
+      "acquisition_record_sha256": "3c7576bbb711361150384a14749936a7e5748a5c612806d842344e8704444f9b",
+      "training_pages": 2156,
+      "training_tiles": 77415,
+      "training_boxes": 1071028,
+      "development_pages": 240,
+      "development_tiles": 10412,
+      "development_boxes": 117824,
+      "training_dataset_sha256": "5a573077787b216c1f500febe09b8793edf58d64a7e503bd73c321003ecfd86c",
+      "training_annotations_sha256": "85b88b6026d9a54f3efa446690374662423cd60903522bc0bffaa7e6599e0552",
+      "development_annotations_sha256": "9abc0ca4c8b45161a910404acc36b4c3668443805befa47dabff9945e74adad0"
+    },
+    "checkpoint": {
+      "path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-valid-unique-epoch1-seed361004-v1-train/checkpoint_best_regular.pth",
+      "bytes": 121516443,
+      "sha256": "f77d91bba64891a79f70fbabaeaca95e104a1d94c2db46fe7d20b41012e95f8c",
+      "retained_path": "library/evaluations/objects/f77d91bba64891a79f70fbabaeaca95e104a1d94c2db46fe7d20b41012e95f8c"
+    },
+    "training_identity": {
+      "path": "scratch/ocr_benchmark/runs/rfdetr-mth2156-valid-unique-epoch1-seed361004-v1-train/experiment_identity.json",
+      "sha256": "8811464093c0d2814601c2b2d37cb42d9ddbf45bd9ee8597ea56ba5ee58a9d14",
+      "retained_path": "library/evaluations/objects/8811464093c0d2814601c2b2d37cb42d9ddbf45bd9ee8597ea56ba5ee58a9d14"
+    },
+    "training_validation": {
+      "map_50_95": 0.7619,
+      "map_50": 0.9867,
+      "map_75": 0.9069,
+      "mar_500": 0.8223,
+      "f1": 0.9694,
+      "precision": 0.9722,
+      "recall": 0.9667,
+      "best_regular_map_50_95": 0.76192,
+      "best_ema_map_50_95": 0.7660
+    },
+    "development_full_240": {
+      "coverage": 1.0,
+      "precision": 0.988074,
+      "recall": 0.991315,
+      "f1": 0.989691,
+      "ap50": 0.99043,
+      "paired_mean_f1_delta": 0.003142,
+      "bootstrap_95_ci": [0.002025, 0.004403],
+      "protected_slice_f1_deltas": {
+        "MTH1000": 0.003138,
+        "MTH1200": 0.004768,
+        "TKH": 0.000414
+      },
+      "predictions_sha256": "a450e76c335bdf9eca85bff3013cf5e548154fad6c5d11545408c44f6a2bdda3",
+      "report_sha256": "c5840fd76231d725d88bc155d9e9cdfd7651e3d8b98e258b18601bdfa560dead",
+      "comparison_sha256": "7b8814ae563104794f6f0970fd700079b7e399bed0d84b1b2aa2f87465831428"
+    },
+    "development_smoke_36": {
+      "paired_mean_f1_delta": 0.003258,
+      "bootstrap_95_ci": [0.001178, 0.005473],
+      "protected_slice_f1_deltas": {
+        "MTH1000": 0.003016,
+        "MTH1200": 0.005776,
+        "TKH": 0.000759
+      },
+      "comparison_sha256": "4c1e81c3ec71114102e622a2341ef2676a378276c7042fadd60852ca3723b3a9"
+    },
+    "resources": {
+      "initial_balance_usd": 149.9906342009,
+      "final_balance_usd": 145.7786192949,
+      "observed_cost_usd": 4.212015,
+      "active_pods_after_cleanup": 0,
+      "current_spend_per_hour_after_cleanup": 0
+    },
+    "next_permitted_action": "Review this development winner; qualification, canary, proposal, promotion, and production refresh require separate authorization and fresh held-out evidence."
+  }
+}

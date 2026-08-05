@@ -27,6 +27,11 @@ dev = ["pytest>=8.0", "ruff>=0.15.10,<1", "setuptools>=68", "wheel"]
 [project.scripts]
 palimpsest = "palimpsest.cli:main"
 
+[tool.setuptools]
+# Runtime data is declared explicitly below; do not admit files implicitly
+# through source manifests or VCS plugins.
+include-package-data = false
+
 [tool.setuptools.packages.find]
 include = ["palimpsest*"]
 
@@ -40,9 +45,11 @@ include = ["palimpsest*"]
   "evaluation/cases/**/*.json",
   "evaluation/cases/**/*.jsonl",
   "evaluation/cases/**/*.jpg",
+  "evaluation/cases/**/*.pgm",
   "evaluation/gold/**/*.json",
   "evaluation/gold/**/*.jpg",
   "evaluation/gold/**/*.epub",
+  "publication_contract/*.json",
 ]
 
 [tool.pytest.ini_options]

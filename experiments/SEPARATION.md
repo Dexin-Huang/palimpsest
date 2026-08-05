@@ -50,7 +50,7 @@ visual audit on worst folio → promote in place or delete → LOG entry.
 |---|---|---|
 | separation2: prep + geometry + v2 features + language-prior gate | zero | CHAMPION — 0.14->0.23 median on frozen set, all corpora up |
 | CV incumbent (projection + DTW + refine + lasso) | zero | superseded baseline |
-| light-backdrop frame detection (Gallica/IDP) | zero | next challenger — biggest named lever |
+| guarded neutral-mount frame detection | zero | PASSED — activates on 8/28; 0.23->0.32 overall, estr_or 0.48->0.77, other corpus medians unchanged; Gallica/IDP premise refuted |
 | GrabCut, mask-seeded hybrid | zero | staged — faint-char recovery |
 | Marker watershed for touching chars | zero | staged |
 | MobileSAM/EdgeSAM via onnxruntime | ~50MB | only if zero-byte rungs stall |

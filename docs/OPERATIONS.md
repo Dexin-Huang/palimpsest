@@ -128,8 +128,16 @@ wrong, correct the source boundary explicitly and let freshness propagate.
 ### 4.2 Execute or resume
 
 ```text
-python -m palimpsest run --doc-id DOC_ID --workers 6
+python -m palimpsest run --doc-id DOC_ID --workers 6 --model-workers 3
 ```
+
+The conductor uses a barrier between page stations. `--workers` controls
+non-model page cells; `--model-workers` controls model-backed page cells and
+defaults to `min(3, --workers)`. Dual-reader candidates start concurrently,
+while `PALIMPSEST_MODEL_PROVIDER_WORKERS` limits simultaneous calls to each
+provider independently (default `3`). Increasing page workers beyond a
+provider's useful concurrency usually increases latency and timeout risk rather
+than throughput.
 
 The conductor decides by fingerprint:
 
@@ -143,6 +151,19 @@ The conductor decides by fingerprint:
 
 Use `--executor subprocess` when isolation matters. Inline and subprocess
 execution must produce the same artifact contract.
+
+Hard deadlines are positive integer seconds configured in `.env`:
+
+| Setting | Default | Boundary |
+|---|---:|---|
+| `PALIMPSEST_MODEL_TIMEOUT_SECONDS` | 7200 | One provider call |
+| `PALIMPSEST_AGENT_TIMEOUT_SECONDS` | 14400 | One agent run or repair turn |
+| `PALIMPSEST_CELL_TIMEOUT_SECONDS` | 28800 | One isolated subprocess cell |
+
+The outer cell deadline intentionally exceeds model and agent deadlines.
+Provider-call deadline expiry is terminal: the gateway does not automatically
+repeat a potentially completed paid call. Raise a deadline for known long
+folios rather than increasing concurrency.
 
 ### 4.3 Apply an intentional configuration change
 
@@ -328,6 +349,53 @@ This is architecture work, not yet a candidate experiment:
 
 One implementation does not justify an interface. A new logical station must
 own a distinct transformation and output concept.
+
+#### Export or import an agent rig
+
+A `.palrig` archive contains one complete model-backed candidate identity. It
+includes these components:
+
+- the fixed model name;
+- the canonical candidate record;
+- the exact skill prompt;
+- the station implementation source closure;
+- the Python, package, and applicable OMP runtime versions.
+
+Export a rig only after the candidate resolves:
+
+```text
+python -m palimpsest rig export \
+  --candidate CANDIDATE_PATH \
+  --output CANDIDATE.palrig
+```
+
+Copy the archive SHA-256 from the export output through an authenticated
+channel. Then import the rig on a compatible Palimpsest installation:
+
+```text
+python -m palimpsest rig import CANDIDATE.palrig \
+  --expected-sha256 ARCHIVE_SHA256
+```
+
+Import authenticates the archive against the supplied SHA-256 value. This check
+proves origin only when the value came through a trusted channel. Import also
+verifies the installed runtime. It stores the archive at
+`library/rigs/<rig_fingerprint>/rig.palrig`.
+
+Import does not execute the rig or install the bundled implementation
+snapshots. A later benchmark executes extensions declared in `candidate.yaml`.
+Review and trust the rig before you run that benchmark.
+
+Use the stored `.palrig` path in a development benchmark where a candidate path
+is accepted. The runner marks the imported candidate as untracked. To make it
+eligible for qualification, create and review an immutable candidate under
+`palimpsest/factory/candidates/`, then collect new evidence with that tracked
+identity.
+
+The archive does not contain credentials, remote model weights, benchmark
+cases, gold, or reports. Transfer those records through their existing
+content-addressed paths.
+
 
 ### 5.4 Create or select evidence
 

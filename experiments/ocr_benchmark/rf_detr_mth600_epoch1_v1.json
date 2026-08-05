@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded_experiment",
+  "experiment_id": "rf_detr_mth600_vs_kuzushiji_transfer_epoch1_v1",
+  "objective": "unlabeled_character_localization",
+  "state": "frozen-development-winner",
+  "decision": {
+    "winner": "rf_detr/mth600-control-epoch1-seed361004-v1",
+    "rejected": "rf_detr/mth300-kuzushiji-matched-epoch1-seed361004-v1",
+    "reason": "The 600-page in-domain candidate improved paired F1 on all 240 development pages and every protected corpus; the tile-matched Kuzushiji arm regressed at its frozen 36-page gate.",
+    "qualification": "not_run",
+    "production": "unchanged"
+  },
+  "baseline": {
+    "candidate_id": "rf_detr/scale300-fixed-epoch0-threshold031-v1",
+    "checkpoint_sha256": "812d5bfc19f74a301a5eb72a147a35105d700f804948240c783159e8c9747085",
+    "full_predictions_sha256": "8a2998eb43b0c814a439b3cb98639acc73b855106d50be8cb1b002e208dd0f83"
+  },
+  "winner": {
+    "candidate_id": "rf_detr/mth600-control-epoch1-seed361004-v1",
+    "dataset": {
+      "pages": 600,
+      "tiles": 21275,
+      "boxes": 308292,
+      "record_sha256": "765dfa9450b4f242fa239baecc08a31a1424b1ced6fb84a06794ed3f0ef1d8f5",
+      "coco_sha256": "e9afdb86abee85663b88bba53aeabc423c47bae03fb023167416d8c85ad69883"
+    },
+    "checkpoint": {
+      "path": "scratch/ocr_benchmark/runs/rfdetr-mth600-control-epoch1-seed361004-v1-train/checkpoint_best_regular.pth",
+      "bytes": 121516507,
+      "sha256": "cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d",
+      "retained_path": "library/evaluations/objects/cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d",
+      "retention": "content-addressed-local"
+    },
+    "training_identity": {
+      "path": "scratch/ocr_benchmark/runs/rfdetr-mth600-control-epoch1-seed361004-v1-train/experiment_identity.json",
+      "sha256": "a01755f94daeca4d16265e7cf89459a7e05c41651bef128cdd9c79f39b84fefc",
+      "retained_path": "library/evaluations/objects/a01755f94daeca4d16265e7cf89459a7e05c41651bef128cdd9c79f39b84fefc"
+    },
+    "training": {
+      "model": "RF-DETR Nano 1.8.3",
+      "pretrained_weights_sha256": "d8d6b9ee57d4d0ed2b1f305163624712a0532cb7bce0c747317984fc5457440d",
+      "seed": 361004,
+      "epochs": 1,
+      "batch_size": 1,
+      "gradient_accumulation_steps": 8,
+      "learning_rate": 0.0001,
+      "encoder_learning_rate": 0.00015,
+      "early_stopping": false,
+      "resolution": 512,
+      "tile_overlap": 96,
+      "minimum_box_visibility": 0.8,
+      "augmentation": null
+    },
+    "inference": {
+      "threshold": 0.31,
+      "nms_iou": 0.4
+    },
+    "full_240": {
+      "cases": 240,
+      "coverage": 1.0,
+      "true_positives": 79582,
+      "false_positives": 1205,
+      "false_negatives": 899,
+      "precision": 0.985084,
+      "recall": 0.98883,
+      "f1": 0.986953,
+      "ap50": 0.987321,
+      "predictions_sha256": "271da1d4f4dd41cf5bb0ca674ac59df1cdda704df7a2263095fdc9e5e6dfc96b",
+      "report": {
+        "path": "scratch/ocr_benchmark/runs/kuzushiji-transfer-gate-v1/control/full240/report.json",
+        "sha256": "0a1a66a76c700ffd0b12fcad7027083d8d53ed6419de67bbbb517706204d089f",
+        "retained_path": "library/evaluations/objects/0a1a66a76c700ffd0b12fcad7027083d8d53ed6419de67bbbb517706204d089f"
+      }
+    },
+    "comparison_vs_baseline": {
+      "decision": "challenger_wins",
+      "paired_cases": 240,
+      "paired_mean_f1_delta": 0.008058,
+      "bootstrap_95_ci": [0.006422, 0.009965],
+      "bootstrap_samples": 10000,
+      "protected_slice_f1_deltas": {
+        "MTH1000": 0.010039,
+        "MTH1200": 0.009187,
+        "TKH": 0.004726
+      },
+      "report": {
+        "path": "scratch/ocr_benchmark/runs/kuzushiji-transfer-gate-v1/control/full240/comparison-vs-champion.json",
+        "sha256": "85925e01e60d468fe7908f4081865710ea327c55d630b4d32cb1a4a4ff9b63bd",
+        "retained_path": "library/evaluations/objects/85925e01e60d468fe7908f4081865710ea327c55d630b4d32cb1a4a4ff9b63bd"
+      }
+    }
+  },
+  "rejected_transfer_arm": {
+    "candidate_id": "rf_detr/mth300-kuzushiji-matched-epoch1-seed361004-v1",
+    "dataset": {
+      "source_pages": 900,
+      "tiles": 21275,
+      "boxes": 239976,
+      "record_sha256": "13a35ddc885606a2d929981a6bcb2bb44df29f27df7e09d07b07a44e617ef1e4",
+      "coco_sha256": "fa4e31514b99e4a0388f40e6c176c6c5a43b15d747ba499e63e4e8fc8b550700"
+    },
+    "checkpoint": {
+      "path": "scratch/ocr_benchmark/runs/rfdetr-mth300-kuzushiji-matched-epoch1-seed361004-v1-train/checkpoint_best_regular.pth",
+      "bytes": 121516571,
+      "sha256": "962eac4b57b34769090862e3f493f47560d5c9f9945c7213273315bbb5011796",
+      "retained_path": "library/evaluations/objects/962eac4b57b34769090862e3f493f47560d5c9f9945c7213273315bbb5011796",
+      "retention": "content-addressed-local"
+    },
+    "training_identity": {
+      "path": "scratch/ocr_benchmark/runs/rfdetr-mth300-kuzushiji-matched-epoch1-seed361004-v1-train/experiment_identity.json",
+      "sha256": "aa5d1d25a1d7f774953fec82c000379f12b1175f4950eb457276f6cb20854e0d",
+      "retained_path": "library/evaluations/objects/aa5d1d25a1d7f774953fec82c000379f12b1175f4950eb457276f6cb20854e0d"
+    },
+    "gate_36": {
+      "cases": 36,
+      "coverage": 1.0,
+      "precision": 0.963807,
+      "recall": 0.984674,
+      "f1": 0.974129,
+      "ap50": 0.982803,
+      "report": {
+        "path": "scratch/ocr_benchmark/runs/kuzushiji-transfer-gate-v1/transfer/report.json",
+        "sha256": "09a330d1b4d1242af29a8f330d87543cbb7ada485b961696e8a11f6f574c41fd",
+        "retained_path": "library/evaluations/objects/09a330d1b4d1242af29a8f330d87543cbb7ada485b961696e8a11f6f574c41fd"
+      }
+    },
+    "comparison_vs_control": {
+      "decision": "baseline_wins",
+      "paired_mean_f1_delta": -0.014823,
+      "bootstrap_95_ci": [-0.021637, -0.00912],
+      "protected_slice_f1_deltas": {
+        "MTH1000": -0.017868,
+        "MTH1200": -0.020698,
+        "TKH": -0.003744
+      },
+      "report": {
+        "path": "scratch/ocr_benchmark/runs/kuzushiji-transfer-gate-v1/comparison-vs-control.json",
+        "sha256": "7f7259a7de8e2ac222d9e4f06a0815e79a2656a97a3d84f5c1e49de23836558c",
+        "retained_path": "library/evaluations/objects/7f7259a7de8e2ac222d9e4f06a0815e79a2656a97a3d84f5c1e49de23836558c"
+      }
+    },
+    "heldout_204": "not_run_gate_failed"
+  },
+  "source_evidence": {
+    "candidate_source": {
+      "path": "experiments/ocr_benchmark/rfdetr_candidate.py",
+      "sha256": "94c5291e0da54ae1e674e9791b2099eb371ee7a17f31345198060445a90e070d"
+    },
+    "dataset_builder_source": {
+      "path": "experiments/ocr_benchmark/rfdetr_dataset.py",
+      "sha256": "41615ee85ec8521b468fc87ffb8b63c1465ad3c424726ed691532d3779ef346b"
+    },
+    "protocol": {
+      "path": "experiments/ocr_benchmark/PROTOCOL.md",
+      "sha256": "376e31dac5f9719b2a879b8a6e43df2eaef21ade3186636cdfbee18fed1acb07"
+    },
+    "lab_log": {
+      "path": "experiments/LOG.md",
+      "sha256": "68090e7bec2f00c870a385009e13a4d3b410592af41a5da9c87ae481c0598e7c"
+    }
+  },
+  "integration_state": {
+    "formal_factory_candidate": false,
+    "canonical_factory_report": false,
+    "qualification_authorized": false,
+    "proposal_created": false,
+    "canary_run": false,
+    "production_recipe_changed": false,
+    "blocking_boundary": "The research detector emits unlabeled character boxes, while production consumes a page_alignment artifact that binds transcription characters to coordinates. A same-socket align variant and station-owned evaluation suite are required before qualification."
+  }
+}

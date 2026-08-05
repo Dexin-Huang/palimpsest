@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "transcribe-toolbelt3-development-v1",
+  "station": "transcribe",
+  "stage": "development-smoke",
+  "state": "completed",
+  "created_at": "2026-07-29T13:53:27Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight_record": "experiments/ocr_benchmark/transcribe_toolbelt3_preflight_v1.json",
+  "hypothesis": "v3 eliminates case-level repetition on the two dense Gaoli commentary pages without regressing healthy pages, holding or improving the paired MTHv2 mean against v2; on passing, the AncientDoc smoke confirms no cross-suite regression.",
+  "production_state": "unchanged",
+  "decision": "Withhold the full run because the repetition-binding gate's premise is falsified, not because v3 underperformed. The targeted smoke measured the two Gaoli pages' GOLD at repetition_rate 0.095238 and 0.157895: these are canon catalog pages that legitimately repeat the line 右N經同本異譯 four to six times, so a perfect transcription of GL-1054-1-13 would fail the suite's absolute 0.1 hard limit and the declared zero-repetition target was unsatisfiable on truthful output. The stability of the measured rates across runs and harnesses (0.1739 and 0.2273 within a few points every time) was page structure, not stochastic looping. v3 itself performed well: 4 of 4 sealed, smoke mean 0.316125 versus v2's 0.529125 in the same run, invented characters at 0.0 to 0.0364, and the healthy control read at 0.1172 while the v2 side flaked to 0.8682 on a page it previously read at 0.0816, underscoring single-repeat variance. Next bounded step is a corrected gate: per-case repetition measured RELATIVE to gold repetition, and a suite revision that derives each case's repetition allowance from its gold rather than an absolute constant.",
+  "smoke_run": {
+    "run_id": "toolbelt3-mthv2-smoke4-v1",
+    "report": "library/evaluations/runs/toolbelt3-mthv2-smoke4-v1/report.json",
+    "cases": [
+      {
+        "case": "mthv2-mth1200-GL-1054-1-12",
+        "v2_cer": 0.5,
+        "v3_cer": 0.5108,
+        "v2_repetition": 0.1739,
+        "v3_repetition": 0.1739,
+        "gold_repetition": 0.095238,
+        "gold_loop": "右二經同本異譯 x4"
+      },
+      {
+        "case": "mthv2-mth1200-GL-1054-1-13",
+        "v2_cer": 0.5286,
+        "v3_cer": 0.5041,
+        "v2_repetition": 0.2381,
+        "v3_repetition": 0.2273,
+        "gold_repetition": 0.157895,
+        "gold_loop": "右三經同本異譯 x6"
+      },
+      {
+        "case": "mthv2-mth1000-01-V086P0669",
+        "v2_cer": 0.8682,
+        "v3_cer": 0.1172,
+        "note": "v2 layer-misroute flake; the same immutable v2 read this page at 0.0816 in toolbelt2-mthv2-dev24"
+      },
+      {
+        "case": "mthv2-tkh-0001-002-28-02",
+        "v2_cer": 0.2197,
+        "v3_cer": 0.1324
+      }
+    ],
+    "smoke_mean": {"v2": 0.529125, "v3": 0.316125},
+    "cost_usd": 2.0316
+  },
+  "findings": [
+    "Metric-design finding on real gold: repetition_rate as an absolute hard limit false-alarms on legitimately repetitive catalog and liturgical pages; the two flagged Gaoli pages carry their loops in gold. Any metric or threshold change requires a new suite fingerprint per governance, so this is recorded, not patched in place.",
+    "The v2 champion carries a layer-misroute failure mode with material single-run variance (0.0816 versus 0.8682 on the same page); repeats or a misroute self-check belong in the next iteration.",
+    "v3's register anchors, repetition mirror, and detector-trust verdict all executed (37-45 tool calls per session) with zero invented characters on one page and at most 0.0364 elsewhere."
+  ],
+  "harness_changes_delivered": [
+    "transcribe_omp_toolbelt3.py: register-aware geometry, suite-exact repetition mirror per layer in verify_layers, detector_trusted verdict that suppresses misleading anchors",
+    "transcribe_omp.py and the v2 layered reader: first-wins sealed submission tolerance after two observed duplicate-attempt flakes, with the pinned test updated deliberately (34 tests pass)"
+  ],
+  "gate_status": {
+    "smoke_finished_outputs": "pass: 4 of 4 sealed",
+    "repetition_binding": "fail as declared, premise falsified: gold repetition is 0.095238 and 0.157895, so zero was never achievable on truthful output",
+    "healthy_non_regression": "pass within the run: v3 0.1172 versus v2 0.8682; against v2's prior-run 0.0816 the delta is +0.0356, dominated by line-segmentation noise",
+    "full_quality": "not run: withheld pending the corrected repetition gate",
+    "cross_suite": "not run: withheld with the full run",
+    "budget_stop": "pass: 2.0316 USD of 4.00 smoke budget"
+  },
+  "cost": {
+    "smoke_usd": 2.0316,
+    "total_usd": 2.0316,
+    "budget_usd": 20.0,
+    "paid_gpu": "none"
+  },
+  "limitations": [
+    "Four targeted cases at one repeat; the v2 flake makes this run's paired mean unrepresentative of v2's typical quality.",
+    "The gold-relative repetition comparison uses line segmentation that differs between model output and gold lines, so small excesses over gold repetition are partly segmentation noise."
+  ],
+  "next_permitted_action": "Author a v3.1 preflight whose repetition gate compares candidate repetition against per-case GOLD repetition with a small tolerance, propose a suite revision deriving repetition allowances from gold (new suite version per governance), add a layer-misroute self-check to the harness, then run the full MTHv2 24 and the AncientDoc cross-suite smoke under the remaining budget."
+}

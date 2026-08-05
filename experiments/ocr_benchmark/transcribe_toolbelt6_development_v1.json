@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "transcribe-toolbelt6-development-v1",
+  "station": "transcribe",
+  "stage": "development",
+  "state": "completed",
+  "created_at": "2026-07-30T06:33:34Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight": "experiments/ocr_benchmark/transcribe_toolbelt6_preflight_v1.json",
+  "question": "Does deterministic reading-order reconciliation (layer-interleave fold plus geometry-order re-emit) close the ordering residue without harming healthy pages?",
+  "candidates": {
+    "baseline_v5_champion": "a084eb53... candidate (development champion per transcribe-toolbelt5-development-v1)",
+    "challenger_v6": {
+      "rendered_fingerprint": "8b2a0eae5ddd15493435ba004da3fb03c219f6d47012a21cfd81cc220c4c2a2b",
+      "identity": "omp_toolbelt6 = omp_toolbelt5 + reorder pass (v6.0 trigger: bag >= 0.70, seq <= 0.75, gain >= 0.10, no layer gate)"
+    }
+  },
+  "runs": {
+    "smoke": "toolbelt6-mthv2-smoke4-v1 (4/4 sealed; GL-1054 pages 0.2705->0.7872 and 0.3848->0.7000; control untouched; mth1000-006 triggered against the declared expectation - preflight amendment recorded BEFORE the full run)",
+    "full": ["toolbelt6-mthv2-dev24-c1", "toolbelt6-mthv2-dev24-c2", "toolbelt6-mthv2-dev24-c3", "toolbelt6-mthv2-dev24-c4"],
+    "artifacts": {
+      "recall_v6_jsonl_sha256": "15e7b29a3786d2e9cd350686b4e60c708dffb1bec5f309b9b8d7a9712b4430cc",
+      "judgments_v6_jsonl_sha256": "107564e5b8f3d02cbe104a1b2392456840213703cc5cd287f31bafbdde7682dd"
+    }
+  },
+  "observations": {
+    "deterministic_sequence_recall": {
+      "v5_in_run_mean": 0.8544,
+      "v6_mean": 0.8546,
+      "v6_wins": "14/24, ties 1",
+      "trio": {"mth1200-GL-1054-1-12": [0.2766, 0.8267], "mth1200-GL-1054-1-13": [0.4939, 0.7303], "mth1200-GL-1047-1-5": [0.7409, 0.8601]},
+      "damage": {"mth1000-01-V007P0009": [0.9627, 0.3234], "mth1000-006": [0.95, 0.5324]},
+      "other_21_delta": -0.043,
+      "damage_note": "Both damaged pages kept full content (bag vs gold 0.9701 and 0.9618) - pure ordering damage from adopting geometry order on pages whose annotation order geometry cannot explain."
+    },
+    "judged_answer_recovery": {
+      "v5_in_run": {"mean": 0.9771, "verdicts": {"perfect": 2, "near_perfect": 21, "partial": 1}},
+      "v6": {"mean": 0.9664, "verdicts": {"perfect": 2, "near_perfect": 20, "partial": 2}},
+      "note": "The dip concentrates on the reordered trio (0.982->0.950, 0.950->0.880, 0.970->0.820): the order-tolerant judge already forgave the scrambled drafts and reads reorder fragment boundaries as noise. The two lenses now disagree about reordering: sequence (and the printed edition's reading order) favors it, the judge is indifferent-to-negative. One gateway-failed judgment purged and re-judged; zero failed rows in the artifact.",
+      "suspicious_extra": 0
+    },
+    "discriminator_found": "All five live adoptions split perfectly on the page-level two_layer flag: three wins are two_layer=true (the interleave class the pass was designed for), both casualties are two_layer=false single-layer pages. The damaging adoption also ended at sequence 0.700 against the reader channel while every healthy adoption ended >= 0.81.",
+    "cost": {"smoke_usd": 2.7161, "full_usd": 14.3438, "judge_usd": 0.8836, "total_usd": 17.9434, "ceiling_usd": 24.0}
+  },
+  "gates": {
+    "smoke_finished_outputs": "pass",
+    "smoke_reorder_behavior": "pass under the recorded pre-full-run amendment (mth1000-006 adopted, recall-neutral)",
+    "smoke_recall": "pass",
+    "full_recall": "FAIL (mean 0.8546 < 0.87; other-21 delta -0.043 exceeds the 0.01 allowance)",
+    "judged_non_regression": "FAIL (0.9664 vs 0.9771 in-run, attributable to reordered pages)",
+    "reorder_health": "pass (5 adoptions <= 6, every adoption gain >= 0.10)",
+    "budget_stop": "not triggered"
+  },
+  "decision": "rejected as-is; v5 remains development champion",
+  "decision_detail": "The pass proves its designed capability - the interleave trio lifts 0.28/0.49/0.74 to 0.83/0.73/0.86 sequence recall, the largest single-page gains of the campaign - but v6.0's trigger fired on two single-layer pages whose annotation order geometry cannot explain, converting good session drafts into geometry order and cancelling the mean. The evidence names the gold-free fix exactly: gate adoption on two_layer=true and raise the adoption floor to final sequence >= 0.75 against the reader channel. Both were applied to the module after the run as v6.1 (module sha256 7809f19a863e84bd4609b75087042148c9d65393d70046024a9a3ef7a033a746) and validated by replay: the damaged pages no longer adopt, GL-1054-1-12 and GL-1047-1-5 still lift, GL-1054-1-13 adopts only when its session clears the floor (it did in the live run at 0.810). The judged-lens dip on reordered pages is recorded as a watch item: fragment placement may need smoothing if the judge penalty persists under v6.1.",
+  "production_state": "unchanged",
+  "next_permitted_action": "Render the v6.1 candidate from the updated module and run the paired smoke (trio plus both damaged pages plus control) under a fresh preflight; promote nothing from this evidence."
+}

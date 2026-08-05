@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "transcribe-toolbelt2-mthv2-preflight-v1",
+  "station": "transcribe",
+  "state": "ready",
+  "created_at": "2026-07-29T03:03:00Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Measure the adopted omp_toolbelt2 rig against the image-only baseline on REAL human gold: the new transcribe/mthv2-development/v1 suite whose page text comes from MTHv2's manually annotated text lines in annotation reading order.",
+  "hypothesis": "On professionally annotated full-scope gold the rig's paired advantage persists under the print-perfect invented allowance of 0.15, repetition stays zero, and absolute CER lands materially below the AncientDoc numbers because gold-scope confounds are absent.",
+  "production_state": "unchanged",
+  "suite": {
+    "id": "transcribe/mthv2-development/v1",
+    "cases": 24,
+    "cases_sha256": "b56815ba12529df040d6979e095632f703260ed4d3953e317b694ee7e8a10ff3",
+    "suite_sha256": "2b838089ed67715aa93de2511b6c99771804a9410615d91dd13cbbcf98f41c1e",
+    "builder": "experiments/ocr_benchmark/make_mthv2_transcribe_suite.py",
+    "verified": "bench verify: cases=24 objects=63 candidates=37 judges=1 reports=56",
+    "gold_provenance": "official_annotation: MTHv2 manually annotated text lines, eight pages per corpus (MTH1000, MTH1200, TKH), protected slices per corpus, invented allowance 0.15 because gold covers the full page",
+    "license_note": "MTHv2 is released for academic and non-commercial research; evaluation-internal use only"
+  },
+  "candidates": {
+    "model_ref": "openai-codex/gpt-5.6-luna",
+    "baseline": {
+      "candidate": "scratch/exodia-rig/candidates/8508b4c933eecb2033d12bdae9cf289601d8f7e4575aa0ba2ee15d2a1f6ddd25.candidate.yaml",
+      "fingerprint": "62d518151671499c86c482aaed090a2a74ce5c36d97a2ebecc2e1b45e8ec7124",
+      "variant": "omp_extension"
+    },
+    "challenger": {
+      "candidate": "scratch/exodia-rig/candidates/b57a514efd96281f8bc92ddfb01fc680db269c83488ce2b0d775124a7275374a.candidate.yaml",
+      "fingerprint": "6d37a51b036bd095bc66784ad216ee1ec39cc24ebf130c7354347b00a4a63769",
+      "variant": "omp_toolbelt2"
+    },
+    "identity_note": "The exact immutable pair adopted in transcribe-toolbelt2-ancientdoc-development-v1; nothing re-rendered."
+  },
+  "execution": {
+    "smoke_run_id": "toolbelt2-mthv2-smoke4-v1",
+    "smoke_cases": [
+      "mthv2-mth1000-006-transcribe-development",
+      "mthv2-mth1000-008-transcribe-development",
+      "mthv2-mth1200-GL-1047-1-11-transcribe-development",
+      "mthv2-tkh-0001-001-26-15-transcribe-development"
+    ],
+    "full_run_ids": [
+      "toolbelt2-mthv2-dev24-c1",
+      "toolbelt2-mthv2-dev24-c2",
+      "toolbelt2-mthv2-dev24-c3",
+      "toolbelt2-mthv2-dev24-c4"
+    ],
+    "policy": "Smoke first; start the full 24 as four disjoint concurrent chunk runs only if all four challenger sessions seal, the paired smoke mean favors the challenger, and smoke spend stays at or below 4 USD.",
+    "environment": "PALIMPSEST_RFDETR_OBJECT_ROOT=D:/Projects/palimpsest/library/evaluations/objects",
+    "detector_note": "The rig's detector checkpoint is the production mth600 pin trained on MTH-family material, so detection should be at its strongest on this suite."
+  },
+  "gates": {
+    "smoke_finished_outputs": "4 of 4 challenger sessions sealed with layered artifacts",
+    "smoke_quality": "paired smoke mean character_error_rate favors the challenger",
+    "smoke_budget": "smoke spend at or below 4 USD",
+    "full_quality": "challenger mean character_error_rate below the baseline's with no protected corpus slice regressing beyond suite policy",
+    "full_hard_limits": "all four suite limits pass on the challenger, including the print-perfect invented allowance",
+    "budget_stop": "bench run --max-cost aborts dispatch at the ceiling"
+  },
+  "budget": {
+    "smoke_maximum_usd": 4.0,
+    "full_maximum_usd": 13.0,
+    "total_maximum_usd": 17.0,
+    "paid_gpu": "none"
+  },
+  "allowed_changes": [
+    "experiments/ocr_benchmark/make_mthv2_transcribe_suite.py",
+    "palimpsest/factory/evaluation/suites/transcribe/mthv2-development-v1.yaml",
+    "palimpsest/factory/evaluation/cases/transcribe/mthv2-development-v1.jsonl",
+    "palimpsest/factory/evaluation/gold/transcribe/mthv2-development/",
+    "palimpsest/factory/evaluation/assets/transcribe/mthv2-development/",
+    "experiments/ocr_benchmark/transcribe_toolbelt2_mthv2_preflight_v1.json",
+    "experiments/ocr_benchmark/transcribe_toolbelt2_mthv2_development_v1.json",
+    "experiments/LOG.md",
+    "library/evaluations/runs (run records produced by bench run)"
+  ],
+  "non_goals": [
+    "Do not edit production recipes.",
+    "Do not touch the MTHv2 pages already consumed by localization training experiments for anything other than this development suite.",
+    "Do not run bench propose or promote."
+  ],
+  "next_permitted_action": "Run the four-case smoke under the smoke budget, evaluate the smoke gates, then run the full 24 only if every smoke gate passes."
+}

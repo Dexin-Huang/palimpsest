@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "transcribe-toolbelt7-priority-preflight-v3",
+  "station": "transcribe",
+  "state": "ready",
+  "created_at": "2026-07-31T06:38:28Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "supersedes": "experiments/ocr_benchmark/transcribe_toolbelt7_preflight_v2.json",
+  "objective": "Test whether a prioritized, candidate-limited, airlocked glyph-inspection tool improves ambiguous-character decisions without the distraction or unsolicited classifier labels observed in v2.",
+  "hypothesis": "Limiting the agent to eight highest-impact disputed cells and returning classifier evidence only for literal alternatives it already proposed will preserve crop-local autonomy while meeting deterministic and blinded quality gates against toolbelt6.1.",
+  "production_state": "unchanged",
+  "baseline": {
+    "candidate": "scratch/exodia-rig/candidates/720f54f5808ff49ae4d7fb5e4f6e088e740793d152555480595bed9773ad3836.candidate.yaml",
+    "fingerprint": "024244fc55eae502d77705e32eab2bc42b57bac9c32cf590b47143a87d599cc0"
+  },
+  "challenger": {
+    "candidate": "scratch/exodia-rig/candidates/289fa7b53d6e5be4510afe0104ec4d612844048cda825316879adad68b714a04.candidate.yaml",
+    "fingerprint": "257fc5d095da78e58d4e5a0e101aabf2538879ca3e0a190681713813b3fc6729",
+    "variant": "omp_toolbelt7",
+    "module_sha256": "198d05dbb3d89c8f5bcb9ef3188cb28a841eb12c40a4842563a99afc55189aab",
+    "extension_sha256": "3c2f22d7b97d05d98df2bfd4b9bea3a8d6e5b5ef204e395a58b73bc4606bbfa3",
+    "classifier_onnx_sha256": "edd81d3fcc089488fc79571701bdf2fdeb23bed50850bd8d911f9dc71c361f75",
+    "classifier_classes_sha256": "a53da8698ee4b191d1f41860750b8d0efd216b421c0a72b169488aed1301a5a3",
+    "design_changes_from_v2": [
+      "hard per-page inspect_glyph ceiling reduced from 20 to 8",
+      "agent must supply at least two literal alternatives it already considered",
+      "tool result no longer exposes the classifier's unsolicited top-k characters",
+      "selected crop remains inline and the bulk manifest remains outside readable roots"
+    ]
+  },
+  "suite": "palimpsest/factory/evaluation/suites/transcribe/mthv2-development-v1.yaml",
+  "suite_fingerprint": "73c7f29b8ba64f084027f8b9b3ebab17215a0572e1945d4a3113d1ba595e073b",
+  "smoke_cases": [
+    "mthv2-mth1200-GL-1047-1-11-transcribe-development",
+    "mthv2-mth1200-GL-1048-2-21-transcribe-development",
+    "mthv2-tkh-0001-001-26-15-transcribe-development",
+    "mthv2-tkh-0001-001-26-26-transcribe-development",
+    "mthv2-mth1000-01-V007P0009-transcribe-development",
+    "mthv2-mth1000-006-transcribe-development"
+  ],
+  "ordering_expectation": {
+    "full_expected_two_layer_cases": [
+      "mthv2-mth1200-GL-1047-1-5-transcribe-development",
+      "mthv2-mth1200-GL-1048-2-29-transcribe-development",
+      "mthv2-mth1200-GL-1054-1-12-transcribe-development",
+      "mthv2-mth1200-GL-1054-1-13-transcribe-development",
+      "mthv2-tkh-0001-001-26-26-transcribe-development"
+    ],
+    "historically_triggered_v61_trio": [
+      "mthv2-mth1200-GL-1047-1-5-transcribe-development",
+      "mthv2-mth1200-GL-1054-1-12-transcribe-development",
+      "mthv2-mth1200-GL-1054-1-13-transcribe-development"
+    ],
+    "full_expected_single_layer_count": 19,
+    "geometry_gate": "baseline and challenger two_layer classifications equal the exact five-case set",
+    "single_layer_gate": "triggered and adopted are false on all 19 single-layer challenger outputs",
+    "two_layer_transition_gate": "if challenger reorder is triggered then adopted is true and seq_ratio_after is greater than seq_ratio_before; adoption without trigger is forbidden",
+    "rationale": "Triggering depends on the session draft. The invariant is auditable without incorrectly requiring a repair when the draft already has acceptable order."
+  },
+  "development_scope": {
+    "smoke_pairs": 6,
+    "remaining_pairs": 18,
+    "suite_total_pairs": 24,
+    "protected_slices": ["MTH1000", "MTH1200", "TKH", "two_layer", "single_layer"],
+    "downstream_probe": "Identity-blind Gemini answer-recovery judge on all paired outputs."
+  },
+  "gates": {
+    "smoke": {
+      "completed_pairs": 6,
+      "challenger_classifier_enabled_all": true,
+      "private_manifest_absent_from_evidence": true,
+      "challenger_total_inspection_calls_minimum": 1,
+      "challenger_inspection_calls_per_page_maximum": 8,
+      "inline_crop_reads_equal_inspection_calls": true,
+      "challenger_mean_sequence_recall_minimum": 0.89,
+      "challenger_mean_sequence_recall_delta_minimum": -0.01,
+      "expected_two_layer_cases": [
+        "mthv2-tkh-0001-001-26-26-transcribe-development"
+      ],
+      "single_layer_reorder_triggers": 0,
+      "single_layer_reorder_adoptions": 0,
+      "catastrophic_failures_maximum": 0
+    },
+    "development": {
+      "completed_pairs": 24,
+      "challenger_classifier_enabled_all": true,
+      "challenger_total_inspection_calls_minimum": 1,
+      "challenger_inspection_calls_per_page_maximum": 8,
+      "inline_crop_reads_equal_inspection_calls": true,
+      "challenger_mean_sequence_recall_minimum": 0.9,
+      "challenger_mean_sequence_recall_delta_minimum": -0.005,
+      "challenger_blinded_judged_mean_minimum": 0.972,
+      "challenger_blinded_judged_delta_minimum": -0.003,
+      "expected_two_layer_cases_exact": true,
+      "single_layer_reorder_triggers": 0,
+      "single_layer_reorder_adoptions": 0,
+      "two_layer_transition_invariant": true,
+      "catastrophic_failures_maximum": 0
+    }
+  },
+  "cost_guard": {
+    "maximum_approved_total_spend_usd": 26.0,
+    "spent_before_v3_usd": 7.853333,
+    "spent_before_v3_detail": {
+      "v1_smoke": 3.6003172,
+      "stopped_invalid_fanout_sessions": 0.8121368,
+      "v2_smoke": 3.440879
+    },
+    "v3_smoke_maximum_usd": 4.2,
+    "v3_remaining_run_maximum_usd": 12.3,
+    "v3_judge_maximum_usd": 1.5,
+    "maximum_total_if_all_v3_ceilings_reached_usd": 25.853333
+  },
+  "prior_evidence_disposition": {
+    "v1": "methodologically inconclusive; full fanout stopped and excluded",
+    "v2": "airlock correct but smoke rejected on frozen recall-delta gate",
+    "production_effect": "none"
+  },
+  "non_goals": [
+    "No production recipe, suite, case, gold, prompt, proposal, promotion, or station socket changes.",
+    "No post-hoc threshold weakening.",
+    "No direct classifier write or unsolicited classifier character proposal.",
+    "No qualification claim from this development-only suite."
+  ],
+  "stop_conditions": [
+    "Stop before remaining cases unless every v3 smoke gate is true.",
+    "Stop before the next paid dispatch if cumulative spend is unknown or can exceed 26 USD.",
+    "Preserve every terminal and incomplete record under its original identity."
+  ],
+  "amendments": [
+    {
+      "created_at": "2026-07-31T08:05:02Z",
+      "reason": "The six-case v3 smoke passed every declared deterministic, autonomy, ordering, identity, failure, and cost gate.",
+      "effect": "The remaining eighteen declared cases were authorized under the unchanged identities and 12.3 USD full-development ceiling."
+    },
+    {
+      "created_at": "2026-07-31T10:31:44Z",
+      "reason": "The MTH1200 chunk preserved one frozen-baseline 900-second timeout and stopped before its sixth case. A new run completed the timed-out case and the undispatched case without changing either candidate.",
+      "effect": "Use the recovery pair for the 24-case quality aggregate, retain the timeout as one catastrophic failure, and retain both immutable reports. Known full-development execution spend including partial timeout telemetry is 11.738219 USD, below the 12.3 USD ceiling; the interrupted in-flight request remains unknown."
+    }
+  ],
+  "next_permitted_action": "Run and fully score the six-case v3 smoke under a new run ID; no remaining case may dispatch until every smoke gate passes."
+}

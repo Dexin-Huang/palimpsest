@@ -110,10 +110,13 @@ remain independently auditable.
 
 ### Publication layer
 
-`stations/publish.py` compiles one content-only book model.
-`stations/render_epub.py` renders EPUB from that model. `factory/site.py`
-rebuilds the hosted shelf and reader from published book models. Presentation
-never reaches back into intermediate station outputs.
+`stations/finalize_edition.py` reviews every section against the final emended
+reading and the page readers' adjudication reasoning and unresolved items, then
+produces only reader-facing prose. `stations/publish.py`
+deterministically combines that prose with immutable evidence into one
+content-only book model. `stations/render_epub.py` renders EPUB from that model.
+`factory/site.py` rebuilds the hosted shelf and reader from published book
+models. Presentation never reaches back into intermediate station outputs.
 
 ### Evaluation and promotion layer
 

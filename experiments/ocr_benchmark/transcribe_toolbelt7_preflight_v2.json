@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "transcribe-toolbelt7-airlock-preflight-v2",
+  "station": "transcribe",
+  "state": "ready",
+  "created_at": "2026-07-31T05:08:21Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "supersedes": "experiments/ocr_benchmark/transcribe_toolbelt7_preflight_v1.json",
+  "objective": "Measure whether an airlocked agent-directed crop inspection tool backed by the accepted frozen local top-k glyph classifier improves ambiguous-character decisions without weakening toolbelt6.1 ordering behavior.",
+  "hypothesis": "The challenger will use inspect_glyph only on verifier-flagged or reader-disputed cells, receive the selected crop inline, remain below the hard 20-call ceiling, preserve toolbelt6.1 ordering, and improve or hold deterministic and blinded judged answer recovery against toolbelt6.1.",
+  "production_state": "unchanged",
+  "baseline": {
+    "candidate": "scratch/exodia-rig/candidates/720f54f5808ff49ae4d7fb5e4f6e088e740793d152555480595bed9773ad3836.candidate.yaml",
+    "fingerprint": "024244fc55eae502d77705e32eab2bc42b57bac9c32cf590b47143a87d599cc0"
+  },
+  "challenger": {
+    "candidate": "scratch/exodia-rig/candidates/889dd0db4c6f5fff30f32efa4509d7a72b6b46354599a9e06dc2b021c437d788.candidate.yaml",
+    "fingerprint": "f9802c4575f162274a36446dd104080b45ffef23e2d60fa84f6736153937a7ba",
+    "variant": "omp_toolbelt7",
+    "module_sha256": "74edeb2340e9d90ef5fe691df852efc999f61a71fd953c18c404f4af09877d7f",
+    "extension_sha256": "d4d9130e23609cf8e931b20ae88c9711be29edd9671885b4e54e848ff488600d",
+    "classifier_onnx_sha256": "edd81d3fcc089488fc79571701bdf2fdeb23bed50850bd8d911f9dc71c361f75",
+    "classifier_classes_sha256": "a53da8698ee4b191d1f41860750b8d0efd216b421c0a72b169488aed1301a5a3",
+    "airlock": {
+      "bulk_manifest_path": ".glyph-inspection-private.json",
+      "bulk_manifest_outside_readable_roots": true,
+      "maximum_calls_per_page": 20,
+      "selected_crop_returned_inline": true,
+      "journal_records_crop_sha256_after_crop_read": true,
+      "classifier_cannot_write_or_submit": true
+    }
+  },
+  "suite": "palimpsest/factory/evaluation/suites/transcribe/mthv2-development-v1.yaml",
+  "suite_fingerprint": "73c7f29b8ba64f084027f8b9b3ebab17215a0572e1945d4a3113d1ba595e073b",
+  "smoke_cases": [
+    "mthv2-mth1200-GL-1047-1-11-transcribe-development",
+    "mthv2-mth1200-GL-1048-2-21-transcribe-development",
+    "mthv2-tkh-0001-001-26-15-transcribe-development",
+    "mthv2-tkh-0001-001-26-26-transcribe-development",
+    "mthv2-mth1000-01-V007P0009-transcribe-development",
+    "mthv2-mth1000-006-transcribe-development"
+  ],
+  "ordering_expectation": {
+    "expected_two_layer_cases": [
+      "mthv2-tkh-0001-001-26-26-transcribe-development"
+    ],
+    "expected_single_layer_cases": [
+      "mthv2-mth1200-GL-1047-1-11-transcribe-development",
+      "mthv2-mth1200-GL-1048-2-21-transcribe-development",
+      "mthv2-tkh-0001-001-26-15-transcribe-development",
+      "mthv2-mth1000-01-V007P0009-transcribe-development",
+      "mthv2-mth1000-006-transcribe-development"
+    ],
+    "two_layer_outcome": "toolbelt.two_layer and toolbelt.reorder.two_layer are true; triggered/adopted may be false when submission order is already acceptable",
+    "single_layer_outcome": "toolbelt.two_layer, reorder.triggered, and reorder.adopted are false"
+  },
+  "development_scope": {
+    "smoke_pairs": 6,
+    "remaining_pairs": 18,
+    "suite_total_pairs": 24,
+    "protected_slices": ["MTH1000", "MTH1200", "TKH", "two_layer", "single_layer"],
+    "downstream_probe": "Identity-blind Gemini answer-recovery judge on all paired outputs."
+  },
+  "gates": {
+    "smoke": {
+      "completed_pairs": 6,
+      "challenger_classifier_enabled_all": true,
+      "private_manifest_absent_from_evidence": true,
+      "challenger_total_inspection_calls_minimum": 1,
+      "challenger_inspection_calls_per_page_maximum": 20,
+      "inline_crop_reads_equal_inspection_calls": true,
+      "challenger_mean_sequence_recall_minimum": 0.89,
+      "challenger_mean_sequence_recall_delta_minimum": -0.01,
+      "ordering_expectation_exact": true,
+      "catastrophic_failures_maximum": 0
+    },
+    "development": {
+      "completed_pairs": 24,
+      "challenger_classifier_enabled_all": true,
+      "challenger_total_inspection_calls_minimum": 1,
+      "challenger_inspection_calls_per_page_maximum": 20,
+      "inline_crop_reads_equal_inspection_calls": true,
+      "challenger_mean_sequence_recall_minimum": 0.9,
+      "challenger_mean_sequence_recall_delta_minimum": -0.005,
+      "challenger_blinded_judged_mean_minimum": 0.972,
+      "challenger_blinded_judged_delta_minimum": -0.003,
+      "single_layer_reorder_adoptions": 0,
+      "catastrophic_failures_maximum": 0
+    }
+  },
+  "cost_guard": {
+    "maximum_approved_total_spend_usd": 26.0,
+    "spent_before_v2_usd": 4.412454,
+    "spent_before_v2_detail": {
+      "v1_smoke": 3.6003172,
+      "stopped_invalid_fanout_sessions": 0.8121368
+    },
+    "v2_smoke_maximum_usd": 4.5,
+    "v2_remaining_run_maximum_usd": 15.0,
+    "v2_judge_maximum_usd": 1.5,
+    "maximum_total_if_all_v2_ceilings_reached_usd": 25.412454,
+    "authorization": "User explicitly requested autonomous, parallel, cost-bounded execution and use of agent tooling where useful."
+  },
+  "prior_evidence_disposition": {
+    "v1_smoke": "preserved but methodologically inconclusive",
+    "v1_full_fanout": "stopped after independent review found the readable bulk-manifest bypass; incomplete records preserved and excluded",
+    "production_effect": "none"
+  },
+  "non_goals": [
+    "No production recipe, suite, case, gold, prompt, proposal, promotion, or station socket changes.",
+    "No direct classifier rewrite of submitted text.",
+    "No bulk prediction read or broad glyph sweep.",
+    "No qualification claim from this development-only suite."
+  ],
+  "stop_conditions": [
+    "Stop before the remaining eighteen cases if any smoke gate fails or is unknown.",
+    "Stop before the next paid dispatch if cumulative spend is unknown or can exceed 26 USD.",
+    "Preserve failed and incomplete records; never reuse a terminal run ID."
+  ],
+  "next_permitted_action": "Run the six-case v2 paired smoke under a new run ID, score every explicit smoke gate, and dispatch no remaining case until every result is true."
+}

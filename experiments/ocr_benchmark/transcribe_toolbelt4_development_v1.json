@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "transcribe-toolbelt4-development-v1",
+  "station": "transcribe",
+  "stage": "development",
+  "state": "completed",
+  "created_at": "2026-07-29T17:44:23Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight": "experiments/ocr_benchmark/transcribe_toolbelt4_preflight_v1.json",
+  "candidates": {
+    "baseline_v2": {
+      "candidate": "scratch/exodia-rig/candidates/b57a514efd96281f8bc92ddfb01fc680db269c83488ce2b0d775124a7275374a.candidate.yaml",
+      "fingerprint_note": "In-run fingerprint rotated to a84e74b49dd045c0... because the first-wins reader change is part of station implementation identity; behavior delta is retry tolerance only.",
+      "declared_fingerprint": "6d37a51b036bd095bc66784ad216ee1ec39cc24ebf130c7354347b00a4a63769"
+    },
+    "challenger_v4": {
+      "candidate": "scratch/exodia-rig/candidates/268196d2501354f4e5cb41b78af2bb149fa6fd62e2db625704d116372799b3f9.candidate.yaml",
+      "fingerprint": "973a478bd3f8de5a8198f841b6d83dd8682564d4bd3624b91d10c2c516c02ae8",
+      "identity": "omp_toolbelt3 harness + transcribe/zh/toolbelt4 exact-form prompt"
+    }
+  },
+  "runs": {
+    "smoke": "library/evaluations/runs/toolbelt4-mthv2-smoke4-v1 (4 Gaoli pages; gate passed 3 strict wins 1 tie)",
+    "full": ["toolbelt4-mthv2-dev24-c1", "toolbelt4-mthv2-dev24-c2", "toolbelt4-mthv2-dev24-c3", "toolbelt4-mthv2-dev24-c4"],
+    "artifacts": {
+      "recall_v4_jsonl_sha256": "6985f4080a3473e19b38fa8d0c7a348fbffba2fd380bd50213f49e45440ef8f2",
+      "judgments_v4_jsonl_sha256": "25832f8ec1fab702bb8e57f1b2ed9a4d4431c2b530ad0ace2c6791f8b0d8f8cc"
+    }
+  },
+  "observations": {
+    "judged_answer_recovery": {"v2_in_run": {"mean": 0.9559, "median": 0.983, "verdicts": {"perfect": 4, "near_perfect": 15, "partial": 4}}, "v4": {"mean": 0.9621, "median": 0.982, "verdicts": {"perfect": 3, "near_perfect": 15, "partial": 5}}, "v4_wins": "13/23, ties 4", "suspicious_extra": 0},
+    "deterministic_sequence_recall": {"v2_in_run_mean": 0.8466, "v4_mean": 0.8426, "v4_wins": "14/23, ties 2", "note": "One v4 reliability flake (mth1000-008 dropped to 0.494, layer-misroute variance class); excluding it v4 mean 0.858."},
+    "variant_class": {"v2_top12_pair_errors": 199, "v4_top12_pair_errors": 112, "reduction": "44 percent", "total_wrong_rate": "12.12 to 10.32 percent", "overcorrections_appeared": ["為->爲 11", "說->説 9"], "interpretation": "Exact-form policy works where the form is visually resolvable, and guesses archaic forms where it is not; codepoint fidelity is partially irreducible from page-resolution reading."},
+    "ordering_class": {"finding": "GL-1054 catalog pages: bag-of-characters recall 0.87-0.89 versus sequence recall 0.25-0.48; the characters are present, panel order differs from annotation order. The judge lens already scores these correctly (0.98-1.0)."}
+  },
+  "gates": {
+    "smoke_finished_outputs": "pass (4/4 sealed)",
+    "smoke_recall": "pass (3 strict wins, 1 tie)",
+    "full_recall": "fail (v4 mean 0.8426 not above v2 0.8468; Gaoli pages lifted but ordering-capped)",
+    "judged_non_regression": "pass (0.9621 vs 0.9559)",
+    "budget_stop": "not triggered"
+  },
+  "decision": "inconclusive",
+  "decision_detail": "v2 remains champion. The exact-form prompt delivered a measured 44 percent cut on its named confusion class but net sequence recall is flat, judged recovery moves within noise, and one new reliability flake appeared. Perfection now decomposes into four named residues with different instruments: (1) codepoint variant ambiguity - needs glyph-crop adjudication against the char_inventory exemplar library, not prompting; (2) catalog panel ordering - already correct under the judge; the deterministic lens needs order-aware scoring; (3) reliability flakes - harness repeat policy; (4) small interlinear misses - detector-anchored completeness. No promotion or proposal from this evidence.",
+  "cost": {"smoke_usd": 2.5851, "full_usd": 11.6387, "judge_usd": 0.2172, "total_usd": 14.441, "ceiling_usd": 18.0},
+  "next_permitted_action": "Design the glyph-adjudication experiment: route judge-named variant disagreements through char_inventory exemplar matching on the character crops, and add an order-aware deterministic lens for catalog pages."
+}

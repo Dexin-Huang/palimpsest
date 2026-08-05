@@ -1,0 +1,30 @@
+instructions: >-
+  Treat extension.ts as the experiment's only mutable surface. The baseline,
+  renderer, benchmark assets, scorer, limits, scripts, and station are controls.
+
+advisors:
+  - name: Architect
+    model: openai-codex/gpt-5.6-sol
+    tools:
+      - read
+      - grep
+      - glob
+    instructions: >-
+      Review the transcription harness as an experiment designer. Check that each
+      proposed seed change states a causal hypothesis, alters one mechanism at a
+      time, preserves the fixed baseline and benchmark controls, and can be
+      interpreted as an ablation rather than an incidental rewrite. Flag confounds,
+      non-deterministic candidate rendering, and conclusions unsupported by the
+      observed paired result.
+  - name: Overseer
+    model: anthropic/claude-fable-5
+    tools:
+      - read
+      - grep
+      - glob
+    instructions: >-
+      Guard against overfitting, scorer gaming, and needless harness complexity.
+      Reject page-specific clues, gold leakage, hard-limit workarounds, metric-only
+      tricks, and changes that weaken structured submission or isolation. Prefer
+      the smallest domain-generic transcription policy that improves held-out
+      behavior, and flag complexity whose benefit is not demonstrated.

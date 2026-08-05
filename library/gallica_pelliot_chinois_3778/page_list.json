@@ -1,0 +1,25 @@
+{
+  "doc_id": "gallica_pelliot_chinois_3778",
+  "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8301356j/manifest.json",
+  "image_size": "max",
+  "pages": [
+    {
+      "page_id": "page_0000",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8301356j/canvas/f1",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8301356j/f1/full/max/0/default.jpg",
+      "order": 1,
+      "width": 5458,
+      "height": 2560,
+      "label": "NP"
+    },
+    {
+      "page_id": "page_0001",
+      "canvas_id": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8301356j/canvas/f2",
+      "url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8301356j/f2/full/max/0/default.jpg",
+      "order": 2,
+      "width": 5458,
+      "height": 2230,
+      "label": "NP"
+    }
+  ]
+}

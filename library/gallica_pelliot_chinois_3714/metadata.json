@@ -1,0 +1,70 @@
+{
+  "doc_id": "gallica_pelliot_chinois_3714",
+  "source": {
+    "kind": "iiif",
+    "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b83025695/manifest.json"
+  },
+  "source_catalog": {
+    "label": "BnF. Département des Manuscrits. Pelliot chinois 3714",
+    "title": "Pelliot chinois 3714",
+    "shelfmark": "Bibliothèque nationale de France. Département des Manuscrits. Pelliot chinois 3714",
+    "archive": null,
+    "author": "Li Ji 李 勣. Auteur du texte",
+    "date": "0601-0700",
+    "language": "chinois",
+    "description": "Pelliot chinois 3714",
+    "canvas_count": 28,
+    "metadata_entries": [
+      {
+        "label": "Repository",
+        "value": ""
+      },
+      {
+        "label": "Digitised by",
+        "value": "Bibliothèque nationale de France"
+      },
+      {
+        "label": "Source Images",
+        "value": "https://gallica.bnf.fr/ark:/12148/btv1b83025695"
+      },
+      {
+        "label": "Metadata Source",
+        "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b83025695"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "Bibliothèque nationale de France. Département des Manuscrits. Pelliot chinois 3714"
+      },
+      {
+        "label": "Title",
+        "value": "Pelliot chinois 3714"
+      },
+      {
+        "label": "Date",
+        "value": "0601-0700"
+      },
+      {
+        "label": "Language",
+        "value": "chinois"
+      },
+      {
+        "label": "Format",
+        "value": "Rouleau de 15 ff. dont 11 de 38,5 à 41,5 cm (f. 1, mutilée : 35 cm, f. 4 : 29 cm, f. 14 : 29,5 cm, f. 15, mutilée : 15,5 cm). Pap. très irrégulier, bis. Verg. 8 par cm. - 27,7 × 552,5 cm"
+      },
+      {
+        "label": "Creator",
+        "value": "Li Ji 李 勣. Auteur du texte"
+      },
+      {
+        "label": "Relation",
+        "value": "Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc1203624"
+      },
+      {
+        "label": "Type",
+        "value": "Manuscrit"
+      }
+    ]
+  },
+  "created_at": "2026-07-26T04:07:54.083693+00:00",
+  "updated_at": "2026-07-26T04:07:54.083693+00:00"
+}

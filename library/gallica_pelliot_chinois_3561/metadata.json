@@ -1,0 +1,70 @@
+{
+  "doc_id": "gallica_pelliot_chinois_3561",
+  "source": {
+    "kind": "iiif",
+    "manifest_url": "https://gallica.bnf.fr/iiif/ark:/12148/btv1b52519981x/manifest.json"
+  },
+  "source_catalog": {
+    "label": "BnF. Département des Manuscrits. Pelliot chinois 3561",
+    "title": "Pelliot chinois 3561",
+    "shelfmark": "Bibliothèque nationale de France. Département des Manuscrits. Pelliot chinois 3561",
+    "archive": null,
+    "author": "Zhou Xing si 周 興 嗣. Auteur du texte",
+    "date": "0601-0700",
+    "language": "chinois",
+    "description": "Pelliot chinois 3561",
+    "canvas_count": 3,
+    "metadata_entries": [
+      {
+        "label": "Repository",
+        "value": ""
+      },
+      {
+        "label": "Digitised by",
+        "value": "Bibliothèque nationale de France"
+      },
+      {
+        "label": "Source Images",
+        "value": "https://gallica.bnf.fr/ark:/12148/btv1b52519981x"
+      },
+      {
+        "label": "Metadata Source",
+        "value": "http://oai.bnf.fr/oai2/OAIHandler?verb=GetRecord&metadataPrefix=oai_dc&identifier=oai:bnf.fr:gallica/ark:/12148/btv1b52519981x"
+      },
+      {
+        "label": "Shelfmark",
+        "value": "Bibliothèque nationale de France. Département des Manuscrits. Pelliot chinois 3561"
+      },
+      {
+        "label": "Title",
+        "value": "Pelliot chinois 3561"
+      },
+      {
+        "label": "Date",
+        "value": "0601-0700"
+      },
+      {
+        "label": "Language",
+        "value": "chinois"
+      },
+      {
+        "label": "Format",
+        "value": "Rouleau de 3 ff. (f. 1 mutilée : 20 cm ; f. 2 : 42,5 cm ; f. 3 : 38 à 39 cm). Pap. homogène, ocre foncé. Verg. 11 par cm. Taches de gras. Quelques trous, fentes et échancrures. - 25 × 100,5 à 101,5 cm"
+      },
+      {
+        "label": "Creator",
+        "value": "Zhou Xing si 周 興 嗣. Auteur du texte"
+      },
+      {
+        "label": "Relation",
+        "value": "Notice du catalogue : http://archivesetmanuscrits.bnf.fr/ark:/12148/cc1202084"
+      },
+      {
+        "label": "Type",
+        "value": "Manuscrit"
+      }
+    ]
+  },
+  "created_at": "2026-07-27T01:02:09.671984+00:00",
+  "updated_at": "2026-07-27T01:02:09.671984+00:00"
+}

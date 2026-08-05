@@ -92,13 +92,15 @@ validated against their artifact contract before they are written.
 ### Recipes
 
 A recipe is a declarative route sheet with separate page and manuscript lanes.
-The page lane is ordered and runs concurrently across pages. The manuscript
-lane runs after every page dependency required by its next station is present.
+The page lane is ordered, with one barrier after each station, and each station
+runs concurrently across eligible pages. The manuscript lane runs after every
+page dependency required by its next station is present.
 
 The maintained recipes are:
 
 - `latin_manuscript`
 - `chinese_scroll`
+- `chinese_printed_book`
 
 Recipe interpolation accepts only the named model settings in factory
 configuration. Missing settings fail during recipe loading rather than during
@@ -123,9 +125,12 @@ For each cell it:
 6. validates and atomically commits the output;
 7. records success, usage, cost, or a structured failure.
 
-Page cells execute through a bounded thread pool. Ledger writes share one
-serialized SQLite connection in WAL mode. A manuscript cell never starts until
-all required page artifacts exist.
+Page cells execute through bounded thread pools: one for local transformations
+and a smaller one for model-backed stations. Model calls have an additional
+per-provider bound, allowing independent providers to overlap without
+oversubscribing either. Ledger writes share one serialized SQLite connection in
+WAL mode. A manuscript cell never starts until all required page artifacts
+exist.
 
 ### Executors
 
@@ -175,6 +180,7 @@ library/<doc_id>/
   manuscript.json
   reference.json
   emendations.json
+  edition.json
   book/book.json
   book/book.epub
 ```
@@ -233,18 +239,26 @@ The editorial line preserves separate evidence layers:
 - `manuscript`: reconstructed continuous original and translation;
 - `reference`: bounded external evidence tied to manuscript anchors;
 - `emendations`: proposed readings plus an apparatus explaining each change;
+- `edition`: reader-facing headings, translations, and note reconciled against
+  every final emended reading;
 - `book`: chapters containing translation, verbatim original, emended reading,
   apparatus, catalog identity, and production colophon.
 
 Emendation never mutates the diplomatic transcription or reconstructed
-manuscript. Publication presents the layers together, preserving both readable
-text and the evidence required to audit it.
+manuscript. The final-edition agent reviews each section but can only write the
+reader-facing prose layer. Publication deterministically presents all layers
+together, preserving both readable text and the evidence required to audit it.
 
 ## Publication
 
-`publish` creates the book model as pure structured content. `render_epub`
-renders an EPUB from that model. `site` rebuilds the hosted shelf and per-book
-reader from all published book models. Presentation code does not read upstream
+`finalize_edition` gives a goal-directed Sol agent the finished manuscript,
+reference dossier, emendation apparatus, and full page-transcription audits.
+It must reconcile the final emended reading with any unresolved visual or
+segmentation uncertainty, then produce one reader-facing entry for every
+section. `publish` combines that edition prose with immutable
+source and editorial layers as pure structured content. `render_epub` renders
+an EPUB from that model. `site` rebuilds the hosted shelf and per-book reader
+from all published book models. Presentation code does not read upstream
 station artifacts directly.
 
 The publication colophon reports the model and prompt identity for model-backed

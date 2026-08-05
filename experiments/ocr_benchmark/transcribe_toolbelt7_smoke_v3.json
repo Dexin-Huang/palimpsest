@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-result",
+  "record_id": "transcribe-toolbelt7-priority-smoke-v3",
+  "station": "transcribe",
+  "stage": "development-smoke",
+  "state": "completed",
+  "created_at": "2026-07-31T08:05:02Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "preflight": "experiments/ocr_benchmark/transcribe_toolbelt7_preflight_v3.json",
+  "run": {
+    "id": "tb7-priority-smoke-v3",
+    "report": "library/evaluations/runs/tb7-priority-smoke-v3/report.json",
+    "report_sha256": "24f003b72c1b9fb679823f3d1aa909cefa283303dbbd07e1c6d4aa1f011cff72",
+    "suite_fingerprint": "73c7f29b8ba64f084027f8b9b3ebab17215a0572e1945d4a3113d1ba595e073b",
+    "baseline_fingerprint": "024244fc55eae502d77705e32eab2bc42b57bac9c32cf590b47143a87d599cc0",
+    "challenger_fingerprint": "257fc5d095da78e58d4e5a0e101aabf2538879ca3e0a190681713813b3fc6729"
+  },
+  "deterministic_evidence": {
+    "path": "scratch/ocr_benchmark/runs/toolbelt7-priority-smoke-v3-recall.jsonl",
+    "sha256": "93422c789144f184e2b8f8846aa25b1a0581186cabd2d6c6defa8b13cc3d97ac",
+    "baseline_combined_gold_recall": 0.9150431743480998,
+    "challenger_combined_gold_recall": 0.9282608885813511,
+    "delta": 0.013217714233251354,
+    "minimum_allowed_delta": -0.01
+  },
+  "autonomy_evidence": {
+    "classifier_enabled_pages": 6,
+    "inspection_calls_by_case": [0, 3, 0, 8, 1, 1],
+    "total_inspection_calls": 13,
+    "maximum_calls_per_page": 8,
+    "inline_crop_reads": 13,
+    "private_manifests_present": 6,
+    "readable_bulk_manifests_present": 0,
+    "observed_two_layer_cases": [
+      "mthv2-tkh-0001-001-26-26-transcribe-development"
+    ],
+    "single_layer_reorder_triggers": 0,
+    "single_layer_reorder_adoptions": 0
+  },
+  "operations": {
+    "completed_pairs": 6,
+    "failures": 0,
+    "known_cost_usd": 3.7990276,
+    "maximum_cost_usd": 4.2,
+    "unknown_cost": false,
+    "cumulative_experiment_spend_usd": 11.6523606,
+    "remaining_authorized_budget_usd": 14.3476394
+  },
+  "gates": {
+    "completion": true,
+    "suite_and_candidate_identity": true,
+    "classifier_airlock": true,
+    "inspection_used": true,
+    "inspection_bounded": true,
+    "inline_crop_reads": true,
+    "challenger_recall_minimum": true,
+    "challenger_recall_delta": true,
+    "ordering_expectation": true,
+    "catastrophic_failures": true,
+    "cost": true
+  },
+  "decision": "accepted",
+  "production_state": "unchanged",
+  "next_permitted_action": "Run the remaining eighteen declared development cases under the unchanged v3 identities, with three per-chunk ceilings totaling at most 12.3 USD."
+}

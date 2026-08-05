@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "exemplar-labeling-preflight-v1",
+  "station": "transcribe",
+  "state": "ready",
+  "created_at": "2026-07-30T17:37:20Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Seed-label the 1,959-crop unlabeled glyph exemplar bank (experiments/char_inventory/out) with one open-vocabulary reading per crop, converting geometry-only inventory into a training and verification asset. This is the Vesuvius Challenge bootstrap move adopted by vesuvius_research: weak seed labels first, hardening loop after.",
+  "hypothesis": "A majority of crops resolve to a single character with usable certainty stratification; the labeled bank plus MTHv2's 100k labeled boxes and the 1,131 blind adjudication verdicts form the training set for a local glyph classifier (the fourth evidence channel and the cheap first stage of adjudication).",
+  "instrument": {
+    "script": "experiments/ocr_benchmark/glyph_labeler.py",
+    "model": "gemini-3.5-flash, temperature 0, minimal thinking, schema-bound {character, certainty, notes}",
+    "rules": "exactly one codepoint, variant forms kept (no normalization), empty character when illegible; resumable; budget-capped",
+    "smoke": "first 5 crops labeled live: 慮/脈/光 high-certainty plus two explicit illegibles, ~0.0024 USD per crop"
+  },
+  "label_status": "SEED labels, development-only. Not gold, never qualification evidence. Hardening path: model-vs-model disagreement review, then expert verification through the draft queue per the gold protocol.",
+  "gates": {
+    "coverage": "every crop in the index receives a row (labeled or explicit illegible/failed)",
+    "resolution": "at least 70 percent of crops labeled with a non-empty character",
+    "audit": "top character families spot-checked against the inventory contact sheet for gross misreads",
+    "budget_stop": "label --max-cost stops before the next call"
+  },
+  "budget": {"maximum_usd": 6.5, "estimated_usd": 4.8, "paid_gpu": "none"},
+  "allowed_changes": [
+    "experiments/ocr_benchmark/glyph_labeler.py",
+    "experiments/ocr_benchmark/exemplar_labeling_preflight_v1.json",
+    "experiments/ocr_benchmark/exemplar_labeling_development_v1.json",
+    "experiments/LOG.md",
+    "scratch/ocr_benchmark/runs/glyph-labeling-v1/"
+  ],
+  "non_goals": ["No production changes.", "No classifier training in this record (separate preflight once labels exist).", "No gold edits."],
+  "next_permitted_action": "Run the full labeling pass under the declared budget, then summarize, audit, and record."
+}

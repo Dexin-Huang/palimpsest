@@ -16,6 +16,9 @@ flowchart TB
   kind_page_transcription --> station_assemble_page
   kind_page_translation --> station_assemble_page
   station_assemble_page --> kind_page_assembled
+  kind_page_image --> station_audit_transcription
+  kind_page_transcription_draft --> station_audit_transcription
+  station_audit_transcription --> kind_page_transcription_audit
   kind_page_image --> station_deframe
   station_deframe --> kind_page_image_framed
   kind_page_image_framed --> station_dewatermark
@@ -25,16 +28,23 @@ flowchart TB
   kind_page_assembled --> station_emend
   kind_page_image_clean --> station_emend
   station_emend --> kind_emendations
+  kind_page_transcription --> station_finalize_edition
+  kind_manuscript --> station_finalize_edition
+  kind_reference --> station_finalize_edition
+  kind_emendations --> station_finalize_edition
+  station_finalize_edition --> kind_edition
   kind_page_image_unmarked --> station_flatten
   station_flatten --> kind_page_image_clean
   kind_metadata --> station_publish
   kind_manuscript --> station_publish
   kind_translation_brief --> station_publish
   kind_page_transcription --> station_publish
+  kind_page_image --> station_publish
   kind_page_image_clean --> station_publish
   kind_page_translation --> station_publish
   kind_reference --> station_publish
   kind_emendations --> station_publish
+  kind_edition --> station_publish
   kind_page_alignment -. optional .-> station_publish
   station_publish --> kind_book
   kind_page_image_clean --> station_read
@@ -50,6 +60,8 @@ flowchart TB
   station_segment --> kind_page_regions
   kind_page_transcription --> station_survey
   station_survey --> kind_translation_brief
+  kind_page_image --> station_transcribe
+  station_transcribe --> kind_page_transcription_draft
   kind_page_transcription --> station_translate
   kind_translation_brief --> station_translate
   station_translate --> kind_page_translation
@@ -59,12 +71,16 @@ flowchart TB
   style station_align fill:#eef2ec,stroke:#9ab08f
   station_assemble_page(["assemble_page<br/><i>page</i>"])
   style station_assemble_page fill:#eef2ec,stroke:#9ab08f
+  station_audit_transcription(["audit_transcription ✱<br/><i>page</i>"])
+  style station_audit_transcription fill:#eef2ec,stroke:#9ab08f
   station_deframe(["deframe<br/><i>page</i>"])
   style station_deframe fill:#eef2ec,stroke:#9ab08f
   station_dewatermark(["dewatermark<br/><i>page</i>"])
   style station_dewatermark fill:#eef2ec,stroke:#9ab08f
   station_emend(["emend ✱<br/><i>manuscript</i>"])
   style station_emend fill:#eef2ec,stroke:#9ab08f
+  station_finalize_edition(["finalize_edition ✱<br/><i>manuscript</i>"])
+  style station_finalize_edition fill:#eef2ec,stroke:#9ab08f
   station_flatten(["flatten<br/><i>page</i>"])
   style station_flatten fill:#eef2ec,stroke:#9ab08f
   station_publish(["publish<br/><i>manuscript</i>"])
@@ -81,10 +97,13 @@ flowchart TB
   style station_segment fill:#eef2ec,stroke:#9ab08f
   station_survey(["survey ✱<br/><i>manuscript</i>"])
   style station_survey fill:#eef2ec,stroke:#9ab08f
+  station_transcribe(["transcribe ✱<br/><i>page</i>"])
+  style station_transcribe fill:#eef2ec,stroke:#9ab08f
   station_translate(["translate ✱<br/><i>page</i>"])
   style station_translate fill:#eef2ec,stroke:#9ab08f
   kind_book["book"]
   kind_book_epub["book_epub"]
+  kind_edition["edition"]
   kind_emendations["emendations"]
   kind_manuscript["manuscript"]
   kind_metadata[("metadata")]
@@ -99,6 +118,8 @@ flowchart TB
   style kind_page_list fill:#fdf6e3,stroke:#c9b99a
   kind_page_regions["page_regions"]
   kind_page_transcription["page_transcription"]
+  kind_page_transcription_audit["page_transcription_audit"]
+  kind_page_transcription_draft["page_transcription_draft"]
   kind_page_translation["page_translation"]
   kind_reference["reference"]
   kind_translation_brief["translation_brief"]
@@ -124,8 +145,12 @@ flowchart TB
 | | | | *Illumination-flattened study image; what segment and read consume.* | |
 | `page_regions` | page | json | `doc_id`, `page_id`, `route`, `image`, `regions` | `<kind>/<page_id>.json` |
 | | | | *Polygon lassos + the routing decision (blank | full_page | segmented).* | |
+| `page_transcription_draft` | page | json | `doc_id`, `page_id`, `page_seq`, `canvas_id`, `text`, `requested_model`, `model`, `finish_reason` | `<kind>/<page_id>.json` |
+| | | | *Unreviewed full-image transcription from one direct reader call.* | |
 | `page_transcription` | page | json | `doc_id`, `page_id`, `text`, `route`, `regions`, `candidate_readings`, `adjudication_status`, `adjudication_requested_model`, `adjudication_model`, `adjudication_reasoning`, `unresolved`, `adjudication_error` | `<kind>/<page_id>.json` |
 | | | | *Diplomatic transcription; per-region texts when the page was segmented.* | |
+| `page_transcription_audit` | page | json | `doc_id`, `page_id`, `page_seq`, `canvas_id`, `text`, `route`, `regions`, `candidate_readings`, `adjudication_status`, `adjudication_requested_model`, `adjudication_model`, `adjudication_reasoning`, `unresolved`, `adjudication_error` | `<kind>/<page_id>.json` |
+| | | | *Auditor-corrected transcription grounded in the raw archive image.* | |
 | `page_translation` | page | json | `doc_id`, `page_id`, `translation`, `flags` | `<kind>/<page_id>.json` |
 | | | | *English translation of one page, with continuity flags.* | |
 | `page_alignment` | page | json | `doc_id`, `page_id`, `columns`, `stats` | `<kind>/<page_id>.json` |
@@ -140,8 +165,10 @@ flowchart TB
 | | | | *The reference dossier: document identification plus, per passage that tracks a transmitted text, the controlling received wording with citation, confidence, and verification source.* | |
 | `emendations` | manuscript | json | `doc_id`, `sections`, `apparatus` | `emendations.json` |
 | | | | *The final editorial pass: an emended reading per section + the apparatus recording every change. The diplomatic layer is never edited; this sits beside it.* | |
-| `book` | manuscript | json | `doc_id`, `title`, `language`, `chapters`, `evidence`, `colophon` | `book/book.json` |
-| | | | *The book model: bilingual chapters, page-level source evidence, alignment geometry when available, and a provenance colophon.* | |
+| `edition` | manuscript | json | `doc_id`, `readers_note`, `sections` | `edition.json` |
+| | | | *Reader-facing prose reconciled against the final emended reading: one heading and translation per manuscript section, plus the manuscript-level reader's note.* | |
+| `book` | manuscript | json | `schema_version`, `profile`, `doc_id`, `identity`, `languages`, `readers_note`, `folios`, `sections`, `apparatus`, `colophon` | `book/book.json` |
+| | | | *Book Model v1: normalized folios, reader-facing sections, explicit source descriptors, editorial apparatus, and production colophon.* | |
 | `book_epub` | manuscript | epub | — | `book/{doc_id}.epub` |
 | | | | *EPUB 3 rendering of the book model.* | |
 
@@ -149,21 +176,24 @@ flowchart TB
 
 | Station | Implementation | Grain | Consumes | Produces | Model |
 |---|---|---|---|---|---|
-| `acquire` | `164a207719c2325f` | page | `page_list` | `page_image` | no |
-| `align` | `8f2ec7eb68f29c1b` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
-| `assemble_page` | `4bdf4191554dd89d` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
-| `deframe` | `41ee89260f60657d` | page | `page_image` | `page_image_framed` | no |
-| `dewatermark` | `a5168c2ebdef9aae` | page | `page_image_framed` | `page_image_unmarked` | no |
-| `emend` | `e9edf6f5fbe562cf` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
-| `flatten` | `775b8d0bc76f40d2` | page | `page_image_unmarked` | `page_image_clean` | no |
-| `publish` | `102822ec327f2bed` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `page_alignment` (optional) | `book` | no |
-| `read` | `0cc08c1ed3b917ff` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
-| `reconstruct` | `560e49fe59e44972` | manuscript | `page_assembled` | `manuscript` | yes |
-| `reference` | `eec596a2cdeeea06` | manuscript | `manuscript` | `reference` | yes |
-| `render_epub` | `e478a9373a5b56ec` | manuscript | `book` | `book_epub` | no |
-| `segment` | `662691183077048f` | page | `page_image_clean` | `page_regions` | no |
-| `survey` | `56277056d489dcde` | manuscript | `page_transcription` | `translation_brief` | yes |
-| `translate` | `44f033a09a334c37` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
+| `acquire` | `b006fb2b2cddcd03` | page | `page_list` | `page_image` | no |
+| `align` | `04670f51533855f7` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
+| `assemble_page` | `ac15fdf3c50701f5` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
+| `audit_transcription` | `63940599c0f5b523` | page | `page_image`, `page_transcription_draft` | `page_transcription_audit` | yes |
+| `deframe` | `cb7450439b86d9c5` | page | `page_image` | `page_image_framed` | no |
+| `dewatermark` | `d649cd7af32f6c8e` | page | `page_image_framed` | `page_image_unmarked` | no |
+| `emend` | `fd7c7b40283f44fc` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
+| `finalize_edition` | `da5c4866e78bc8cd` | manuscript | `page_transcription`, `manuscript`, `reference`, `emendations` | `edition` | yes |
+| `flatten` | `ba7a378e822bd683` | page | `page_image_unmarked` | `page_image_clean` | no |
+| `publish` | `07ff0f3b2809bdd8` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
+| `read` | `5f49fdf3d5e93ac9` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
+| `reconstruct` | `f064c0bd6b290df2` | manuscript | `page_assembled` | `manuscript` | yes |
+| `reference` | `cafb5e6bfcf10a64` | manuscript | `manuscript` | `reference` | yes |
+| `render_epub` | `24e8ad7a4417aa3e` | manuscript | `book` | `book_epub` | no |
+| `segment` | `932fe29f9be7739c` | page | `page_image_clean` | `page_regions` | no |
+| `survey` | `eb8d784a1305cbc3` | manuscript | `page_transcription` | `translation_brief` | yes |
+| `transcribe` | `7131a0305ccb4ee8` | page | `page_image` | `page_transcription_draft` | yes |
+| `translate` | `305d45d813ca4c28` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
 
 Contracts are enforced twice at runtime: a station referencing an
 unknown kind fails at registration, and a JSON artifact missing its

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "name": "Palimpsest",
+  "promise": "Recovery without erasure.",
+  "purpose": "Turn image-bound manuscripts into trustworthy, readable books while preserving the evidence behind every reading.",
+  "mark": {
+    "concept": "Offset folio layers form a P around an open-book seam.",
+    "status": "candidate",
+    "primary_asset": "assets/palimpsest-mark.svg",
+    "preview_asset": "assets/palimpsest-mark.png",
+    "default_color": "ink_vault"
+  },
+  "palette": {
+    "ink_vault": "#17252C",
+    "mineral_paper": "#F2F0E9",
+    "parchment": "#C9B99A",
+    "seal_vermilion": "#9C3F35",
+    "oxidized_slate": "#405054"
+  },
+  "typography": {
+    "brand_display": {
+      "family": "Libre Caslon Display",
+      "weight": 400,
+      "license": "OFL-1.1",
+      "source": "https://fonts.google.com/specimen/Libre+Caslon+Display",
+      "wordmark": {
+        "case": "uppercase",
+        "tracking_em": 0.16
+      }
+    },
+    "reading_latin": {
+      "family": "Libre Caslon Text",
+      "weight": 400,
+      "license": "OFL-1.1",
+      "source": "https://fonts.google.com/specimen/Libre+Caslon+Text"
+    },
+    "reading_traditional_chinese": {
+      "family": "Noto Serif TC",
+      "weights": [400, 500],
+      "license": "OFL-1.1",
+      "source": "https://fonts.google.com/noto/specimen/Noto+Serif+TC"
+    },
+    "interface": {
+      "family": "Inter",
+      "weights": [400, 500, 600],
+      "license": "OFL-1.1",
+      "source": "https://rsms.me/inter/"
+    }
+  },
+  "publication": {
+    "facsimile_surface": "ink_vault",
+    "reading_surface": "mineral_paper",
+    "editorial_accent": "seal_vermilion",
+    "required_content_order": [
+      "translation",
+      "emended_reading",
+      "diplomatic_transcription",
+      "apparatus"
+    ]
+  },
+  "reference": {
+    "status": "approved_direction",
+    "brand_board": "reference/palimpsest-brand-board.png",
+    "generation_record": "reference/palimpsest-brand-board.generation.json"
+  }
+}

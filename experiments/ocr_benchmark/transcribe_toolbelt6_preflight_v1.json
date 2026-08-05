@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "record_kind": "bounded-experiment-preflight",
+  "record_id": "transcribe-toolbelt6-preflight-v1",
+  "station": "transcribe",
+  "state": "ready",
+  "created_at": "2026-07-30T03:37:23Z",
+  "operator": "Dexin Huang <dh3172@columbia.edu>",
+  "objective": "Close the ordering residue named by the v5 result: a deterministic reading-order reconciliation pass between submission and glyph adjudication. The offline replay of stored v5 outputs against their own geometry evidence identified the true failure class as LAYER INTERLEAVING plus column order: gold reads each column's small-character notes inline, while the layered draft emits all primary then all commentary. The full second-reader channel re-emitted in geometry order scores 0.88-0.92 against gold on the catalog pages where the layered draft scores 0.50-0.79.",
+  "hypothesis": "Re-emitting the combined draft (primary plus folded commentary) in geometry column order - multi-block span claims per column, strictly non-overlapping, leftovers riding with their preceding block, adoption only on material sequence gain against the reader channel - lifts the catalog trio without touching healthy pages, raising the full-run mean materially over v5.",
+  "production_state": "unchanged",
+  "replay_evidence": {
+    "method": "scratch/exodia-rig/replay_reorder.py over stored toolbelt5-mthv2-dev24 outputs and their geometry.json (difflib lens)",
+    "lifted": {"mth1200-GL-1054-1-12": [0.4985, 0.7964], "mth1200-GL-1054-1-13": [0.5091, 0.7273], "mth1200-GL-1047-1-5": [0.7927, 0.886]},
+    "untouched": ["mth1200-GL-1048-1-25", "mth1200-GL-1048-2-29", "mth1000-006 (geometry cannot explain its order - correct no-trigger)", "tkh-0001-001-26-15", "tkh-0001-001-26-24", "mth1000-01-V086P0669"],
+    "note": "Replay applies reorder to already-adjudicated v5 text; the live pipeline reorders BEFORE adjudication, so the replay is a floor for the trio."
+  },
+  "station_variant": {
+    "module": "palimpsest/factory/stations/transcribe_omp_toolbelt6.py",
+    "variant": "omp_toolbelt6",
+    "agent_surface": "identical to omp_toolbelt3/5 (same task, extension, prompt transcribe/zh/toolbelt3, evidence bytes)",
+    "pass_order": "submission -> reorder -> glyph adjudication",
+    "trigger": "bag overlap >= 0.70 and sequence ratio <= 0.75 between combined draft and full reader channel; adoption requires sequence gain >= 0.10; adoption folds commentary inline and empties the commentary field; every draft character survives exactly once (reorder never injects reader text, never deletes)"
+  },
+  "candidates": {
+    "model_ref": "openai-codex/gpt-5.6-luna",
+    "baseline_v5_champion": {
+      "candidate": "scratch/exodia-rig/candidates/a084eb53abbad3e65567e0bb037748f437808c4c084eb559e715169050068850.candidate.yaml",
+      "note": "development champion adopted by transcribe-toolbelt5-development-v1; fingerprints rotate with the tree per the v5 amendment"
+    },
+    "challenger_v6": {
+      "candidate": "scratch/exodia-rig/candidates/720f54f5808ff49ae4d7fb5e4f6e088e740793d152555480595bed9773ad3836.candidate.yaml",
+      "fingerprint": "8b2a0eae5ddd15493435ba004da3fb03c219f6d47012a21cfd81cc220c4c2a2b",
+      "seed_source_sha256": "55f20c1bde7b2c07c18529bec0091b51b472b874c410cb051b6d7867013af305"
+    },
+    "model_identity_note": "Second reader and adjudicator lanes run gemini-3.5-flash per the current tree (the identity the adopted v5 evidence used)."
+  },
+  "execution": {
+    "smoke_run_id": "toolbelt6-mthv2-smoke4-v1",
+    "smoke_cases": [
+      "mthv2-mth1200-GL-1054-1-12-transcribe-development",
+      "mthv2-mth1200-GL-1054-1-13-transcribe-development",
+      "mthv2-mth1000-006-transcribe-development",
+      "mthv2-tkh-0001-001-26-15-transcribe-development"
+    ],
+    "smoke_design": "The two fixable catalog pages, the geometry-unexplainable negative control (mth1000-006), and a healthy control.",
+    "full_run_ids": ["toolbelt6-mthv2-dev24-c1", "toolbelt6-mthv2-dev24-c2", "toolbelt6-mthv2-dev24-c3", "toolbelt6-mthv2-dev24-c4"],
+    "policy": "Smoke first; full 24 only if all smoke gates pass. Score both lenses (temporary rapidfuzz scorer, answer-key judge), validate records, uninstall the scorer.",
+    "environment": "PALIMPSEST_RFDETR_OBJECT_ROOT=D:/Projects/palimpsest/library/evaluations/objects",
+    "workers": 2
+  },
+  "gates": {
+    "smoke_finished_outputs": "4 of 4 sealed with reorder and adjudication telemetry",
+    "smoke_reorder_behavior": "adopted on both GL-1054 pages; NOT adopted on tkh control; mth1000-006 not adopted (no-trigger expected)",
+    "smoke_recall": "v6 beats stored v5 rapidfuzz-lens recall on both GL-1054 pages (0.2705, 0.3848); tkh control >= 0.93",
+    "full_recall": "v6 mean >= 0.87 (v5 0.8594) AND v6 wins all three replay-lifted pages AND mean over the other 21 pages within 0.01 of v5",
+    "judged_non_regression": "v6 judged answer recovery not below v5's 0.9740 beyond noise",
+    "reorder_health": "adopted on at most 6 of 24 pages; every adoption records sequence gain >= 0.10",
+    "budget_stop": "bench run --max-cost per chunk; adjudication capped in code"
+  },
+  "budget": {"smoke_maximum_usd": 5.0, "full_maximum_usd": 17.0, "judge_maximum_usd": 2.0, "total_maximum_usd": 24.0, "paid_gpu": "none"},
+  "amendments": [
+    {
+      "at": "2026-07-30T04:55:00Z",
+      "scope": "smoke_reorder_behavior gate, mth1000-006 clause, amended BEFORE the full run",
+      "smoke_outcome": "4/4 sealed; GL-1054-1-12 0.2705 -> 0.7872 and GL-1054-1-13 0.3848 -> 0.7000 (both adopted, both beat stored v5); tkh control 0.9635, no trigger. mth1000-006 TRIGGERED AND ADOPTED against the declared expectation: this session's agent draft was scrambled relative to geometry (seq 0.5176 vs the stored v5 session's 0.9592) - the no-trigger expectation encoded an assumption about session-stable agent ordering that the smoke falsified. The pass moved the page to geometry order (seq 0.9283 vs reader) and was recall-neutral against gold (0.5029 vs 0.5088 stored), because annotation order on this page is not geometry-derivable - the named out-of-scope residual.",
+      "amended_expectation": "mth1000-006 MAY adopt depending on the session's draft order; the safety requirement is recall neutrality (no material degradation attributable to the pass). Rationale: without gold there is no signal distinguishing geometry-unexplainable pages, and normalizing to a deterministic canonical order is preferable to the session lottery. The full-run gates are unchanged and will be reported against their original wording.",
+      "note": "GL-1054 lifts exceeded the offline replay floor (0.7964/0.7273 replayed on adjudicated text; 0.7872/0.7000 live include fresh session variance), and adjudication ran after reorder as designed."
+    }
+  ],
+  "allowed_changes": [
+    "palimpsest/factory/stations/transcribe_omp_toolbelt6.py",
+    "palimpsest/factory/stations/__init__.py (registration)",
+    "D:/Projects/exodia/research/palimpsest-transcription/seeds/harness-toolbelt6.ts",
+    "experiments/ocr_benchmark/transcribe_toolbelt6_preflight_v1.json",
+    "experiments/ocr_benchmark/transcribe_toolbelt6_development_v1.json",
+    "experiments/LOG.md",
+    "scratch/exodia-rig/replay_reorder*.py (offline replay evidence)",
+    "scratch/ocr_benchmark/runs/gold-judge-eval-v1/ (appended v6 scores and judgments)",
+    "library/evaluations/runs (run records produced by bench run)"
+  ],
+  "non_goals": [
+    "Do not edit production recipes, suites, or gold.",
+    "Do not run bench propose or promote.",
+    "mth1000-006-class ordering (geometry-unexplainable) is out of scope and stays a named residual."
+  ],
+  "next_permitted_action": "Run the four-case smoke, evaluate the smoke gates, then the full 24 and both evaluation lenses under the declared budget."
+}
