@@ -13,6 +13,7 @@ import numpy as np
 
 from palimpsest.factory import agent_cell
 from palimpsest.factory.core.registry import register
+from palimpsest.factory.config import LIBRARY_ROOT
 from palimpsest.factory.core.station import Job, StationResult
 from palimpsest.factory.stations import instrumented_sensors
 from palimpsest.factory.stations.transcribe import Transcribe
@@ -695,13 +696,20 @@ class OmpInstrumentedTranscribe(Transcribe):
         _instrumented_options(options)
 
     def _load_object(self, job: Job, sha256_hex: str, label: str) -> Path:
-        path = job.library_root / "evaluations" / "objects" / sha256_hex
-        if not path.is_file():
-            raise FileNotFoundError(f"{label} object is missing: {path}")
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest != sha256_hex:
-            raise ValueError(f"{label} object content drifted: {digest}")
-        return path
+        # Isolated evaluation roots carry only materialized case inputs, so
+        # candidate-scoped objects fall back to the shared library store. The
+        # content hash makes any byte source equally trustworthy.
+        candidates = (
+            job.library_root / "evaluations" / "objects" / sha256_hex,
+            LIBRARY_ROOT / "evaluations" / "objects" / sha256_hex,
+        )
+        for path in candidates:
+            if path.is_file():
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                if digest != sha256_hex:
+                    raise ValueError(f"{label} object content drifted: {digest}")
+                return path
+        raise FileNotFoundError(f"{label} object is missing: {candidates[0]}")
 
     def run(self, job: Job) -> StationResult:
         source_bytes, binding, sensor_digests, quiet_max = _instrumented_options(
@@ -711,6 +719,27 @@ class OmpInstrumentedTranscribe(Transcribe):
         page_key = hashlib.sha256(str(job.page_id).encode("utf-8")).hexdigest()[:16]
         run_root = (
             doc_dir(job.doc_id, job.library_root) / "runs" / "transcribe_omp_instrumented"
+        )
+
+        # Resolve instrument objects before any paid model session.
+        detections_by_case = instrumented_sensors.load_jsonl_keyed(
+            self._load_object(job, sensor_digests["detections_sha256"], "detections"),
+            "characters",
+        )
+        verdicts_by_case = instrumented_sensors.load_jsonl_keyed(
+            self._load_object(
+                job, sensor_digests["classifier_verdicts_sha256"], "classifier verdicts"
+            ),
+            "columns",
+        )
+        case_keys = (f"{job.doc_id}__{job.page_id}", str(job.doc_id))
+        characters = next(
+            (detections_by_case[key] for key in case_keys if key in detections_by_case),
+            None,
+        )
+        verdict_columns = next(
+            (verdicts_by_case[key] for key in case_keys if key in verdicts_by_case),
+            None,
         )
 
         base_text, base_run = _stage_draft(
@@ -742,25 +771,6 @@ class OmpInstrumentedTranscribe(Transcribe):
                     else cost + shadow_run.cost_usd
                 )
 
-        detections_by_case = instrumented_sensors.load_jsonl_keyed(
-            self._load_object(job, sensor_digests["detections_sha256"], "detections"),
-            "characters",
-        )
-        verdicts_by_case = instrumented_sensors.load_jsonl_keyed(
-            self._load_object(
-                job, sensor_digests["classifier_verdicts_sha256"], "classifier verdicts"
-            ),
-            "columns",
-        )
-        case_keys = (f"{job.doc_id}__{job.page_id}", str(job.doc_id))
-        characters = next(
-            (detections_by_case[key] for key in case_keys if key in detections_by_case),
-            None,
-        )
-        verdict_columns = next(
-            (verdicts_by_case[key] for key in case_keys if key in verdicts_by_case),
-            None,
-        )
         sensors, flags = instrumented_sensors.compute_sensors(
             base_text, characters, alternates, verdict_columns
         )
