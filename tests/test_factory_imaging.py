@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import base64
+import subprocess
+import threading
 from types import SimpleNamespace
 
 import cv2
@@ -11,9 +13,28 @@ import httpx
 import pytest
 
 from palimpsest.factory import imaging
-from palimpsest.factory.core.station import Job, StationConfig
+from palimpsest.factory.core.station import Job, StationConfig, StationResult
 from palimpsest.factory.gateway import GatewayError, ImageContent, ModelResponse
 from palimpsest.factory.prompt_store import Prompt
+from palimpsest.factory.stations.deframe import Deframe, SpreadSafeDeframe
+from palimpsest.factory.stations.deframe_models import (
+    EfficientVitSamDeframe,
+    FastSamDeframe,
+)
+from palimpsest.factory.stations.deframe_models_adaptive import (
+    AdaptiveEfficientVitSamDeframe,
+)
+from palimpsest.factory.stations.deframe_models_hybrid import (
+    HybridEfficientVitSamDeframe,
+    SizeAwareHybridEfficientVitSamDeframe,
+)
+from palimpsest.factory.stations.deframe_models_resilient import (
+    ResilientHybridEfficientVitSamDeframe,
+)
+from palimpsest.factory.stations.deframe_topology import (
+    TopologyAwareDeframe,
+    _guarded_bbox,
+)
 from palimpsest.factory.stations.read import Read
 from palimpsest.factory.stations.segment import Segment
 from palimpsest.factory.workspace.io import atomic_write_json
@@ -48,8 +69,59 @@ def _job(tmp_path, page_id="f001r", options=None, prompt=None, params=None):
     )
 
 
+def _hybrid_options(*, size_aware=False):
+    options = {
+        "checkpoint_sha256": "b" * 64,
+        "torch_version": "2.10.0+cu128",
+        "source_revision": "c" * 40,
+        "points_per_side": 8,
+        "points_per_batch": 32,
+        "predicted_iou_threshold": 0.75,
+        "fallback_predicted_iou_threshold": 0.7,
+        "stability_threshold": 0.85,
+        "box_nms_threshold": 0.7,
+        "min_box_fraction": 0.15,
+        "min_mask_fraction": 0.12,
+        "min_box_height_fraction": 0.4,
+        "crop_margin": 0.0,
+        "frame_margin": 0.02,
+        "left_model_weight": 1.0,
+        "top_model_weight": 0.25,
+        "right_model_weight": 1.0,
+        "bottom_model_weight": 0.5,
+    }
+    if size_aware:
+        options.update(
+            {
+                "large_page_threshold_pixels": 10_000,
+                "large_left_model_weight": 0.75,
+                "large_top_model_weight": 0.0,
+                "large_right_model_weight": 0.75,
+                "large_bottom_model_weight": 0.5,
+            }
+        )
+    return options
+
+
+def _topology_options():
+    return {
+        "frame_margin": 0.02,
+        "multi_span_aspect_ratio": 1.3,
+        "protected_band_ink_fraction": 0.1,
+        "topology_edge_disagreement": 0.02,
+    }
+
+
 def _write_clean_image(job, image):
     path = job.path_of("page_image_clean")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ok, buffer = cv2.imencode(".jpg", image)
+    assert ok
+    path.write_bytes(buffer.tobytes())
+
+
+def _write_page_image(job, image):
+    path = job.path_of("page_image")
     path.parent.mkdir(parents=True, exist_ok=True)
     ok, buffer = cv2.imencode(".jpg", image)
     assert ok
@@ -87,6 +159,355 @@ def test_ink_masks_split_dark_and_faint():
     assert dark[107, 200] == 255 and faint[107, 200] == 0
     assert faint[200, 110] == 255 and dark[200, 110] == 0
     assert faint[220, 300] == 0  # large light overlay is not a faint annotation
+
+
+def test_spread_safe_deframe_keeps_both_leaves_across_dark_crease(tmp_path):
+    page = np.full((1000, 1400, 3), 20, np.uint8)
+    cv2.rectangle(page, (100, 80), (1299, 919), (230,) * 3, -1)
+    cv2.rectangle(page, (385, 80), (414, 919), (25,) * 3, -1)
+    cv2.rectangle(page, (190, 180), (320, 820), (45,) * 3, -1)
+    cv2.rectangle(page, (520, 180), (1150, 820), (45,) * 3, -1)
+    job = _job(tmp_path)
+    _write_page_image(job, page)
+
+    Deframe().run(job)
+    default = cv2.imread(str(job.path_of("page_image_framed")))
+    SpreadSafeDeframe().run(job)
+    spread_safe = cv2.imread(str(job.path_of("page_image_framed")))
+
+    assert default is not None and spread_safe is not None
+    assert default.shape[1] < 900
+    assert spread_safe.shape[1] > 1100
+    assert spread_safe.shape[1] > default.shape[1] * 1.25
+
+
+def test_spread_safe_deframe_matches_default_without_gutter(tmp_path):
+    page = np.full((1000, 1400, 3), 20, np.uint8)
+    cv2.rectangle(page, (100, 80), (1299, 919), (230,) * 3, -1)
+    cv2.rectangle(page, (300, 180), (1100, 820), (45,) * 3, -1)
+    job = _job(tmp_path)
+    _write_page_image(job, page)
+
+    Deframe().run(job)
+    default = job.path_of("page_image_framed").read_bytes()
+    SpreadSafeDeframe().run(job)
+
+    assert job.path_of("page_image_framed").read_bytes() == default
+
+
+def test_spread_safe_deframe_is_a_same_socket_variant():
+    baseline = Deframe()
+    challenger = SpreadSafeDeframe()
+
+    assert challenger.variant == "spread-safe/v1"
+    assert challenger.socket == baseline.socket
+    assert challenger.implementation_fingerprint != baseline.implementation_fingerprint
+
+
+def test_topology_aware_deframe_is_a_same_socket_variant():
+    baseline = Deframe()
+    challenger = TopologyAwareDeframe()
+
+    challenger.validate_options(_topology_options())
+    assert challenger.variant == "topology-aware/v1"
+    assert challenger.socket == baseline.socket
+    assert challenger.implementation_fingerprint != baseline.implementation_fingerprint
+
+    invalid = dict(_topology_options(), multi_span_aspect_ratio=0.9)
+    with pytest.raises(ValueError, match="must be at least 1.0"):
+        challenger.validate_options(invalid)
+
+
+@pytest.mark.parametrize(
+    ("largest_outer", "envelope_outer", "expected"),
+    (
+        ((10, 10, 90, 90), (11, 10, 89, 90), (12, 12, 88, 88)),
+        ((20, 10, 80, 90), (5, 10, 95, 90), (7, 12, 93, 88)),
+    ),
+)
+def test_topology_aware_deframe_selects_single_or_multi_span_geometry(
+    monkeypatch: pytest.MonkeyPatch,
+    largest_outer,
+    envelope_outer,
+    expected,
+):
+    station = TopologyAwareDeframe()
+    gray = np.full((100, 100), 220, np.uint8)
+    largest_inner = (12, 12, 88, 88)
+    envelope_inner = (7, 12, 93, 88)
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_topology.parchment_frame",
+        lambda gray, *, margin_fraction: (
+            largest_outer if margin_fraction == 0.0 else largest_inner
+        ),
+    )
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_topology.parchment_spread_frame",
+        lambda gray, *, margin_fraction: (
+            envelope_outer if margin_fraction == 0.0 else envelope_inner
+        ),
+    )
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_topology.ink_masks",
+        lambda gray: (np.zeros_like(gray), np.zeros_like(gray)),
+    )
+
+    assert station._crop_bbox(gray, _topology_options()) == expected
+
+
+def test_topology_aware_deframe_retains_an_edge_with_protected_ink():
+    marks = np.zeros((100, 100), np.uint8)
+    marks[20:40, 0:10] = 255
+
+    assert _guarded_bbox(
+        (0, 0, 100, 100),
+        (10, 10, 90, 90),
+        marks,
+        minimum_ink_fraction=0.1,
+    ) == (0, 10, 90, 90)
+
+
+def test_topology_aware_deframe_decodes_encodes_and_writes_once(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    job = _job(tmp_path, options=_topology_options())
+    image = _page(height=100, width=120)
+    station = TopologyAwareDeframe()
+    calls = {"load": 0, "encode": 0, "write": 0}
+
+    def load(current_job, kind):
+        calls["load"] += 1
+        assert current_job is job and kind == "page_image"
+        return image
+
+    def encode(crop):
+        calls["encode"] += 1
+        assert crop.shape[:2] == (80, 100)
+        return b"jpeg"
+
+    def write(path, content):
+        calls["write"] += 1
+        assert path == station.output_path(job)
+        assert content == b"jpeg"
+
+    monkeypatch.setattr("palimpsest.factory.stations.deframe_topology.load_image", load)
+    monkeypatch.setattr(
+        station,
+        "_crop_bbox",
+        lambda gray, options: (10, 10, 110, 90),
+    )
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_topology.encode_jpeg", encode
+    )
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_topology.atomic_write_bytes",
+        write,
+    )
+
+    assert station.run(job) == StationResult()
+    assert calls == {"load": 1, "encode": 1, "write": 1}
+
+
+def test_model_deframe_variants_keep_socket_and_identity_locality(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    baseline = Deframe()
+    challengers = (
+        FastSamDeframe(),
+        EfficientVitSamDeframe(),
+        AdaptiveEfficientVitSamDeframe(),
+        HybridEfficientVitSamDeframe(),
+        SizeAwareHybridEfficientVitSamDeframe(),
+        ResilientHybridEfficientVitSamDeframe(),
+    )
+    original_read_bytes = type(baseline.production_source_paths[0]).read_bytes
+
+    def reject_model_sources(path):
+        if path.name.startswith("deframe_model"):
+            raise AssertionError(f"Default deframe fingerprint read {path.name}")
+        return original_read_bytes(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            type(baseline.production_source_paths[0]),
+            "read_bytes",
+            reject_model_sources,
+        )
+        assert baseline.implementation_fingerprint
+    assert all(challenger.socket == baseline.socket for challenger in challengers)
+    assert all(
+        challenger.implementation_fingerprint != baseline.implementation_fingerprint
+        for challenger in challengers
+    )
+
+
+def test_fastsam_deframe_applies_reported_source_geometry(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    options = {
+        "checkpoint_sha256": "a" * 64,
+        "torch_version": "2.10.0+cu128",
+        "runtime_version": "8.4.105",
+        "image_size": 1024,
+        "confidence": 0.25,
+        "iou": 0.9,
+        "min_box_fraction": 0.18,
+        "min_box_height_fraction": 0.5,
+        "crop_margin": 0.0,
+    }
+    job = _job(tmp_path, options=options)
+    _write_page_image(job, _page(height=100, width=120))
+    station = FastSamDeframe()
+    monkeypatch.setattr(station, "_runtime_python", job.path_of("page_image"))
+    observed_commands = []
+
+    def run_model(command, **kwargs):
+        observed_commands.append((command, kwargs))
+        return SimpleNamespace(
+            returncode=0,
+            stdout='{"bbox":[10,20,90,80],"selected_masks":1}\n',
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_models.subprocess.run", run_model
+    )
+
+    result = station.run(job)
+    output = cv2.imread(str(job.path_of("page_image_framed")))
+
+    assert result.cost_usd == 0.0
+    assert output is not None and output.shape[:2] == (60, 80)
+    assert observed_commands[0][0][2] == "fastsam-s"
+    assert observed_commands[0][1]["timeout"] == 180
+
+
+def test_adaptive_efficientvit_retries_only_after_missing_manuscript_mask(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    options = {
+        "checkpoint_sha256": "b" * 64,
+        "torch_version": "2.10.0+cu128",
+        "source_revision": "c" * 40,
+        "points_per_side": 8,
+        "points_per_batch": 32,
+        "predicted_iou_threshold": 0.75,
+        "fallback_predicted_iou_threshold": 0.7,
+        "stability_threshold": 0.85,
+        "box_nms_threshold": 0.7,
+        "min_box_fraction": 0.15,
+        "min_mask_fraction": 0.12,
+        "min_box_height_fraction": 0.4,
+        "crop_margin": 0.0,
+    }
+    job = _job(tmp_path, options=options)
+    observed_thresholds = []
+
+    def run_model(self, current_job):
+        threshold = current_job.config.options["predicted_iou_threshold"]
+        observed_thresholds.append(threshold)
+        if len(observed_thresholds) == 1:
+            raise RuntimeError("Model produced no manuscript-scale mask")
+        return StationResult(cost_usd=0.0)
+
+    monkeypatch.setattr(EfficientVitSamDeframe, "run", run_model)
+
+    result = AdaptiveEfficientVitSamDeframe().run(job)
+
+    assert result.cost_usd == 0.0
+    assert observed_thresholds == [0.75, 0.7]
+
+
+def test_hybrid_efficientvit_blends_default_and_model_edges(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    options = _hybrid_options()
+    job = _job(tmp_path, options=options)
+    image = _page(height=100, width=120)
+    station = HybridEfficientVitSamDeframe()
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_models_hybrid.parchment_frame",
+        lambda gray, *, margin_fraction: (10, 20, 110, 90),
+    )
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_models_hybrid.trim_gutter",
+        lambda gray: (5, 95),
+    )
+
+    station.validate_options(options)
+    fused = station._crop_bbox(job, image, [0, 0, 120, 100])
+
+    assert fused == (0, 15, 120, 95)
+    invalid = dict(options, top_model_weight=1.1)
+    with pytest.raises(ValueError, match="top_model_weight must be between"):
+        station.validate_options(invalid)
+
+    size_options = _hybrid_options(size_aware=True)
+    size_job = _job(tmp_path, options=size_options)
+    size_station = SizeAwareHybridEfficientVitSamDeframe()
+
+    size_station.validate_options(size_options)
+    size_fused = size_station._crop_bbox(
+        size_job,
+        image,
+        [0, 0, 120, 100],
+    )
+
+    assert size_fused == (4, 20, 116, 95)
+    invalid_threshold = dict(size_options, large_page_threshold_pixels=0)
+    with pytest.raises(ValueError, match="must be a positive integer"):
+        size_station.validate_options(invalid_threshold)
+
+
+@pytest.mark.parametrize("failure", ("timeout", "no-mask"))
+def test_resilient_hybrid_uses_retention_fallback_after_model_failure(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure,
+):
+    options = _hybrid_options(size_aware=True)
+    job = _job(tmp_path, options=options)
+    _write_page_image(job, _page(height=100, width=120))
+    station = ResilientHybridEfficientVitSamDeframe()
+
+    def fail_model(self, current_job):
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(["model"], timeout=180)
+        raise RuntimeError(
+            f"{self.variant} inference failed: Model produced no manuscript-scale mask"
+        )
+
+    monkeypatch.setattr(SizeAwareHybridEfficientVitSamDeframe, "run", fail_model)
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.deframe_models_resilient.parchment_spread_frame",
+        lambda gray, *, margin_fraction: (5, 6, 115, 94),
+    )
+
+    result = station.run(job)
+    output = cv2.imread(str(job.path_of("page_image_framed")))
+
+    assert result.cost_usd == 0.0
+    assert output is not None and output.shape[:2] == (88, 110)
+
+
+def test_resilient_hybrid_does_not_hide_fusion_errors(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    job = _job(tmp_path, options=_hybrid_options(size_aware=True))
+    station = ResilientHybridEfficientVitSamDeframe()
+
+    def fail_fusion(self, current_job):
+        raise RuntimeError(f"{self.variant} produced invalid fused bbox")
+
+    monkeypatch.setattr(SizeAwareHybridEfficientVitSamDeframe, "run", fail_fusion)
+
+    with pytest.raises(RuntimeError, match="produced invalid fused bbox"):
+        station.run(job)
 
 
 # --- segment station ----------------------------------------------------------
@@ -500,11 +921,13 @@ class RouteGateway:
 class ScriptedReadGateway:
     def __init__(self, *steps):
         self.steps = list(steps)
+        self.lock = threading.Lock()
         self.calls = []
 
     def __call__(self, request, **kwargs):
-        self.calls.append(request)
-        step = self.steps.pop(0)
+        with self.lock:
+            self.calls.append(request)
+            step = self.steps.pop(0)
         if isinstance(step, Exception):
             raise step
         value = step["value"]
@@ -669,6 +1092,37 @@ def test_read_dual_exact_agreement_skips_adjudication(tmp_path, monkeypatch):
     assert result.payload["adjudication_status"] == "agreement"
     assert result.payload["adjudication_model"] is None
     assert result.payload["adjudication_requested_model"] == "anthropic/claude-fable-5"
+
+
+def test_read_dual_candidates_run_concurrently(tmp_path, monkeypatch):
+    job = _job(tmp_path, prompt=PROMPT, params=DUAL_PARAMS)
+    _write_clean_image(job, _page())
+    _regions_plan(job, "full_page", [])
+    rendezvous = threading.Barrier(2)
+    started = []
+    lock = threading.Lock()
+
+    def concurrent_gateway(request, **_kwargs):
+        with lock:
+            started.append(request.model)
+        rendezvous.wait(timeout=2)
+        return _reading("lectio")["value"], ModelResponse(
+            text="",
+            model=request.model,
+            prompt_tokens=10,
+            output_tokens=5,
+            cost_usd=0.001,
+        )
+
+    monkeypatch.setattr(
+        "palimpsest.factory.stations.read.generate_json", concurrent_gateway
+    )
+
+    result = Read().run(job)
+
+    assert set(started) == {"fake-model", "omp/gemini-3.6"}
+    assert result.payload["text"] == "lectio"
+    assert result.payload["adjudication_status"] == "agreement"
 
 
 def test_read_dual_disagreement_is_anonymously_adjudicated_and_usage_combined(
@@ -1049,15 +1503,16 @@ def test_schema_invalid_truncated_reader_escalates_and_retains_usage(
         truncated,
         _reading("complete"),
         _reading("complete"),
+        _reading("complete"),
     )
     monkeypatch.setattr("palimpsest.factory.stations.read.generate_json", fake)
 
     result = Read().run(job)
 
-    assert len(fake.calls) == 3
+    assert len(fake.calls) == 4
     assert result.payload["route"] == "segmented(escalated)"
     assert result.payload["text"] == "complete"
-    assert (result.tokens_in, result.tokens_out, result.cost_usd) == (31, 16, 0.006)
+    assert (result.tokens_in, result.tokens_out, result.cost_usd) == (41, 21, 0.007)
 
 
 def test_schema_invalid_truncated_adjudication_escalates_and_retains_usage(

@@ -269,6 +269,7 @@ def test_evaluation_to_promotion_and_exact_rollback_lifecycle(
                 tokens_in=2,
                 tokens_out=1,
                 cost_usd=0.001,
+                process_stats=None,
             )
 
     monkeypatch.setattr(

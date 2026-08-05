@@ -10,17 +10,30 @@ from palimpsest.factory.core import station as station_module
 from palimpsest.factory.core.station import Station
 from palimpsest.factory.stations.acquire import Acquire
 from palimpsest.factory.stations.align import Align
-from palimpsest.factory.stations.deframe import Deframe
+from palimpsest.factory.stations.deframe import Deframe, SpreadSafeDeframe
 from palimpsest.factory.stations.dewatermark import Dewatermark
 from palimpsest.factory.stations.flatten import Flatten
 from palimpsest.factory.stations.read import Read
 from palimpsest.factory.stations.segment import Segment
 
 
-PAGE_STATIONS = (Acquire, Deframe, Dewatermark, Flatten, Segment, Read, Align)
+PAGE_STATIONS = (
+    Acquire,
+    Deframe,
+    SpreadSafeDeframe,
+    Dewatermark,
+    Flatten,
+    Segment,
+    Read,
+    Align,
+)
 EXPECTED_DEPENDENCIES = {
     Acquire: (),
     Deframe: (
+        "factory/imaging.py",
+        "factory/stations/image_input.py",
+    ),
+    SpreadSafeDeframe: (
         "factory/imaging.py",
         "factory/stations/image_input.py",
     ),
@@ -37,6 +50,7 @@ EXPECTED_DEPENDENCIES = {
         "factory/stations/image_input.py",
     ),
     Read: (
+        "factory/config.py",
         "factory/gateway/__init__.py",
         "factory/gateway/client.py",
         "factory/gateway/gemini.py",
@@ -139,7 +153,7 @@ def test_page_station_declares_exact_production_import_closure(
 def test_page_station_registers_and_computes_fingerprint(
     station_type: type[Station],
 ) -> None:
-    station = registry.get(station_type.name)
+    station = registry.get(station_type.name, station_type().variant)
 
     assert type(station) is station_type
     assert len(station.implementation_fingerprint) == 16

@@ -5,6 +5,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import cv2
+import numpy as np
 import pytest
 
 from palimpsest.factory import stations as _stations  # noqa: F401 - registers variants
@@ -12,6 +14,7 @@ from palimpsest.factory.evaluation.candidate import RecordError, load_candidate
 from palimpsest.factory.evaluation.suite import load_suite, validate_candidate_suite
 from palimpsest.factory.evaluation.metrics import MetricDirection, MetricRegistry
 from palimpsest.factory.evaluation.station_metrics.imaging import (
+    image_artifact_observation,
     register_imaging_metrics,
 )
 
@@ -186,6 +189,43 @@ def test_undefined_imaging_denominators_are_unknown_and_omissions_are_failures()
     )
 
 
+def test_image_artifact_observation_localizes_reencoded_crop(tmp_path: Path) -> None:
+    rng = np.random.default_rng(4101)
+    source = rng.integers(0, 256, size=(180, 240, 3), dtype=np.uint8)
+    source_path = tmp_path / "source.jpg"
+    assert cv2.imwrite(str(source_path), source, [cv2.IMWRITE_JPEG_QUALITY, 95])
+    decoded_source = cv2.imread(str(source_path), cv2.IMREAD_COLOR)
+    assert decoded_source is not None
+    output_path = tmp_path / "output.jpg"
+    output = decoded_source[17:159, 23:211]
+    assert cv2.imwrite(str(output_path), output, [cv2.IMWRITE_JPEG_QUALITY, 92])
+
+    source_sha256 = hashlib.sha256(source_path.read_bytes()).hexdigest()
+    observation = image_artifact_observation(
+        output_path,
+        source_path,
+        source_sha256=source_sha256,
+    )
+
+    assert observation["source_bbox"] == [23, 17, 188, 142]
+    assert observation["source_sha256"] == source_sha256
+    assert np.asarray(observation["pixels"]).shape == (142, 188, 3)
+
+
+def test_image_artifact_observation_rejects_unreadable_output(tmp_path: Path) -> None:
+    source_path = tmp_path / "source.jpg"
+    output_path = tmp_path / "output.jpg"
+    source_path.write_bytes(b"not an image")
+    output_path.write_bytes(b"also not an image")
+
+    with pytest.raises(ValueError, match="output is not a readable image"):
+        image_artifact_observation(
+            output_path,
+            source_path,
+            source_sha256="0" * 64,
+        )
+
+
 def test_imaging_resources_load_strictly_with_real_hashes_and_actual_sockets() -> None:
     registry = _registry()
     loaded: dict[str, tuple[object, object]] = {}
@@ -238,3 +278,358 @@ def test_imaging_resources_load_strictly_with_real_hashes_and_actual_sockets() -
 
     with pytest.raises(RecordError, match="does not match suite station"):
         validate_candidate_suite(loaded["deframe"][0], loaded["segment"][1])
+
+
+def test_spread_safe_deframe_development_records_resolve_exactly() -> None:
+    registry = _registry()
+    candidate = load_candidate(
+        FACTORY_ROOT / "candidates" / "deframe" / "spread-safe-development-v1.yaml"
+    )
+    suite = load_suite(
+        EVALUATION_ROOT / "suites" / "deframe" / "spread-safe-development-v1.yaml",
+        metric_resolver=registry,
+        probe_resolver={},
+        judge_resolver={},
+    )
+
+    validate_candidate_suite(candidate, suite)
+    assert candidate.station == suite.station == "deframe"
+    assert candidate.variant == "spread-safe/v1"
+    assert len(candidate.fingerprint) == len(suite.fingerprint) == 64
+    assert len(candidate.implementation_fingerprint) == 16
+    assert suite.qualification_eligible is False
+    assert len(suite.cases) == 1
+    assert suite.cases[0].strata == (
+        "generated_geometry",
+        "two_page_spread",
+        "interior_crease",
+    )
+
+
+def test_spread_safe_deframe_qualification_records_resolve_exactly() -> None:
+    registry = _registry()
+    candidate = load_candidate(
+        FACTORY_ROOT / "candidates" / "deframe" / "spread-safe-development-v1.yaml"
+    )
+    suite = load_suite(
+        EVALUATION_ROOT / "suites" / "deframe" / "spread-safe-qualification-v1.yaml",
+        metric_resolver=registry,
+        probe_resolver={},
+        judge_resolver={},
+    )
+
+    validate_candidate_suite(candidate, suite)
+    assert candidate.variant == "spread-safe/v1"
+    assert suite.qualification_eligible is True
+    assert suite.promotion.minimum_completed_cases == len(suite.cases) == 9
+    assert suite.promotion.paired_bootstrap_samples == 10_000
+    assert suite.promotion.require_all_hard_limits is True
+    assert [case.case_id for case in suite.cases] == [
+        f"deframe-qual-v1-{number:03d}" for number in range(1, 10)
+    ]
+    assert set(suite.protected_slices) == {
+        "two_page_spread",
+        "single_page_control",
+        "edge_annotations",
+        "archive_loc",
+        "archive_bnf",
+        "zh_vertical",
+        "latin_cursive",
+    }
+    assert all(
+        sum(slice_name in case.strata for case in suite.cases) >= 3
+        for slice_name in suite.protected_slices
+    )
+
+    for case in suite.cases:
+        source = case.inputs["page_image"]
+        assert source.path is None and source.source is not None
+        gold = case.references["metric_gold"]
+        assert gold.path is not None and gold.source is None
+        path = EVALUATION_ROOT / gold.path
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == gold.sha256
+
+
+def test_split_deframe_development_records_resolve_exactly() -> None:
+    registry = _registry()
+    baseline = load_candidate(FACTORY_ROOT / "candidates" / "deframe" / "current.yaml")
+    challenger = load_candidate(
+        FACTORY_ROOT / "candidates" / "deframe" / "spread-safe-development-v1.yaml"
+    )
+    suite_root = EVALUATION_ROOT / "suites" / "deframe"
+    spread_suite = load_suite(
+        suite_root / "spread-safe-conditional-development-v1.yaml",
+        metric_resolver=registry,
+        probe_resolver={},
+        judge_resolver={},
+    )
+    control_suite = load_suite(
+        suite_root / "spread-safe-single-page-control-development-v1.yaml",
+        metric_resolver=registry,
+        probe_resolver={},
+        judge_resolver={},
+    )
+
+    assert baseline.fingerprint == (
+        "a613e47b0bfb6240af444938bf49d7c83a10f251b091f224f97a4636afebb891"
+    )
+    assert challenger.fingerprint == (
+        "e69c1afd281c3e725da99ef78688291cd31ab59b6b6ad7660c88e7d55b58726d"
+    )
+    assert spread_suite.fingerprint == (
+        "6a9c2a189cefec26b1533a96a326e24e521cc96e519e557893b569a0a468979a"
+    )
+    assert control_suite.fingerprint == (
+        "6500a37132eb1e11f0afd2995a268ad08bf3dc3c41c2a041c408d9cb79f02bf9"
+    )
+
+    for suite in (spread_suite, control_suite):
+        validate_candidate_suite(baseline, suite)
+        validate_candidate_suite(challenger, suite)
+        assert suite.qualification_eligible is False
+        assert suite.judges == ()
+        assert suite.downstream_probes == ()
+        assert {metric.name for metric in suite.primary_metrics} == {
+            "deframe_manuscript_area_recall",
+            "deframe_edge_annotation_recall",
+            "deframe_crop_boundary_error",
+        }
+        assert {
+            limit.name: (limit.minimum, limit.maximum) for limit in suite.hard_limits
+        } == {
+            "deframe_geometry_traceability": (1.0, None),
+            "deframe_manuscript_area_recall": (0.9, None),
+        }
+
+    assert (
+        spread_suite.promotion.minimum_completed_cases == len(spread_suite.cases) == 6
+    )
+    assert {
+        metric.name: metric.minimum_effect for metric in spread_suite.primary_metrics
+    }["deframe_manuscript_area_recall"] == 0.03
+    assert spread_suite.protected_slices == (
+        "two_page_spread",
+        "archive_loc",
+        "archive_bnf",
+        "zh_vertical",
+        "latin_cursive",
+    )
+    assert all(
+        sum(slice_name in case.strata for case in spread_suite.cases) >= 3
+        for slice_name in spread_suite.protected_slices
+    )
+    assert (
+        control_suite.promotion.minimum_completed_cases == len(control_suite.cases) == 3
+    )
+    assert all(metric.minimum_effect == 0.0 for metric in control_suite.primary_metrics)
+    assert control_suite.protected_slices == ("single_page_control",)
+    assert spread_suite.slice_policy.maximum_regression == 0.02
+    assert control_suite.slice_policy.maximum_regression == 0.02
+
+    expected = {
+        "deframe-conditional-spread-dev-v1-001": (
+            "f009r",
+            "d87b17759e1dff6fa93ce8b7250f78dc48955960bb069f1d778dd42e3802ae6f",
+            "828d76ef1549225cf4b98d4dd7f627432a60cd3098cf7ecd21062a806b8b5be8",
+            "two_page_spread",
+        ),
+        "deframe-conditional-spread-dev-v1-002": (
+            "f011r",
+            "536ce81b54f2def7a62e39f5c603108f6b7c1ff505c5737ff4f665d932171a0b",
+            "5da4eaab8124d1cc90fa65d988831cdd0b112b8991e06c80f372ce8e6323ddb1",
+            "two_page_spread",
+        ),
+        "deframe-conditional-spread-dev-v1-003": (
+            "f017r",
+            "56d3fd2f6fdfebab2db35760508a2a4acf11526b2848d099b4a926acf21e331c",
+            "b191b1f1d3f83b5a46d940c633714498e175ad966041a38bb69179159c3bab8e",
+            "two_page_spread",
+        ),
+        "deframe-conditional-spread-dev-v1-004": (
+            "page_0080",
+            "ba00fb14246f06aa9837954ba1693829559a46d062009d175d4ee4bce166cf2c",
+            "bea43b311cc197e627c109bacd888c5e7f4f55e9508c1434bdbffa67fa51857d",
+            "two_page_spread",
+        ),
+        "deframe-conditional-spread-dev-v1-005": (
+            "page_0180",
+            "5613525a8c4c6c1bef213213c04fc004a4faa03fdc5441535ef0a2ed2d01be54",
+            "ef9684f1aedf150029263d6e8743b9f6b4d9f0cc38db46d8287b9004b8ee4848",
+            "two_page_spread",
+        ),
+        "deframe-conditional-spread-dev-v1-006": (
+            "page_0240",
+            "3d8ba489893ee7d50646143874020950a64702cdb9e5739c48b0f34e4b0fd3ec",
+            "a0e29bee6bca7f3b62ed1de5539bb65f346d1a41a70aceabae54fab509cd0cb6",
+            "two_page_spread",
+        ),
+        "deframe-single-page-control-dev-v1-001": (
+            "page_0002",
+            "b7ce06329cc8b746988ce39a8f6e890ffaf352707f857ba902b2717b31a43482",
+            "de4c2d96bc9f85509147c2ae1f3384639ecad00e579a57294c28d61758a6ba86",
+            "single_page_control",
+        ),
+        "deframe-single-page-control-dev-v1-002": (
+            "page_0004",
+            "682cfa72e7599b94d52473edb953e94ad8fc9fc10a90275d62b33013cf6276ef",
+            "4a73325d8c600759d115e344c5545be010491c96694f88bc056244381ab2578d",
+            "single_page_control",
+        ),
+        "deframe-single-page-control-dev-v1-003": (
+            "page_0006",
+            "4b8b70946a6b7af4190e0b36e660a02a338abb9b89d3234f6ee8e1b01bb333d0",
+            "0bf2e1458727fbc88819be3e32f17447485f37dbd48a899066e468d1e6fb84fb",
+            "single_page_control",
+        ),
+    }
+    observed_ids = []
+    for suite in (spread_suite, control_suite):
+        for case in suite.cases:
+            page_id, source_sha256, gold_sha256, layout_class = expected[case.case_id]
+            observed_ids.append(case.case_id)
+            assert case.page_id == page_id
+            source = case.inputs["page_image"]
+            assert source.path is None
+            assert source.source is not None
+            assert source.sha256 == source_sha256
+            assert case.pages[0]["url"] == source.source
+            gold_asset = case.references["metric_gold"]
+            assert gold_asset.path is not None and gold_asset.source is None
+            assert gold_asset.sha256 == gold_sha256
+            gold_path = EVALUATION_ROOT / gold_asset.path
+            assert hashlib.sha256(gold_path.read_bytes()).hexdigest() == gold_sha256
+            gold = json.loads(gold_path.read_text(encoding="utf-8"))
+            assert gold["layout_class"] == layout_class
+            assert gold["source_sha256"] == source_sha256
+            assert len(gold["source_size"]) == 2
+            for key in (
+                "crop_bbox",
+                "manuscript_regions",
+                "edge_annotation_regions",
+                "frame_regions",
+            ):
+                assert gold[key]
+
+    assert set(observed_ids) == set(expected)
+    prior_page_ids = set()
+    case_root = EVALUATION_ROOT / "cases" / "deframe"
+    for manifest_name in (
+        "spread-safe-development-v2.jsonl",
+        "spread-safe-qualification-v1.jsonl",
+    ):
+        prior_page_ids.update(
+            json.loads(line)["page_id"]
+            for line in (case_root / manifest_name)
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line
+        )
+    assert {
+        case.page_id for case in (*spread_suite.cases, *control_suite.cases)
+    }.isdisjoint(prior_page_ids)
+
+
+@pytest.mark.parametrize(
+    ("filename", "variant", "fingerprint"),
+    (
+        (
+            "fastsam-s-development-v1.yaml",
+            "fastsam-s/v1",
+            "352fbd80750306b071ed1cb2a3b9c7ba5a85b6635612c7947315d9639f978765",
+        ),
+        (
+            "fastsam-s-development-v2.yaml",
+            "fastsam-s/v1",
+            "85d89e5a40a2e993ebd9d513401864db91d6055e0786ca765e1777a50a7a2ac5",
+        ),
+        (
+            "efficientvit-sam-l0-development-v1.yaml",
+            "efficientvit-sam-l0/v1",
+            "d3568de45a25dbc731ac70543ee90dc1cbfb4d4870b93e7b33d20abbd9d3480c",
+        ),
+        (
+            "efficientvit-sam-l0-development-v2.yaml",
+            "efficientvit-sam-l0/v1",
+            "24c08078bbb302d2be8091b61e462497d431a2368f3ad06a6c5bbbd79b24f7d3",
+        ),
+        (
+            "efficientvit-sam-l0-development-v3.yaml",
+            "efficientvit-sam-l0/v1",
+            "818e76dcc1f7791cf2267fc8887f8792bd893f49aa4f7e54dadbce305c1a0867",
+        ),
+        (
+            "efficientvit-sam-l0-development-v4.yaml",
+            "efficientvit-sam-l0-adaptive/v1",
+            "bad20440e751746b7b7fa6cf852a5e5389ebf1223508bf7cc1700179a6d65be1",
+        ),
+        (
+            "efficientvit-sam-l0-development-v5.yaml",
+            "efficientvit-sam-l0-adaptive/v1",
+            "fc4c7bb965250e6478d6e0462de6328daac4842035f21c8b2e7ae6c5f70c243e",
+        ),
+        (
+            "efficientvit-sam-l0-hybrid-development-v1.yaml",
+            "efficientvit-sam-l0-hybrid/v1",
+            "41912cfd45dac8cc24a6d4044db9ff78d79af6fc8b88928a8e13a7cf4b81e23c",
+        ),
+        (
+            "efficientvit-sam-l0-hybrid-development-v2.yaml",
+            "efficientvit-sam-l0-hybrid/v2",
+            "b319ff5d8ab2c514b5aed8f86b32f4633a9769c97dda1d3ac0e92a62c9a5d629",
+        ),
+        (
+            "efficientvit-sam-l0-hybrid-development-v3.yaml",
+            "efficientvit-sam-l0-resilient-hybrid/v1",
+            "93ce304ee8046b041698d795c16fce943f586411362a3c7c4e6ae02ef1864d4a",
+        ),
+    ),
+)
+def test_model_deframe_candidate_records_are_immutable_and_same_socket(
+    filename: str,
+    variant: str,
+    fingerprint: str,
+) -> None:
+    candidate = load_candidate(FACTORY_ROOT / "candidates" / "deframe" / filename)
+    suite_root = EVALUATION_ROOT / "suites" / "deframe"
+    suites = (
+        load_suite(
+            suite_root / "spread-safe-conditional-development-v1.yaml",
+            metric_resolver=_registry(),
+            probe_resolver={},
+            judge_resolver={},
+        ),
+        load_suite(
+            suite_root / "spread-safe-single-page-control-development-v1.yaml",
+            metric_resolver=_registry(),
+            probe_resolver={},
+            judge_resolver={},
+        ),
+    )
+
+    assert candidate.variant == variant
+    assert candidate.fingerprint == fingerprint
+    assert candidate.model is None
+    for suite in suites:
+        validate_candidate_suite(candidate, suite)
+        assert suite.qualification_eligible is False
+
+
+def test_topology_aware_deframe_candidate_is_immutable_and_same_socket() -> None:
+    candidate = load_candidate(
+        FACTORY_ROOT / "candidates" / "deframe" / "topology-aware-development-v1.yaml"
+    )
+    suite = load_suite(
+        EVALUATION_ROOT / "suites" / "deframe" / "spread-safe-development-v2.yaml",
+        metric_resolver=_registry(),
+        probe_resolver={},
+        judge_resolver={},
+    )
+
+    assert candidate.variant == "topology-aware/v1"
+    assert (
+        candidate.fingerprint
+        == "8d81926d5bf285789255d09980079c1180d80b3b5f62abd20ff59754f59c7ba2"
+    )
+    assert candidate.model is None
+    validate_candidate_suite(candidate, suite)
+    assert suite.qualification_eligible is False

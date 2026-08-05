@@ -11,6 +11,7 @@ import pytest
 from palimpsest.factory.core import registry
 from palimpsest.factory.core.conductor import Conductor
 from palimpsest.factory.core.ledger import Ledger
+from palimpsest.factory.core.contracts import transcription_audit
 from palimpsest.factory.core.recipe import load as load_recipe
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.evaluation import canary as canary_module
@@ -71,33 +72,113 @@ class CanaryBook(Station):
     produces = "book"
 
     def run(self, job: Job) -> StationResult:
+        fingerprint = "0" * 16
         return StationResult(
             payload={
+                "schema_version": 1,
+                "profile": "facsimile-spread/v1",
                 "doc_id": job.doc_id,
-                "title": "Canary Book",
-                "author": "Test Author",
-                "language": {"translation": "en", "original": "la"},
+                "identity": {
+                    "title": "Canary Book",
+                    "author": "Test Author",
+                    "archive": "Test Archive",
+                    "shelfmark": None,
+                    "date": None,
+                },
+                "languages": {"translation": "en", "original": "la"},
                 "readers_note": "Canary reader note.",
-                "chapters": [
+                "folios": [
                     {
-                        "id": "ch01",
-                        "heading": "Canary Chapter",
-                        "pages": {"from": PAGE_ID, "to": PAGE_ID},
-                        "source_pages": [PAGE_ID],
-                        "translation": "A translated canary.",
-                        "original": "Canarium.",
+                        "page_id": PAGE_ID,
+                        "order": 1,
+                        "images": {
+                            "original": {
+                                "kind": "page_image",
+                                "page_id": PAGE_ID,
+                                "source_url": "https://example.test/f001r.jpg",
+                                "fingerprint": fingerprint,
+                            }
+                        },
+                        "evidence": {
+                            "diplomatic": {
+                                "text": "Canarium.",
+                                "audit": transcription_audit(
+                                    {"candidate_readings": []}
+                                ),
+                                "source": {
+                                    "kind": "page_transcription",
+                                    "pointer": "/text",
+                                    "fingerprint": fingerprint,
+                                },
+                            },
+                            "translation": {
+                                "text": "A translated canary.",
+                                "notes": "",
+                                "flags": {},
+                                "seam": None,
+                                "source": {
+                                    "kind": "page_translation",
+                                    "pointer": "/translation",
+                                    "fingerprint": fingerprint,
+                                },
+                            },
+                        },
                     }
                 ],
-                "evidence": {
-                    "pages": [
+                "sections": [
+                    {
+                        "id": "section-0001",
+                        "order": 1,
+                        "heading": "Canary Chapter",
+                        "folio_ids": [PAGE_ID],
+                        "content": {
+                            "translation": {
+                                "text": "A translated canary.",
+                                "source": {
+                                    "kind": "edition",
+                                    "pointer": "/sections/0/translation",
+                                    "fingerprint": fingerprint,
+                                },
+                            },
+                            "emended_reading": {
+                                "text": "Canarium.",
+                                "source": {
+                                    "kind": "emendations",
+                                    "pointer": "/sections/0/emended",
+                                    "fingerprint": fingerprint,
+                                },
+                            },
+                            "diplomatic_transcription": {
+                                "text": "Canarium.",
+                                "source": {
+                                    "kind": "manuscript",
+                                    "pointer": "/sections/0/reading",
+                                    "fingerprint": fingerprint,
+                                },
+                            },
+                        },
+                        "apparatus_ids": [],
+                    }
+                ],
+                "apparatus": [],
+                "colophon": {
+                    "pipeline": [
                         {
-                            "page_id": PAGE_ID,
-                            "source_image_url": "https://example.test/f001r.jpg",
-                            "diplomatic": "Canarium.",
+                            "station": "canary_changed",
+                            "runs": 1,
+                            "tokens_in": 0,
+                            "tokens_out": 0,
+                            "cost_usd": 0.25,
+                            "cost_complete": True,
+                            "cost_usd_known": 0.25,
+                            "configurations": [],
                         }
-                    ]
+                    ],
+                    "cost_usd_total": 0.25,
+                    "cost_usd_known": 0.25,
+                    "cost_complete": True,
+                    "pages": 1,
                 },
-                "colophon": {"pages": 1, "cost_complete": True, "cost_usd_total": 0.25},
             },
             cost_usd=0.0,
         )
@@ -185,9 +266,10 @@ def _canonical(
             ],
         },
     )
-    clean_image = artifact_path(DOC_ID, "page_image_clean", PAGE_ID, library_root)
-    clean_image.parent.mkdir(parents=True)
-    clean_image.write_bytes(b"isolated canary image")
+    for kind in ("page_image", "page_image_clean"):
+        image = artifact_path(DOC_ID, kind, PAGE_ID, library_root)
+        image.parent.mkdir(parents=True, exist_ok=True)
+        image.write_bytes(b"isolated canary image")
 
     with Ledger(db_path) as ledger:
         ledger.adopt(DOC_ID, recipe=RECIPE)
@@ -214,6 +296,13 @@ def test_canary_runs_exact_proposal_with_isolated_freshness_and_validates_conten
     production_db = db_path.read_bytes()
     production_recipe = (recipe_root / f"{RECIPE}.yaml").read_bytes()
     canary_root = tmp_path / "canary"
+    conductor_options: dict[str, object] = {}
+
+    def capture_conductor(*args: object, **kwargs: object) -> Conductor:
+        conductor_options.update(kwargs)
+        return Conductor(*args, **kwargs)
+
+    monkeypatch.setattr(canary_module, "Conductor", capture_conductor)
 
     evidence = run_proposal_canary(
         proposal,
@@ -224,6 +313,8 @@ def test_canary_runs_exact_proposal_with_isolated_freshness_and_validates_conten
         recipe_root=recipe_root,
         workers=1,
     )
+    assert conductor_options["workers"] == 1
+    assert conductor_options["model_workers"] == 1
 
     assert evidence.status == "passed"
     assert evidence.recipe_hash == proposal.proposed_recipe_hash

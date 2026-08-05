@@ -122,13 +122,19 @@ class _StoreContext:
                 "recipes",
                 "--canary-evidence",
                 "canary.json",
+                "--waive-unknown-canary-cost",
+                "subscription-backed cost is negligible",
                 "--approved-by",
                 "Operator",
                 "--history-root",
                 "history",
             ],
             cli.cmd_bench_promote,
-            {"proposal": Path("proposal.json"), "approved_by": "Operator"},
+            {
+                "proposal": Path("proposal.json"),
+                "approved_by": "Operator",
+                "waive_unknown_canary_cost": "subscription-backed cost is negligible",
+            },
         ),
         (
             [
@@ -652,6 +658,40 @@ def test_live_canary_missing_retention_paths_fails_before_loading_proposal(
     )
 
     with pytest.raises(ValueError, match="canary-root"):
+        args.func(args)
+    load.assert_not_called()
+
+
+def test_unknown_cost_waiver_requires_retained_canary_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    load = Mock()
+    monkeypatch.setattr(
+        "palimpsest.factory.evaluation.promotion.load_recipe_proposal", load
+    )
+    args = build_parser().parse_args(
+        [
+            "bench",
+            "promote",
+            "proposal.json",
+            "--recipe-root",
+            str(tmp_path / "recipes"),
+            "--canary",
+            "doc-1",
+            "--canary-root",
+            str(tmp_path / "canary"),
+            "--canary-evidence-output",
+            str(tmp_path / "canary.json"),
+            "--waive-unknown-canary-cost",
+            "subscription-backed cost is negligible",
+            "--approved-by",
+            "Operator",
+            "--history-root",
+            str(tmp_path / "history"),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="reviewed --canary-evidence"):
         args.func(args)
     load.assert_not_called()
 

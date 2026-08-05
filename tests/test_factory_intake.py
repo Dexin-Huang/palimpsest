@@ -4,10 +4,125 @@ from __future__ import annotations
 
 from palimpsest.cli import build_parser
 from palimpsest.factory.core.recipe import load as load_recipe
-from palimpsest.factory.intake import build_records, write_records
+from palimpsest.factory.intake import build_records, fetch_manifest, write_records
 from palimpsest.factory.workspace.io import read_json
 
 import pytest
+
+
+class FakeResponse:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self):
+        return self._payload
+
+
+def test_loc_cloudflare_block_falls_back_to_public_catalog_json(monkeypatch):
+    calls = []
+    record = {
+        "item": {
+            "title": "He gong shu : yi juan",
+            "shelf_id": "http://lccn.loc.gov/2012402413",
+            "contributor_names": [
+                "Lü, Kun, 1536-1618",
+                "Chinese Rare Book Collection (Library of Congress)",
+            ],
+            "date": "1605",
+            "language": ["chinese"],
+            "summary": ["A manual for regulating rivers."],
+        },
+        "resources": [
+            {
+                "url": "https://www.loc.gov/resource/book",
+                "files": [
+                    [
+                        {
+                            "mimetype": "image/jpeg",
+                            "url": "https://tile.loc.gov/page-1-small.jpg",
+                            "width": 400,
+                            "height": 500,
+                        },
+                        {
+                            "mimetype": "image/jpeg",
+                            "url": "https://tile.loc.gov/page-1-full.jpg",
+                            "width": 1600,
+                            "height": 2000,
+                        },
+                    ],
+                    [
+                        {
+                            "mimetype": "image/jpeg",
+                            "url": "https://tile.loc.gov/page-2-full.jpg",
+                            "width": 1700,
+                            "height": 2100,
+                        }
+                    ],
+                ],
+            }
+        ],
+    }
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        if len(calls) == 1:
+            return FakeResponse(403, None)
+        return FakeResponse(200, record)
+
+    monkeypatch.setattr("palimpsest.factory.intake.requests.get", get)
+    manifest_url = "https://www.loc.gov/item/2012402413/manifest.json"
+    manifest = fetch_manifest(manifest_url)
+    metadata, page_list = build_records("he_gong_shu_1605", manifest_url, manifest)
+
+    assert [call[0] for call in calls] == [
+        manifest_url,
+        "https://www.loc.gov/item/2012402413/?fo=json",
+    ]
+    assert metadata["source_catalog"] == {
+        "label": "He gong shu : yi juan",
+        "title": "He gong shu : yi juan",
+        "shelfmark": "http://lccn.loc.gov/2012402413",
+        "archive": "Library of Congress",
+        "author": "Lü, Kun, 1536-1618",
+        "date": "1605",
+        "language": "chinese",
+        "description": "A manual for regulating rivers.",
+        "canvas_count": 2,
+        "metadata_entries": [
+            {"label": "Archive", "value": "Library of Congress"},
+            {"label": "Title", "value": "He gong shu : yi juan"},
+            {
+                "label": "Shelfmark",
+                "value": "http://lccn.loc.gov/2012402413",
+            },
+            {"label": "Creator", "value": "Lü, Kun, 1536-1618"},
+            {"label": "Date", "value": "1605"},
+            {"label": "Language", "value": "chinese"},
+        ],
+    }
+    assert [page["url"] for page in page_list["pages"]] == [
+        "https://tile.loc.gov/page-1-full.jpg",
+        "https://tile.loc.gov/page-2-full.jpg",
+    ]
+
+
+def test_non_loc_manifest_error_does_not_use_catalog_fallback(monkeypatch):
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        return FakeResponse(403, None)
+
+    monkeypatch.setattr("palimpsest.factory.intake.requests.get", get)
+    with pytest.raises(RuntimeError, match="HTTP 403"):
+        fetch_manifest("https://archive.test/manifest.json")
+
+    assert len(calls) == 1
 
 
 def test_v2_manifest_becomes_source_contracts(tmp_path):

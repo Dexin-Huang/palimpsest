@@ -7,6 +7,8 @@ public contract (FACTORY.md §2.5), so tests exercise it as such.
 from __future__ import annotations
 
 import sqlite3
+import threading
+import time
 
 import pytest
 
@@ -177,6 +179,86 @@ def test_run_report_preserves_unknown_cost_without_counting_skips():
     assert report.cost_usd is None
     report.cells.pop()
     assert report.cost_usd == 0.25
+
+
+def test_page_batch_uses_station_barriers_and_model_worker_limit(
+    ledger, tmp_path, monkeypatch
+):
+    class Prepare(Station):
+        name = "prepare_test"
+        grain = "page"
+        consumes = ()
+        produces = "page_image_clean"
+
+    class Model(Station):
+        name = "model_test"
+        grain = "page"
+        consumes = ("page_image_clean",)
+        produces = "page_transcription"
+        uses_model = True
+
+    batch = (
+        StationSpec(Prepare(), None, None, {}, {}),
+        StationSpec(Model(), "test-model", None, {}, {}),
+    )
+    pages = tuple({"page_id": f"p{index}", "order": index} for index in range(6))
+    events = []
+    active_models = 0
+    maximum_models = 0
+    lock = threading.Lock()
+    conductor = Conductor(
+        ledger,
+        library_root=tmp_path,
+        workers=4,
+        model_workers=2,
+    )
+
+    def fake_run_cell(
+        _doc_id,
+        spec,
+        _all_pages,
+        *,
+        page,
+        prompts,
+        previous_runs,
+    ):
+        nonlocal active_models, maximum_models
+        assert prompts == {}
+        assert previous_runs == {}
+        if spec.station.uses_model:
+            with lock:
+                active_models += 1
+                maximum_models = max(maximum_models, active_models)
+                events.append(("model-start", page["page_id"]))
+            time.sleep(0.02)
+            with lock:
+                active_models -= 1
+                events.append(("model-finish", page["page_id"]))
+        else:
+            with lock:
+                events.append(("prepare", page["page_id"]))
+        return CellReport(spec.station.name, page["page_id"], "ran")
+
+    monkeypatch.setattr(conductor, "_run_cell", fake_run_cell)
+    cells = conductor._run_page_batch("doc", batch, pages, pages, {}, {})
+
+    first_model = next(
+        index for index, event in enumerate(events) if event[0] == "model-start"
+    )
+    assert {event for event in events[:first_model]} == {
+        ("prepare", page["page_id"]) for page in pages
+    }
+    assert maximum_models == 2
+    assert len(cells) == 12
+
+
+@pytest.mark.parametrize(
+    ("argument", "value"),
+    [("workers", 0), ("model_workers", 0), ("workers", True)],
+)
+def test_conductor_rejects_invalid_worker_limits(ledger, argument, value):
+    with pytest.raises(ValueError, match="must be a positive integer"):
+        Conductor(ledger, **{argument: value})
 
 
 def test_conductor_verifies_output_and_refreshes_prompt_snapshot(

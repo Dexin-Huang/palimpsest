@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -70,6 +72,8 @@ def test_omp_maps_multimodal_structured_request(monkeypatch, tmp_path):
         observed["command"] = command
         observed["cwd"] = kwargs["cwd"]
         observed["stdin"] = kwargs["stdin"]
+        observed["timeout"] = kwargs["timeout"]
+        observed["creationflags"] = kwargs["creationflags"]
         prompt_argument = next(
             value
             for value in command
@@ -143,6 +147,8 @@ def test_omp_maps_multimodal_structured_request(monkeypatch, tmp_path):
     assert response.total_tokens == 163
     assert response.billable_output_tokens == 40
     assert observed["stdin"] is subprocess.DEVNULL
+    assert observed["timeout"] == 7200
+    assert observed["creationflags"] == omp._SUBPROCESS_CREATION_FLAGS
     assert response.cost_usd == 0.25
 
 
@@ -173,6 +179,43 @@ def test_omp_omits_thinking_when_unspecified(tmp_path):
     assert "--thinking" not in command
 
 
+def test_gateway_caps_concurrent_calls_per_provider(monkeypatch):
+    active = 0
+    maximum = 0
+    three_started = threading.Event()
+    release = threading.Event()
+    lock = threading.Lock()
+
+    def provider(request):
+        nonlocal active, maximum
+        with lock:
+            active += 1
+            maximum = max(maximum, active)
+            if active == 3:
+                three_started.set()
+        assert release.wait(timeout=2)
+        with lock:
+            active -= 1
+        return ModelResponse(text="ok", model=request.model)
+
+    monkeypatch.setattr(client, "_resolve_provider", lambda _model: provider)
+    monkeypatch.setattr(client, "MODEL_PROVIDER_WORKERS", 3)
+    client._provider_slots.clear()
+    requests = [
+        ModelRequest(model="openai-codex/gpt-test", prompt=f"call-{index}")
+        for index in range(6)
+    ]
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = [pool.submit(client.generate, request) for request in requests]
+        assert three_started.wait(timeout=2)
+        assert maximum == 3
+        release.set()
+        assert [future.result(timeout=2).text for future in futures] == ["ok"] * 6
+
+    assert maximum == 3
+
+
 def test_gateway_routes_slash_qualified_google_models_through_omp(monkeypatch):
     expected = SimpleNamespace(text="routed")
     monkeypatch.setattr(omp, "generate", lambda request: expected)
@@ -193,18 +236,20 @@ def test_gateway_routes_bare_gemini_models_to_direct_api(monkeypatch):
     assert response is expected
 
 
-def test_omp_marks_timeouts_transient(monkeypatch):
+def test_omp_hard_timeout_is_terminal(monkeypatch):
     monkeypatch.setattr(omp.shutil, "which", lambda command: "omp-test")
 
     def timeout(*args, **kwargs):
-        raise subprocess.TimeoutExpired("omp-test", 900)
+        raise subprocess.TimeoutExpired("omp-test", kwargs["timeout"])
 
     monkeypatch.setattr(omp.subprocess, "run", timeout)
 
-    with pytest.raises(GatewayError) as raised:
+    with pytest.raises(
+        GatewayError, match="OMP call timed out after 7200 seconds"
+    ) as raised:
         omp.generate(ModelRequest(model="openai-codex/gpt-5.4", prompt="Wait"))
 
-    assert raised.value.transient is True
+    assert raised.value.transient is False
     assert raised.value.cost_usd == 0.0
 
 

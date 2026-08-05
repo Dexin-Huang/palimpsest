@@ -168,9 +168,9 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
     assert low.params["thinking_level"] == "low"
     assert high.params["thinking_level"] == "high"
     assert current.id == "read/zh-current-production-moving-v1"
-    assert current.model == "gemini-flash-latest"
-    assert current.model_identity == "moving"
-    assert current.can_auto_qualify is False
+    assert current.model == "google/gemini-3.5-flash"
+    assert current.model_identity == "fixed"
+    assert current.can_auto_qualify is True
     assert current.params == high.params
 
     wheel_source = tmp_path / "wheel-source"
@@ -193,6 +193,7 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
         ".jpg",
         ".jpeg",
         ".epub",
+        ".pgm",
         ".html",
         ".xml",
     }

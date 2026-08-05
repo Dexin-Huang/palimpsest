@@ -89,8 +89,8 @@ def test_deterministic_station_and_library_conformance(
     resources = {
         "acquire": "retrieval-conformance-v1.yaml",
         "assemble_page": "assembly-conformance-v1.yaml",
-        "publish": "book-conformance-v1.yaml",
-        "render_epub": "portable-conformance-v1.yaml",
+        "publish": "book-conformance-v2.yaml",
+        "render_epub": "portable-conformance-v2.yaml",
     }
     for station, suite_name in resources.items():
         suite_record = load_suite(
@@ -138,10 +138,12 @@ def test_deterministic_station_and_library_conformance(
         "manuscript",
         "translation_brief",
         "page_transcription",
+        "page_image",
         "page_image_clean",
         "page_translation",
         "reference",
         "emendations",
+        "edition",
     }
 
     acquire_gold = _read_json("gold/acquire/expected-retrieval.json")
@@ -224,10 +226,12 @@ def test_deterministic_station_and_library_conformance(
         "translation_brief": ("translation-brief.json", None),
         "manuscript": ("manuscript.json", None),
         "page_transcription": ("page-transcription.json", "p001"),
+        "page_image": ("page-image-clean.jpg", "p001"),
         "page_image_clean": ("page-image-clean.jpg", "p001"),
         "page_translation": ("page-translation.json", "p001"),
         "reference": ("reference.json", None),
         "emendations": ("emendations.json", None),
+        "edition": ("edition.json", None),
     }
     for kind, (filename, page_id) in publish_assets.items():
         _copy_input(f"gold/publish/{filename}", publish_root, kind, page_id)
@@ -246,7 +250,7 @@ def test_deterministic_station_and_library_conformance(
     )
     assert book_good is not None
     validate_payload("book", book_good)
-    expected_book = _read_json("gold/publish/expected-book.json")
+    expected_book = _read_json("gold/publish/expected-book-v2.json")
     assert book_good == expected_book
     book_gold = {
         **expected_book,
@@ -258,12 +262,15 @@ def test_deterministic_station_and_library_conformance(
             "reconstruct",
             "reference",
             "emend",
+            "finalize_edition",
         ],
     }
     book_broken = copy.deepcopy(book_good)
-    del book_broken["language"]
-    book_broken["chapters"][0]["translation"] = "unsupported replacement"
-    book_broken["evidence"]["pages"] = []
+    del book_broken["schema_version"]
+    book_broken["sections"][0]["content"]["translation"]["text"] = (
+        "unsupported replacement"
+    )
+    book_broken["folios"] = []
     book_broken["colophon"]["pipeline"] = []
     del book_broken["colophon"]["cost_complete"]
     for name in (
@@ -282,7 +289,7 @@ def test_deterministic_station_and_library_conformance(
     RenderEpub().run(Job("fixture_ms", (page,), None, epub_root, StationConfig()))
     epub_path = artifact_path("fixture_ms", "book_epub", None, epub_root)
     epub_good = {"epub_bytes": epub_path.read_bytes()}
-    tracked_epub = EVALUATION_ROOT / "gold/render_epub/expected-book.epub"
+    tracked_epub = EVALUATION_ROOT / "gold/render_epub/expected-book-v2.epub"
     assert hashlib.sha256(tracked_epub.read_bytes()).hexdigest() == (
         suites["render_epub"].cases[0].references["expected_epub"].sha256
     )
@@ -312,11 +319,12 @@ def test_deterministic_station_and_library_conformance(
     site_library = tmp_path / "site-library"
     source_book = artifact_path("fixture_ms", "book", None, site_library)
     atomic_write_json(source_book, book_good)
-    source_image = artifact_path("fixture_ms", "page_image_clean", "p001", site_library)
-    source_image.parent.mkdir(parents=True, exist_ok=True)
-    source_image.write_bytes(
-        (EVALUATION_ROOT / "gold/publish/page-image-clean.jpg").read_bytes()
-    )
+    for kind in ("page_image", "page_image_clean"):
+        source_image = artifact_path("fixture_ms", kind, "p001", site_library)
+        source_image.parent.mkdir(parents=True, exist_ok=True)
+        source_image.write_bytes(
+            (EVALUATION_ROOT / "gold/publish/page-image-clean.jpg").read_bytes()
+        )
     site_root = tmp_path / "built-site"
     assert site.build(site_library, site_root) == ["fixture_ms"]
     assert not (site_root / "fixture_ms/fixture_ms.epub").exists()
@@ -347,7 +355,7 @@ def test_deterministic_station_and_library_conformance(
     reader = site_root / "fixture_ms/index.html"
     reader.write_text(
         reader.read_text(encoding="utf-8").replace(
-            "<button class='toggle' onclick='tgl()'>Show original text</button>",
+            "<button class='toggle' onclick='tgl()'>Show editorial layers</button>",
             "<a href='missing.html'>broken reader target</a>",
         ),
         encoding="utf-8",

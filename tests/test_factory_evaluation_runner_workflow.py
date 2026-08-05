@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
 from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
@@ -12,6 +13,7 @@ from palimpsest.factory.evaluation.candidate import RecordError, ResolvedCandida
 from palimpsest.factory.evaluation.judge import ResolvedJudge
 from palimpsest.factory.evaluation.metrics import Metric, MetricDirection
 from palimpsest.factory.evaluation.runner import (
+    _json_value,
     _side_order,
     filesystem_asset_resolver,
     run_evaluation,
@@ -108,6 +110,34 @@ def _case(
     )
 
 
+def test_candidate_options_become_pickle_safe_at_executor_boundary() -> None:
+    immutable = MappingProxyType(
+        {
+            "tool_bindings": (
+                MappingProxyType(
+                    {
+                        "id": "gemini_3_6_flash_draft_v1",
+                        "kind": "draft_model",
+                        "model": "google/gemini-3.6-flash",
+                    }
+                ),
+            )
+        }
+    )
+
+    serialized = _json_value(immutable)
+
+    assert pickle.loads(pickle.dumps(serialized)) == {
+        "tool_bindings": [
+            {
+                "id": "gemini_3_6_flash_draft_v1",
+                "kind": "draft_model",
+                "model": "google/gemini-3.6-flash",
+            }
+        ]
+    }
+
+
 def _suite(
     cases: tuple[EvaluationCase, ...],
     metric: Metric,
@@ -150,13 +180,21 @@ def _suite(
     )
 
 
-def _install_execution(monkeypatch, plans, calls, candidate_views):
+def _install_execution(
+    monkeypatch,
+    plans,
+    calls,
+    candidate_views,
+    *,
+    uses_model=True,
+):
     station = SimpleNamespace(
         name="read",
         grain="page",
         consumes=("page_list", "page_image"),
         optional_consumes=(),
         produces="page_transcription",
+        uses_model=uses_model,
     )
     monkeypatch.setattr(
         "palimpsest.factory.evaluation.runner.registry.get",
@@ -211,6 +249,7 @@ def _install_execution(monkeypatch, plans, calls, candidate_views):
                 tokens_in=11,
                 tokens_out=7,
                 cost_usd=plan.get("cost", 0.1),
+                process_stats=plan.get("process_stats"),
             )
 
     monkeypatch.setattr(
@@ -310,7 +349,14 @@ def test_workflow_keeps_gold_scorer_only_and_publishes_deterministic_paired_repo
     )
     plans = {
         (baseline.fingerprint, "p1"): {"score": 0.5},
-        (challenger.fingerprint, "p1"): {"score": 0.8},
+        (challenger.fingerprint, "p1"): {
+            "score": 0.8,
+            "process_stats": {
+                "assistant_turns": 4,
+                "tool_calls": 9,
+                "output_tokens": 210,
+            },
+        },
         (baseline.fingerprint, "p2"): {"score": 0.5},
         (challenger.fingerprint, "p2"): {"score": 0.8},
     }
@@ -337,6 +383,12 @@ def test_workflow_keeps_gold_scorer_only_and_publishes_deterministic_paired_repo
         )
         assert labels == _side_order("run-1", case.case_id)
         assert report["cases"][index]["side_order"] == list(labels)
+    assert report["cases"][0]["challenger"]["process_stats"] == {
+        "assistant_turns": 4,
+        "tool_calls": 9,
+        "output_tokens": 210,
+    }
+    assert report["cases"][0]["baseline"]["process_stats"] is None
     assert report["decision"] == "qualified"
     assert (
         report["aggregates"]["metrics"]["quality"]["comparison"]["decision"] == "pass"
@@ -809,6 +861,65 @@ def test_cost_ceiling_stops_before_next_pair_and_blocks_qualification(
     assert (
         "missing paired case observations: 1 of 2" in report["qualification"]["reasons"]
     )
+    store.close()
+
+
+def test_deterministic_cost_is_known_zero_and_does_not_stop_dispatch(
+    tmp_path, monkeypatch
+):
+    cases = (_case(tmp_path, 1), _case(tmp_path, 2))
+    baseline = _candidate("read/baseline", "a" * 64)
+    challenger = _candidate("read/challenger", "b" * 64)
+    suite = _suite(
+        cases,
+        Metric(
+            "quality",
+            MetricDirection.MAXIMIZE,
+            lambda output, gold: output["score"],
+        ),
+    )
+    plans = {
+        (candidate.fingerprint, f"p{number}"): {"score": score, "cost": None}
+        for number in (1, 2)
+        for candidate, score in ((baseline, 0.5), (challenger, 0.8))
+    }
+    calls, candidate_views = [], []
+    _install_execution(
+        monkeypatch,
+        plans,
+        calls,
+        candidate_views,
+        uses_model=False,
+    )
+    store = EvaluationStore(tmp_path / "factory.db")
+
+    result = run_evaluation(
+        run_id="run-1",
+        suite=suite,
+        baseline=baseline,
+        challenger=challenger,
+        store=store,
+        run_root=tmp_path / "runs",
+        asset_resolver=filesystem_asset_resolver(tmp_path, tmp_path / "objects"),
+        executor="inline",
+        max_cost_usd=0.01,
+    )
+    report = read_json(result.report_path)
+
+    assert len(calls) == 4
+    assert [case["case_id"] for case in report["cases"]] == ["case-1", "case-2"]
+    assert report["aggregates"]["cost_ceiling"] == {
+        "maximum_cost_usd": 0.01,
+        "candidate_known_cost_usd": 0.0,
+        "candidate_unknown_cost": False,
+        "judge_known_cost_usd": 0,
+        "judge_unknown_cost": False,
+        "total_known_cost_usd": 0.0,
+        "unknown_cost": False,
+        "limit_reached": False,
+        "limit_exceeded": False,
+        "dispatch_stopped": False,
+    }
     store.close()
 
 

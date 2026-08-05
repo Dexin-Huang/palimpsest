@@ -19,6 +19,7 @@ from palimpsest.factory.core.recipe import load as load_recipe
 from palimpsest.factory.core.station import Job, StationConfig
 from palimpsest.factory.gateway import ModelResponse
 from palimpsest.factory.stations.assemble_page import AssemblePage
+from palimpsest.factory.stations.translate import Translate
 from palimpsest.factory.workspace.io import atomic_write_json, read_json
 from palimpsest.factory.workspace.layout import artifact_path
 
@@ -36,7 +37,10 @@ def library(tmp_path):
     atomic_write_json(doc_dir / "page_list.json", {"doc_id": DOC, "pages": PAGES})
     atomic_write_json(
         doc_dir / "metadata.json",
-        {"doc_id": DOC, "source_catalog": {"title": "Test"}},
+        {
+            "doc_id": DOC,
+            "source_catalog": {"title": "Test", "archive": "Test Archive"},
+        },
     )
     return tmp_path / "library"
 
@@ -111,6 +115,7 @@ class ScriptedGateway:
 @pytest.fixture
 def gateway(monkeypatch):
     from palimpsest.factory import agent_cell
+
     from palimpsest.factory.gateway.client import parse_json_response
 
     fake = ScriptedGateway()
@@ -120,10 +125,11 @@ def gateway(monkeypatch):
         return parse_json_response(response.text), response
 
     def fake_agent_run(workspace, task, model, timeout_s=0, executor="codex"):
-        # scripted stand-ins for the two editorial agents: reference emits an
-        # empty dossier; emend applies one covered, anchored emendation
+        # scripted stand-ins for the three editorial agents: reference emits
+        # an empty dossier, emend applies one covered correction, and the
+        # final editor reconciles the reader-facing translation
         out = workspace / "out"
-        if "out/emendations.json" not in task:
+        if "out/reference.json" in task:
             (out / "reference.json").write_text(
                 json.dumps(
                     {
@@ -131,6 +137,29 @@ def gateway(monkeypatch):
                         "reference_points": [],
                         "editorial_notes": [],
                     }
+                ),
+                encoding="utf-8",
+            )
+        elif "out/edition.json" in task:
+            evidence = json.loads(
+                (workspace / "evidence" / "emendations.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            (out / "edition.json").write_text(
+                json.dumps(
+                    {
+                        "readers_note": "Final reader's note.",
+                        "sections": [
+                            {
+                                "section_index": index,
+                                "heading": section["heading"],
+                                "translation": f"Final translation of {section['reading']}",
+                            }
+                            for index, section in enumerate(evidence["sections"])
+                        ],
+                    },
+                    ensure_ascii=False,
                 ),
                 encoding="utf-8",
             )
@@ -186,6 +215,28 @@ def gateway(monkeypatch):
     return fake
 
 
+def test_translate_signature_distinguishes_target_pages(library):
+    pages = tuple(PAGES)
+    station = Translate()
+    first = Job(
+        doc_id=DOC,
+        pages=pages,
+        page=pages[0],
+        library_root=library,
+        config=StationConfig(options={"overlap": 1}),
+    )
+    second = Job(
+        doc_id=DOC,
+        pages=pages,
+        page=pages[1],
+        library_root=library,
+        config=StationConfig(options={"overlap": 1}),
+    )
+
+    assert station.input_paths(first) == station.input_paths(second)
+    assert station.signature_extras(first) != station.signature_extras(second)
+
+
 def _synthetic_page_jpeg() -> bytes:
     """A light page: white 800×600 with thin text-like strokes — thin, because
     the adaptive ink mask only marks stroke-scale features (solid bars read
@@ -233,6 +284,7 @@ def run_line(ledger, library, **kw):
 def dual_read_models(monkeypatch):
     monkeypatch.setenv("PALIMPSEST_MODEL_READING", "openai-codex/gpt-5.6-sol")
     monkeypatch.setenv("PALIMPSEST_MODEL_READING_SECONDARY", "google/gemini-3.6-flash")
+    monkeypatch.setenv("PALIMPSEST_MODEL_EDITORIAL", "anthropic/claude-fable-5")
     monkeypatch.setenv("PALIMPSEST_MODEL_ADJUDICATOR", "anthropic/claude-fable-5")
 
 
@@ -251,6 +303,7 @@ def test_recipe_loads_and_validates(dual_read_models):
         "reconstruct",
         "reference",
         "emend",
+        "finalize_edition",
         "publish",
         "render_epub",
     ]
@@ -266,6 +319,9 @@ def test_recipe_loads_and_validates(dual_read_models):
         "adjudicator_model": "anthropic/claude-fable-5",
         "adjudicator_thinking_level": "high",
     }
+    assert recipe.steps[6].model == "anthropic/claude-fable-5"
+    assert recipe.steps[7].model == "anthropic/claude-fable-5"
+    assert recipe.steps[9].model == "anthropic/claude-fable-5"
 
 
 def test_recipe_rejects_duplicate_artifact_producers(tmp_path):
@@ -318,6 +374,7 @@ def test_chinese_recipe_loads_and_validates(dual_read_models):
         "reconstruct",
         "reference",
         "emend",
+        "finalize_edition",
         "publish",
         "render_epub",
     ]
@@ -333,6 +390,40 @@ def test_chinese_recipe_loads_and_validates(dual_read_models):
         "adjudicator_model": "anthropic/claude-fable-5",
         "adjudicator_thinking_level": "high",
     }
+    assert recipe.steps[8].options == {
+        "overlap": 1,
+        "trim_seam_overlap": True,
+    }
+
+
+def test_chinese_printed_book_recipe_disables_scroll_seam_trimming(
+    dual_read_models,
+):
+    recipe = load_recipe("chinese_printed_book")
+    assert [spec.station.name for spec in recipe.steps] == [
+        "acquire",
+        "deframe",
+        "dewatermark",
+        "flatten",
+        "segment",
+        "read",
+        "align",
+        "survey",
+        "translate",
+        "assemble_page",
+        "reconstruct",
+        "reference",
+        "emend",
+        "finalize_edition",
+        "publish",
+        "render_epub",
+    ]
+    read = recipe.steps[5]
+    assert read.model == "openai-codex/gpt-5.6-sol"
+    assert read.params["secondary_model"] == "google/gemini-3.6-flash"
+    assert recipe.steps[7].model == "anthropic/claude-fable-5"
+    translate = recipe.steps[8]
+    assert translate.options == {"overlap": 1}
 
 
 def test_assemble_page_applies_the_translation_seam(tmp_path):
@@ -392,8 +483,8 @@ def test_end_to_end_line(ledger, library, gateway, fetch):
     report = run_line(ledger, library)
 
     assert report.count("failed") == 0
-    # 8 page stations × 2 pages + 6 manuscript stations
-    assert report.count("ran") == 22
+    # 8 page stations × 2 pages + 7 manuscript stations
+    assert report.count("ran") == 23
     assert ledger.item(DOC)["status"] == "complete"
 
     assembled = read_json(artifact_path(DOC, "page_assembled", "f001r", library))
@@ -405,6 +496,12 @@ def test_end_to_end_line(ledger, library, gateway, fetch):
     brief = read_json(artifact_path(DOC, "translation_brief", None, library))
     assert brief["glossary"][0]["term"] == "febris"
     assert brief["provenance"]["prompt_sha256"]
+    edition = read_json(artifact_path(DOC, "edition", None, library))
+    assert edition["sections"][0]["translation"].startswith("Final translation of")
+    book = read_json(artifact_path(DOC, "book", None, library))
+    content = book["sections"][0]["content"]
+    assert content["translation"]["text"] == edition["sections"][0]["translation"]
+    assert "morbos EMENDED" in content["emended_reading"]["text"]
 
     # binary artifacts got provenance sidecars
     image = artifact_path(DOC, "page_image", "f001r", library)
@@ -478,7 +575,7 @@ def test_page_selected_run_stops_inclusively_and_resumes_full_line(
 
     assert completed.partial is False
     assert completed.count("fresh") == 6
-    assert completed.count("ran") == 16
+    assert completed.count("ran") == 17
     assert ledger.item(DOC)["status"] == "complete"
 
 
@@ -507,7 +604,7 @@ def test_second_run_is_all_fresh(ledger, library, gateway, fetch):
     calls_before = len(gateway.calls)
     report = run_line(ledger, library)
     assert report.count("ran") == 0
-    assert report.count("fresh") == 22
+    assert report.count("fresh") == 23
     assert len(gateway.calls) == calls_before  # not a single paid call
 
 
@@ -553,6 +650,7 @@ def test_config_drift_is_outdated_not_rerun(
         "reconstruct/generic/structure",
         "reference/generic/identify",
         "emend/generic/agent",
+        "finalize/generic/edition",
     ):
         src = factory_config.PROMPTS_DIR / f"{name}.txt"
         dest = prompts / f"{name}.txt"

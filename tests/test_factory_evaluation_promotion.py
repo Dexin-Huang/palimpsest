@@ -27,6 +27,7 @@ from palimpsest.factory.evaluation.promotion import (
     load_reproducibility_waiver,
     propose_recipe_change,
     record_canary_evidence,
+    record_canary_cost_waiver,
     record_reproducibility_waiver,
     save_canary_evidence,
     save_promotion_record,
@@ -263,6 +264,113 @@ def test_failed_missing_or_incomplete_canary_cannot_promote(tmp_path: Path) -> N
             canary=_canary(proposal, outcome="unknown"),
             approved_by=APPROVER,
             created_at=NOW,
+        )
+
+def test_unknown_canary_cost_requires_exact_reviewed_waiver(tmp_path: Path) -> None:
+    _, _, _, proposal = _proposal(tmp_path)
+    canary = record_canary_evidence(
+        work_order_id="order-1",
+        doc_id="canary-doc",
+        run_id="canary-run-unknown-cost",
+        recipe_hash=proposal.proposed_recipe_hash,
+        refreshed_station="read",
+        status="unknown",
+        downstream_outcomes=(CanaryOutcome("all downstream cells", "passed"),),
+        known_cost_usd=0.05,
+        unknown_cost=True,
+        book_valid=True,
+        epub_valid=True,
+        site_valid=True,
+    )
+
+    with pytest.raises(PromotionError, match="cost evidence is unknown"):
+        create_promotion_record(
+            proposal,
+            canary=canary,
+            approved_by=APPROVER,
+            created_at=NOW,
+        )
+
+    wrong_canary = record_canary_cost_waiver(
+        canary_fingerprint="9" * 64,
+        approved_by=APPROVER,
+        reason="negligible subscription-backed agent cost",
+        created_at=NOW,
+    )
+    with pytest.raises(PromotionError, match="another canary"):
+        create_promotion_record(
+            proposal,
+            canary=canary,
+            approved_by=APPROVER,
+            created_at=NOW,
+            cost_waiver=wrong_canary,
+        )
+
+    waiver = record_canary_cost_waiver(
+        canary_fingerprint=canary.canary_fingerprint,
+        approved_by=APPROVER,
+        reason="negligible subscription-backed agent cost",
+        created_at=NOW,
+    )
+    record = create_promotion_record(
+        proposal,
+        canary=canary,
+        approved_by=APPROVER,
+        created_at=NOW,
+        cost_waiver=waiver,
+    )
+    path = tmp_path / "promotion.json"
+    save_promotion_record(path, record)
+
+    assert record.canary_cost_waiver == waiver
+    assert load_promotion_record(path) == record
+
+
+def test_canary_cost_waiver_cannot_mask_other_evidence(tmp_path: Path) -> None:
+    _, _, _, proposal = _proposal(tmp_path)
+    known_canary = _canary(proposal)
+    waiver = record_canary_cost_waiver(
+        canary_fingerprint=known_canary.canary_fingerprint,
+        approved_by=APPROVER,
+        reason="not applicable to known cost",
+        created_at=NOW,
+    )
+    with pytest.raises(PromotionError, match="requires unknown cost"):
+        create_promotion_record(
+            proposal,
+            canary=known_canary,
+            approved_by=APPROVER,
+            created_at=NOW,
+            cost_waiver=waiver,
+        )
+
+    failed_canary = record_canary_evidence(
+        work_order_id="order-1",
+        doc_id="canary-doc",
+        run_id="canary-run-failed",
+        recipe_hash=proposal.proposed_recipe_hash,
+        refreshed_station="read",
+        status="failed",
+        downstream_outcomes=(CanaryOutcome("all downstream cells", "passed"),),
+        known_cost_usd=0.05,
+        unknown_cost=True,
+        book_valid=True,
+        epub_valid=True,
+        site_valid=True,
+    )
+    failed_waiver = record_canary_cost_waiver(
+        canary_fingerprint=failed_canary.canary_fingerprint,
+        approved_by=APPROVER,
+        reason="cost only",
+        created_at=NOW,
+    )
+    with pytest.raises(PromotionError, match="passing canary"):
+        create_promotion_record(
+            proposal,
+            canary=failed_canary,
+            approved_by=APPROVER,
+            created_at=NOW,
+            cost_waiver=failed_waiver,
         )
 
 

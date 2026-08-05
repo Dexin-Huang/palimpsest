@@ -7,10 +7,11 @@ import zipfile
 
 import pytest
 
-from palimpsest.factory import site as site_builder
+from palimpsest.factory import publication_bundle, site as site_builder
 from palimpsest.factory.core import registry
 from palimpsest.factory.core.artifact import content_fingerprint, payload_fingerprint
 from palimpsest.factory.core.conductor import Conductor
+from palimpsest.factory.core.contracts import validate_payload
 from palimpsest.factory.core.ledger import Ledger, fingerprint
 from palimpsest.factory.core.station import Job, StationConfig
 from palimpsest.factory.stations.assemble_page import AssemblePage
@@ -51,13 +52,15 @@ def test_full_line_to_book(ledger, library, gateway, fetch):  # noqa: F811
     assert "alignment" not in assembled
 
     book = read_json(artifact_path(DOC, "book", None, library))
-    assert book["title"] == "Test"
-    assert book["chapters"][0]["heading"] == "Remedies"
-    assert book["readers_note"] == "A small test codex of remedies."
+    assert book["identity"]["title"] == "Test"
+    assert book["identity"]["archive"] == "Test Archive"
+    assert book["sections"][0]["heading"] == "Remedies"
+    assert book["readers_note"] == "Final reader's note."
     assert book["colophon"]["pages"] == 2
     assert book["colophon"]["transcribed_by"]
     assert book["colophon"]["referenced_by"]
     assert book["colophon"]["emended_by"]
+    assert book["colophon"]["finalized_by"]
     assert book["colophon"]["cost_usd_total"] is None
     assert book["colophon"]["cost_usd_known"] > 0
     assert not book["colophon"]["cost_complete"]
@@ -65,24 +68,155 @@ def test_full_line_to_book(ledger, library, gateway, fetch):  # noqa: F811
         "reference",
         "emend",
     }
-    assert book["chapters"][0]["source_pages"] == ["f001r", "f001v"]
-    assert [page["page_id"] for page in book["evidence"]["pages"]] == [
+    assert book["sections"][0]["folio_ids"] == ["f001r", "f001v"]
+    assert [folio["page_id"] for folio in book["folios"]] == [
         "f001r",
         "f001v",
     ]
+    assert book["schema_version"] == 1
+    assert book["profile"] == "facsimile-spread/v1"
+    first_folio = book["folios"][0]
+    assert first_folio["images"]["original"]["kind"] == "page_image"
+    assert first_folio["images"]["enhanced"]["kind"] == "page_image_clean"
+    assert (
+        first_folio["evidence"]["translation"]["source"]["kind"] == "page_translation"
+    )
+    section_content = book["sections"][0]["content"]
+    assert section_content["translation"]["source"]["kind"] == "edition"
+    assert section_content["emended_reading"]["source"]["kind"] == "emendations"
+    assert section_content["diplomatic_transcription"]["source"]["kind"] == "manuscript"
 
     epub_path = artifact_path(DOC, "book_epub", None, library)
     assert epub_path.exists()
     with zipfile.ZipFile(epub_path) as zf:
         names = zf.namelist()
         assert "mimetype" in names
-        chapter = next(n for n in names if n.endswith("ch01.xhtml"))
+        chapter = next(n for n in names if n.endswith("section-0001.xhtml"))
         content = zf.read(chapter).decode("utf-8")
         assert "Remedies" in content
-        assert "Translated body" in content
+        assert "Final translation of" in content
         assert "Experimenta" in content  # original included per chapter
         assert "Source evidence" in content
         assert "https://archive.test/f001r.jpg" in content
+        assert "coordinate-alignment coverage" not in content
+        colophon = next(n for n in names if n.endswith("colophon.xhtml"))
+        colophon_content = zf.read(colophon).decode("utf-8")
+        assert "finalized by" in colophon_content
+        assert "final-edition review" in colophon_content
+
+
+def test_publish_maps_apparatus_to_final_reader_heading(
+    ledger, library, gateway, fetch
+):  # noqa: F811
+    run_line(ledger, library)
+    edition_path = artifact_path(DOC, "edition", None, library)
+    edition = read_json(edition_path)
+    edition["sections"][0]["heading"] = "Final Remedies"
+    atomic_write_json(edition_path, edition)
+    job = Job(
+        DOC,
+        tuple(line_cases.PAGES),
+        None,
+        library,
+        StationConfig(options={"original_language": "la"}),
+    )
+
+    book = Publish().run(job).payload
+
+    assert book["sections"][0]["heading"] == "Final Remedies"
+    assert book["apparatus"][0]["section_id"] == book["sections"][0]["id"]
+
+
+def test_publish_rejects_mismatched_editorial_section_counts(
+    ledger, library, gateway, fetch
+):  # noqa: F811
+    run_line(ledger, library)
+    edition_path = artifact_path(DOC, "edition", None, library)
+    edition = read_json(edition_path)
+    edition["sections"].append(
+        {
+            "section_index": 1,
+            "heading": "Unexpected section",
+            "translation": "Unexpected translation",
+        }
+    )
+    atomic_write_json(edition_path, edition)
+    job = Job(
+        DOC,
+        tuple(line_cases.PAGES),
+        None,
+        library,
+        StationConfig(options={"original_language": "la"}),
+    )
+
+    with pytest.raises(ValueError, match="editorial section counts do not match"):
+        Publish().run(job)
+
+
+def test_publish_labels_blank_folios_and_section_without_fabricating_sources(
+    ledger, library, gateway, fetch
+):  # noqa: F811
+    run_line(ledger, library)
+    for page in line_cases.PAGES:
+        page_id = page["page_id"]
+        transcription_path = artifact_path(
+            DOC, "page_transcription", page_id, library
+        )
+        transcription = read_json(transcription_path)
+        transcription["text"] = ""
+        transcription["route"] = "blank"
+        atomic_write_json(transcription_path, transcription)
+        translation_path = artifact_path(DOC, "page_translation", page_id, library)
+        translation = read_json(translation_path)
+        translation["translation"] = ""
+        atomic_write_json(translation_path, translation)
+
+    source_fields = {
+        "manuscript": ("original", ""),
+        "emendations": ("reading", "\n\n"),
+        "edition": ("translation", ""),
+    }
+    for kind, (field, blank_text) in source_fields.items():
+        path = artifact_path(DOC, kind, None, library)
+        artifact = read_json(path)
+        artifact["sections"][0][field] = blank_text
+        atomic_write_json(path, artifact)
+
+    job = Job(
+        DOC,
+        tuple(line_cases.PAGES),
+        None,
+        library,
+        StationConfig(options={"original_language": "la"}),
+    )
+    book = Publish().run(job).payload
+
+    for folio in book["folios"]:
+        assert folio["evidence"]["diplomatic"]["text"] == "[Blank page]"
+        assert folio["evidence"]["translation"]["text"] == "[Blank page]"
+    content = book["sections"][0]["content"]
+    assert {layer["text"] for layer in content.values()} == {"[Blank page]"}
+    for kind, (field, blank_text) in source_fields.items():
+        assert read_json(artifact_path(DOC, kind, None, library))["sections"][0][
+            field
+        ] == blank_text
+    validate_payload("book", book, expected_doc_id=DOC)
+
+    for page in line_cases.PAGES:
+        transcription_path = artifact_path(
+            DOC, "page_transcription", page["page_id"], library
+        )
+        transcription = read_json(transcription_path)
+        transcription["route"] = "segmented"
+        atomic_write_json(transcription_path, transcription)
+
+    book = Publish().run(job).payload
+    for folio in book["folios"]:
+        assert folio["evidence"]["diplomatic"]["text"] == "[No transcribed text]"
+        assert folio["evidence"]["translation"]["text"] == "[No transcribed text]"
+    content = book["sections"][0]["content"]
+    assert {layer["text"] for layer in content.values()} == {"[No transcribed text]"}
+    validate_payload("book", book, expected_doc_id=DOC)
 
 
 def test_failed_transcription_cannot_assemble_or_publish(
@@ -153,12 +287,14 @@ def test_unresolved_transcription_publishes_with_full_audit(
         AssemblePage().run(Job(DOC, pages, pages[0], library, StationConfig())).payload
     )
     book = Publish().run(Job(DOC, pages, None, library, StationConfig())).payload
-    first_page = book["evidence"]["pages"][0]
+    first_page = book["folios"][0]
 
     assert assembled["original"]["text"] == "Experimenta 〔?〕 ad morbos"
     assert assembled["transcription_audit"] == audit
-    assert first_page["diplomatic"] == "Experimenta 〔?〕 ad morbos"
-    assert first_page["transcription_audit"] == audit
+    assert first_page["evidence"]["diplomatic"]["text"] == (
+        "Experimenta 〔?〕 ad morbos"
+    )
+    assert first_page["evidence"]["diplomatic"]["audit"] == audit
 
 
 def test_full_line_second_run_fresh(ledger, library, gateway, fetch):  # noqa: F811
@@ -180,10 +316,11 @@ def test_site_build(ledger, library, gateway, fetch, tmp_path):  # noqa: F811
 
     reader = (site_root / DOC / "index.html").read_text(encoding="utf-8")
     assert "Remedies" in reader
-    assert "Translated body" in reader
-    assert "Show original text" in reader
+    assert "Final translation of" in reader
+    assert "Show editorial layers" in reader
     assert (site_root / DOC / f"{DOC}.epub").exists()
     assert "source f001r" in reader
+    assert "finalized by" in reader
     assert (site_root / DOC / "book.json").exists()
     evidence_page = site_root / DOC / "evidence" / "f001r.html"
     assert evidence_page.exists()
@@ -191,6 +328,88 @@ def test_site_build(ledger, library, gateway, fetch, tmp_path):  # noqa: F811
     assert "Archive image" in evidence
     assert "Experimenta ad morbos" in evidence
     assert (site_root / DOC / "evidence" / "f001r.jpg").exists()
+
+
+def test_publication_bundle_exports_renderer_independent_books(
+    ledger, library, gateway, fetch, tmp_path
+):  # noqa: F811
+    run_line(ledger, library)
+    bundle_root = tmp_path / "publication"
+
+    exported = publication_bundle.export_library(library, bundle_root)
+
+    assert [book.doc_id for book in exported.books] == [DOC]
+    payload = read_json(bundle_root / "library.json")
+    assert payload["schema_version"] == 2
+    assert payload["profile"] == "palimpsest-library/v2"
+    assert payload["contract"] == "palimpsest-publication"
+    assert payload["contract_version"] == "1.0.0"
+    assert payload["bundle_id"] == exported.bundle_id
+    assert [entry["doc_id"] for entry in payload["books"]] == [DOC]
+    (record,) = payload["books"]
+    assert record["model"] == f"books/{DOC}/book.json"
+    assert record["epub"] == f"books/{DOC}/{DOC}.epub"
+    assert [folio["page_id"] for folio in record["folios"]] == ["f001r", "f001v"]
+    assert all(folio["original"] for folio in record["folios"])
+    assert not list(bundle_root.rglob("*.html"))
+    assert all((bundle_root / item["path"]).is_file() for item in payload["files"])
+    assert set(payload["schemas"]) == {"book", "library"}
+    publication_bundle.validate_library_object(payload)
+
+
+def test_publication_bundle_preserves_previous_export_when_epub_is_stale(
+    ledger, library, gateway, fetch, tmp_path
+):  # noqa: F811
+    run_line(ledger, library)
+    bundle_root = tmp_path / "publication"
+    bundle_root.mkdir()
+    sentinel = bundle_root / "previous.txt"
+    sentinel.write_text("preserved", encoding="utf-8")
+    book_path = artifact_path(DOC, "book", None, library)
+    book = read_json(book_path)
+    book["readers_note"] = "Changed after EPUB rendering."
+    atomic_write_json(book_path, book)
+
+    with pytest.raises(ValueError, match="has no current EPUB"):
+        publication_bundle.export_library(library, bundle_root)
+
+    assert sentinel.read_text(encoding="utf-8") == "preserved"
+    assert not (bundle_root / "library.json").exists()
+
+
+def test_shelf_excerpt_ends_at_a_word_boundary():
+    model = {
+        "doc_id": "long-note",
+        "identity": {
+            "title": "Long note",
+            "shelfmark": None,
+            "date": None,
+        },
+        "languages": {"original": "la"},
+        "readers_note": "complete words " * 30,
+    }
+
+    shelf = site_builder._shelf_html([model])
+    excerpt = shelf.rsplit("<p class='muted'>", 1)[1].split("</p>", 1)[0]
+
+    assert len(excerpt) <= 220
+    assert excerpt.endswith(("complete…", "words…"))
+
+
+def test_site_rejects_invalid_book_before_writing(
+    ledger, library, gateway, fetch, tmp_path
+):  # noqa: F811
+    run_line(ledger, library)
+    book_path = artifact_path(DOC, "book", None, library)
+    book = read_json(book_path)
+    del book["profile"]
+    atomic_write_json(book_path, book)
+    site_root = tmp_path / "site"
+
+    with pytest.raises(ValueError, match="missing required fields.*profile"):
+        site_builder.build(library, site_root)
+
+    assert not site_root.exists()
 
 
 def test_publish_embeds_only_current_character_alignment(
@@ -232,7 +451,7 @@ def test_publish_embeds_only_current_character_alignment(
 
     run_line(ledger, library)
     book = read_json(artifact_path(DOC, "book", None, library))
-    assert "alignment" not in book["evidence"]["pages"][0]
+    assert "alignment" not in book["folios"][0]["evidence"]
 
     payload["provenance"]["station_fingerprint"] = registry.get(
         "align"
@@ -240,14 +459,24 @@ def test_publish_embeds_only_current_character_alignment(
     atomic_write_json(alignment_path, payload)
     report = run_line(ledger, library)
     book = read_json(artifact_path(DOC, "book", None, library))
-    first_page = book["evidence"]["pages"][0]
+    first_page = book["folios"][0]
 
     assert ("publish", None) in {
         (cell.station, cell.page_id) for cell in report.cells if cell.action == "ran"
     }
-    assert first_page["alignment"]["columns"][0]["chars"][0]["ch"] == "E"
-    assert first_page["alignment"]["stats"] == {"transcribed": 1, "boxed": 1}
-    assert first_page["alignment"]["provenance"]["station"] == "align"
+    assert first_page["evidence"]["alignment"]["columns"][0]["chars"][0]["ch"] == "E"
+    assert first_page["evidence"]["alignment"]["stats"] == {
+        "transcribed": 1,
+        "boxed": 1,
+    }
+    with zipfile.ZipFile(artifact_path(DOC, "book_epub", None, library)) as zf:
+        chapter_name = next(
+            name for name in zf.namelist() if name.endswith("section-0001.xhtml")
+        )
+        chapter = zf.read(chapter_name).decode("utf-8")
+    assert "coordinate-alignment coverage is summarized below" in chapter
+    assert "1 of 1 ink characters aligned" in chapter
+    assert first_page["evidence"]["alignment"]["source"]["kind"] == "page_alignment"
 
 
 def test_binary_artifact_recovers_after_ledger_interruption(
@@ -281,7 +510,7 @@ def test_site_omits_epub_when_book_has_changed(
     run_line(ledger, library)
     book_path = artifact_path(DOC, "book", None, library)
     book = read_json(book_path)
-    book["title"] = "Changed after EPUB rendering"
+    book["identity"]["title"] = "Changed after EPUB rendering"
     atomic_write_json(book_path, book)
 
     site_root = tmp_path / "site"
