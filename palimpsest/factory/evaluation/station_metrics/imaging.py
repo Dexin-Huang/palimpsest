@@ -12,7 +12,9 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from math import hypot
+from pathlib import Path
 
+import cv2
 import numpy as np
 
 from ..metrics import Metric, MetricDirection, MetricRegistry
@@ -44,6 +46,97 @@ def _pixels(record: Mapping[str, object], key: str) -> np.ndarray | None:
     if pixels.ndim != 2 or pixels.size == 0 or not np.isfinite(pixels).all():
         return None
     return pixels
+
+
+def image_artifact_observation(
+    output_path: Path,
+    source_path: Path,
+    *,
+    source_sha256: str,
+) -> dict[str, object]:
+    """Decode an image artifact and locate its axis-aligned source crop."""
+    output = cv2.imread(str(output_path), cv2.IMREAD_COLOR)
+    if output is None:
+        raise ValueError(f"Evaluation output is not a readable image: {output_path}")
+    source = cv2.imread(str(source_path), cv2.IMREAD_COLOR)
+    if source is None:
+        raise ValueError(f"Evaluation source is not a readable image: {source_path}")
+    observation: dict[str, object] = {
+        "pixels": output,
+        "source_sha256": source_sha256,
+    }
+    source_bbox = _source_crop_bbox(source, output)
+    if source_bbox is not None:
+        observation["source_bbox"] = source_bbox
+    return observation
+
+
+def _source_crop_bbox(
+    source: np.ndarray,
+    output: np.ndarray,
+) -> list[int] | None:
+    """Locate a re-encoded, unscaled crop within its source image."""
+    source_height, source_width = source.shape[:2]
+    output_height, output_width = output.shape[:2]
+    if output_height > source_height or output_width > source_width:
+        return None
+    if (output_height, output_width) == (source_height, source_width):
+        return [0, 0, output_width, output_height]
+
+    source_gray = cv2.cvtColor(source, cv2.COLOR_BGR2GRAY)
+    output_gray = cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
+    scale = min(1.0, 640.0 / max(source_height, source_width))
+    scaled_source = cv2.resize(
+        source_gray,
+        (
+            max(1, round(source_width * scale)),
+            max(1, round(source_height * scale)),
+        ),
+        interpolation=cv2.INTER_AREA,
+    )
+    scaled_output = cv2.resize(
+        output_gray,
+        (
+            max(1, round(output_width * scale)),
+            max(1, round(output_height * scale)),
+        ),
+        interpolation=cv2.INTER_AREA,
+    )
+    if (
+        scaled_output.shape[0] > scaled_source.shape[0]
+        or scaled_output.shape[1] > scaled_source.shape[1]
+    ):
+        return None
+    coarse_match = cv2.matchTemplate(
+        scaled_source,
+        scaled_output,
+        cv2.TM_CCOEFF_NORMED,
+    )
+    _, _, _, coarse_location = cv2.minMaxLoc(coarse_match)
+    coarse_x = round(coarse_location[0] / scale)
+    coarse_y = round(coarse_location[1] / scale)
+
+    radius = max(4, round(2.0 / scale))
+    left = max(0, coarse_x - radius)
+    top = max(0, coarse_y - radius)
+    right = min(source_width, coarse_x + output_width + radius)
+    bottom = min(source_height, coarse_y + output_height + radius)
+    if right - left < output_width or bottom - top < output_height:
+        return None
+    local_match = cv2.matchTemplate(
+        source_gray[top:bottom, left:right],
+        output_gray,
+        cv2.TM_CCOEFF_NORMED,
+    )
+    _, confidence, _, location = cv2.minMaxLoc(local_match)
+    if not np.isfinite(confidence) or confidence < 0.8:
+        return None
+    return [
+        left + location[0],
+        top + location[1],
+        output_width,
+        output_height,
+    ]
 
 
 def _mask(

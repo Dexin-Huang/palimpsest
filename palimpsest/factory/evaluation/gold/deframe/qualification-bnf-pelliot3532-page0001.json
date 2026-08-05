@@ -1,0 +1,18 @@
+{
+  "crop_bbox": [0, 105, 3315, 2015],
+  "edge_annotation_regions": [
+    [0, 300, 80, 1400],
+    [3235, 300, 80, 1400]
+  ],
+  "fixture_method": "single-operator visual scroll-boundary annotation from held-out BnF source",
+  "frame_regions": [
+    [0, 0, 3315, 105],
+    [0, 2120, 3315, 130]
+  ],
+  "manuscript_regions": [
+    [0, 115, 3315, 1990]
+  ],
+  "rights": "Public Domain; Bibliotheque nationale de France",
+  "source_sha256": "63880b920c4740df7920eb3616209742305b47bf543689a204fa2525c6c43d98",
+  "source_size": [3315, 2250]
+}

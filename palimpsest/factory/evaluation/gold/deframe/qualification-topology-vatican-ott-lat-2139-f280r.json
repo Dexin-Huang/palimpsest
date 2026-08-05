@@ -1,0 +1,20 @@
+{
+  "crop_bbox": [790, 10, 760, 1090],
+  "edge_annotation_regions": [
+    [900, 20, 500, 120],
+    [1350, 400, 190, 600]
+  ],
+  "fixture_method": "single-operator visual leaf-boundary and marginalia annotation from source image, frozen before candidate execution",
+  "frame_regions": [
+    [0, 0, 790, 1214],
+    [790, 0, 778, 10],
+    [1550, 10, 18, 1090],
+    [790, 1100, 778, 114]
+  ],
+  "manuscript_regions": [
+    [800, 20, 740, 1070]
+  ],
+  "rights": "Copyright Biblioteca Apostolica Vaticana; source terms apply",
+  "source_sha256": "247de33897ba04e53cb2024f57803e55b33707544546dc011b4a18ebac637dea",
+  "source_size": [1568, 1214]
+}

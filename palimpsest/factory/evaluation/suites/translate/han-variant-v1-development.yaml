@@ -1,0 +1,47 @@
+schema_version: 1
+id: "translate/han-variant-v1-development/v1"
+station: translate
+mission: >-
+  One-case synthetic development probe for symmetric Han-form interpretation,
+  repeated terminology, and explicit uncertainty retention. It is transparent
+  representation-level conformance evidence, not manuscript translation gold,
+  and cannot qualify promotion.
+qualification_eligible: false
+case_manifest: translate/han-variant-v1-development.jsonl
+primary_metrics:
+  translation_passage_coverage:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  translation_omission_rate:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.8
+  translation_uncertainty_retention:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+  translation_terminology_consistency:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+hard_limits:
+  translation_passage_coverage: {minimum: 1.0}
+  translation_omission_rate: {maximum: 0.0}
+  translation_uncertainty_retention: {minimum: 1.0}
+  translation_terminology_consistency: {minimum: 1.0}
+protected_slices:
+  - han_variants
+  - uncertainty
+slice_policy:
+  minimum_cases: 1
+  maximum_regression: 0.0
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 1
+  paired_bootstrap_samples: 1
+  seed: 1702
+  require_all_hard_limits: false
+  require_all_downstream_probes: false

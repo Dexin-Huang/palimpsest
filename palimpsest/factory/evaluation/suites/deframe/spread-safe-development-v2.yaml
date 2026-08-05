@@ -1,0 +1,42 @@
+schema_version: 1
+id: deframe/spread-safe-development-v2
+station: deframe
+mission: Development battery for preserving complete manuscript leaves and edge annotations across framed single pages, asymmetric spreads, low-luminance scans, born-clean inputs, and retained Library of Congress two-page scans while removing only outer scanner backdrop.
+qualification_eligible: false
+case_manifest: deframe/spread-safe-development-v2.jsonl
+primary_metrics:
+  deframe_manuscript_area_recall:
+    direction: maximize
+    minimum_effect: 0.05
+    confidence: 0.9
+  deframe_edge_annotation_recall:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.9
+  deframe_crop_boundary_error:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.9
+hard_limits:
+  deframe_geometry_traceability:
+    minimum: 1.0
+  deframe_manuscript_area_recall:
+    minimum: 0.9
+protected_slices:
+  - two_page_spread
+  - single_page_control
+  - dark_scan
+  - edge_annotations
+  - archive_loc
+slice_policy:
+  minimum_cases: 2
+  maximum_regression: 0.02
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 9
+  paired_bootstrap_samples: 1000
+  seed: 4219
+  require_all_hard_limits: true
+  require_all_downstream_probes: false

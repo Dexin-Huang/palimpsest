@@ -1,0 +1,22 @@
+{
+  "crop_bbox": [20, 30, 1495, 915],
+  "edge_annotation_regions": [
+    [150, 40, 100, 90],
+    [1300, 40, 100, 90]
+  ],
+  "fixture_method": "single-operator visual leaf-boundary annotation from fresh BnF development source",
+  "frame_regions": [
+    [0, 0, 1536, 30],
+    [0, 0, 20, 983],
+    [1515, 0, 21, 983],
+    [0, 945, 1536, 38]
+  ],
+  "layout_class": "two_page_spread",
+  "manuscript_regions": [
+    [40, 45, 750, 850],
+    [800, 45, 715, 850]
+  ],
+  "rights": "Public Domain; Bibliotheque nationale de France",
+  "source_sha256": "ba00fb14246f06aa9837954ba1693829559a46d062009d175d4ee4bce166cf2c",
+  "source_size": [1536, 983]
+}

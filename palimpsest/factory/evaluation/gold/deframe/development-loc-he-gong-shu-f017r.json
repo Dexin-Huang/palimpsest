@@ -1,0 +1,19 @@
+{
+  "crop_bbox": [60, 60, 3320, 3140],
+  "edge_annotation_regions": [
+    [60, 850, 90, 1000],
+    [3290, 850, 90, 1000]
+  ],
+  "fixture_method": "single-operator visual parchment-boundary annotation from fresh LOC development source",
+  "frame_regions": [
+    [0, 3200, 3440, 357]
+  ],
+  "layout_class": "two_page_spread",
+  "manuscript_regions": [
+    [0, 300, 1620, 2600],
+    [1720, 300, 1720, 2600]
+  ],
+  "rights": "Public Domain; Library of Congress",
+  "source_sha256": "56d3fd2f6fdfebab2db35760508a2a4acf11526b2848d099b4a926acf21e331c",
+  "source_size": [3440, 3557]
+}

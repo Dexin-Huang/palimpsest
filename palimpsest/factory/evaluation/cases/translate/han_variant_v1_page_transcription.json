@@ -1,0 +1,22 @@
+{
+  "doc_id": "han_variant_translation_probe",
+  "page_id": "probe_1",
+  "text": "佛陁說法。佛陀說法。眞如即真如。[譯者名闕]",
+  "route": "full_page",
+  "regions": [],
+  "candidate_readings": [
+    {
+      "role": "primary",
+      "requested_model": "synthetic-conformance-fixture",
+      "model": "synthetic-conformance-fixture",
+      "raw_text": "佛陁說法。佛陀說法。眞如即真如。[譯者名闕]",
+      "text": "佛陁說法。佛陀說法。眞如即真如。[譯者名闕]"
+    }
+  ],
+  "adjudication_status": "not_configured",
+  "adjudication_requested_model": null,
+  "adjudication_model": null,
+  "adjudication_reasoning": null,
+  "unresolved": [],
+  "adjudication_error": null
+}

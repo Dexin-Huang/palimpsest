@@ -1,0 +1,42 @@
+schema_version: 1
+id: deframe/spread-safe-conditional-development-v1
+station: deframe
+mission: Development-only measurement of manuscript-area improvement on fresh two-page spreads from Library of Congress bound Chinese volumes and Bibliotheque nationale de France Latin manuscripts, without dilution by non-spread controls.
+qualification_eligible: false
+case_manifest: deframe/spread-safe-conditional-development-v1.jsonl
+primary_metrics:
+  deframe_manuscript_area_recall:
+    direction: maximize
+    minimum_effect: 0.03
+    confidence: 0.9
+  deframe_edge_annotation_recall:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.9
+  deframe_crop_boundary_error:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.9
+hard_limits:
+  deframe_geometry_traceability:
+    minimum: 1.0
+  deframe_manuscript_area_recall:
+    minimum: 0.9
+protected_slices:
+  - two_page_spread
+  - archive_loc
+  - archive_bnf
+  - zh_vertical
+  - latin_cursive
+slice_policy:
+  minimum_cases: 3
+  maximum_regression: 0.02
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 6
+  paired_bootstrap_samples: 10000
+  seed: 1606
+  require_all_hard_limits: true
+  require_all_downstream_probes: false

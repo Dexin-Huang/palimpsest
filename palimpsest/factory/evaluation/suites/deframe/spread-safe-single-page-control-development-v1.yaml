@@ -1,0 +1,38 @@
+schema_version: 1
+id: deframe/spread-safe-single-page-control-development-v1
+station: deframe
+mission: Development-only non-regression conformance battery for fresh BnF Pelliot single-page scroll controls, preserving manuscript area and edge content while maintaining crop geometry.
+qualification_eligible: false
+case_manifest: deframe/spread-safe-single-page-control-development-v1.jsonl
+primary_metrics:
+  deframe_manuscript_area_recall:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.9
+  deframe_edge_annotation_recall:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.9
+  deframe_crop_boundary_error:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.9
+hard_limits:
+  deframe_geometry_traceability:
+    minimum: 1.0
+  deframe_manuscript_area_recall:
+    minimum: 0.9
+protected_slices:
+  - single_page_control
+slice_policy:
+  minimum_cases: 3
+  maximum_regression: 0.02
+operational_limits: {}
+judges: []
+downstream_probes: []
+promotion:
+  minimum_completed_cases: 3
+  paired_bootstrap_samples: 10000
+  seed: 3532
+  require_all_hard_limits: true
+  require_all_downstream_probes: false

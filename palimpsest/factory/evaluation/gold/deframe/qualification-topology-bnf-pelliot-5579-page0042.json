@@ -1,0 +1,20 @@
+{
+  "crop_bbox": [80, 65, 4370, 3700],
+  "edge_annotation_regions": [
+    [3500, 100, 800, 1700],
+    [1100, 2600, 900, 1000]
+  ],
+  "fixture_method": "single-operator visual fragment-boundary and edge-writing annotation from source image, frozen before candidate execution",
+  "frame_regions": [
+    [0, 0, 4530, 65],
+    [0, 65, 80, 3700],
+    [4450, 65, 80, 3700],
+    [0, 3765, 4530, 259]
+  ],
+  "manuscript_regions": [
+    [90, 70, 4350, 3680]
+  ],
+  "rights": "Public Domain; Bibliotheque nationale de France",
+  "source_sha256": "fa956351835ac8ea8d367af30ae81b2fd3ce95bfb6ef4c048d16141dbdc13403",
+  "source_size": [4530, 4024]
+}

@@ -1,0 +1,35 @@
+{
+  "document": {
+    "doc_id": "han_variant_translation_probe",
+    "total_pages": 1
+  },
+  "glossary": [
+    {
+      "term": "佛陀 / 佛陁",
+      "translation": "Buddha",
+      "note": "These are equivalent written forms in this synthetic conformance probe; translate consistently."
+    },
+    {
+      "term": "眞如 / 真如",
+      "translation": "suchness",
+      "note": "These are equivalent written forms in this synthetic conformance probe; translate consistently."
+    }
+  ],
+  "outline": [
+    {
+      "start_page": "probe_1",
+      "description": "Synthetic Han-variant and uncertainty retention probe"
+    }
+  ],
+  "abbreviations": [],
+  "entities": [],
+  "difficulty_flags": [
+    {
+      "page_id": "probe_1",
+      "issue": "The diplomatic source explicitly marks the translator name as missing."
+    }
+  ],
+  "style_notes": [
+    "Preserve the explicit uncertainty and translate equivalent historic glyph forms consistently."
+  ]
+}

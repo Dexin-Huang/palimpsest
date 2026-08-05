@@ -1,0 +1,47 @@
+{
+  "passages": [
+    {
+      "id": "teaching",
+      "acceptable": [
+        "The Buddha teaches the Dharma",
+        "The Buddha preached the Dharma",
+        "The Buddha expounds the Dharma"
+      ]
+    },
+    {
+      "id": "suchness",
+      "acceptable": [
+        "suchness is suchness",
+        "suchness itself is suchness"
+      ]
+    }
+  ],
+  "uncertainties": [
+    {
+      "id": "missing_translator",
+      "acceptable_markers": [
+        "translator name missing",
+        "translator's name is missing",
+        "translator unknown",
+        "譯者名闕"
+      ]
+    }
+  ],
+  "terms": [
+    {
+      "source": "佛陀 / 佛陁",
+      "acceptable_targets": ["Buddha"],
+      "minimum_occurrences": 2
+    },
+    {
+      "source": "眞如 / 真如",
+      "acceptable_targets": ["suchness"],
+      "minimum_occurrences": 2
+    }
+  ],
+  "rights": {
+    "source": "Synthetic representation-level conformance fixture; it is not manuscript evidence or a published translation.",
+    "fixture": "CC0-1.0",
+    "adjudication": "English anchors encode only the deliberately authored literal meanings, repeated terminology, and explicit uncertainty in the synthetic source."
+  }
+}

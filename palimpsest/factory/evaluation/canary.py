@@ -110,6 +110,7 @@ def run_proposal_canary(
             ledger,
             library_root=isolated_library,
             workers=workers,
+            model_workers=workers,
             refresh=frozenset({proposal.station}),
             executor=executor,
             recipe_loader=proposal_loader,
@@ -361,28 +362,25 @@ def _validate_book(
         validate_payload("book", book, expected_doc_id=doc_id)
         if book.get("doc_id") != doc_id:
             raise ValueError("book doc_id does not match canary document")
-        evidence = book.get("evidence")
-        evidence_pages = evidence.get("pages") if isinstance(evidence, dict) else None
-        if not isinstance(evidence_pages, list):
-            raise ValueError("book evidence pages are missing")
+        folios = book.get("folios")
+        if not isinstance(folios, list):
+            raise ValueError("book folios are missing")
         covered = tuple(
-            page.get("page_id") for page in evidence_pages if isinstance(page, dict)
+            folio.get("page_id") for folio in folios if isinstance(folio, dict)
         )
         if covered != page_ids:
-            raise ValueError(
-                "book evidence does not cover the canonical pages in order"
-            )
-        chapters = book.get("chapters")
-        if not isinstance(chapters, list) or not chapters:
-            raise ValueError("book has no chapters")
+            raise ValueError("book folios do not cover the canonical pages in order")
+        sections = book.get("sections")
+        if not isinstance(sections, list) or not sections:
+            raise ValueError("book has no sections")
         cited = {
             page_id
-            for chapter in chapters
-            if isinstance(chapter, dict)
-            for page_id in chapter.get("source_pages", [])
+            for section in sections
+            if isinstance(section, dict)
+            for page_id in section.get("folio_ids", [])
         }
         if cited != set(page_ids):
-            raise ValueError("book chapters do not cite every canonical page")
+            raise ValueError("book sections do not cite every canonical page")
     except (OSError, TypeError, ValueError):
         return False
     return True

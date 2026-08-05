@@ -1,0 +1,18 @@
+{
+  "crop_bbox": [0, 0, 3320, 3250],
+  "edge_annotation_regions": [
+    [0, 350, 180, 2400],
+    [3060, 250, 220, 2600]
+  ],
+  "fixture_method": "single-operator visual leaf-boundary annotation from source image, frozen before candidate execution",
+  "frame_regions": [
+    [0, 3250, 3320, 328]
+  ],
+  "manuscript_regions": [
+    [0, 0, 1610, 3240],
+    [1620, 0, 1660, 3240]
+  ],
+  "rights": "Public-Domain-Mark-1.0; Library of Congress",
+  "source_sha256": "79c1753aa599ab406be66933d210aa20e1737cb23a07369403cf423150cc7ae6",
+  "source_size": [3320, 3578]
+}

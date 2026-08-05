@@ -26,6 +26,7 @@ class CaseSideOutcome:
     tokens_in: int | None = None
     tokens_out: int | None = None
     cost_usd: float | None = None
+    process_stats: Mapping[str, int] | None = None
     error_kind: str | None = None
     error_message: str | None = None
 

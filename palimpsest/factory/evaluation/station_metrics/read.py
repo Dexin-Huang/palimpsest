@@ -6,19 +6,29 @@ collapse whitespace, remove punctuation or diacritics, expand abbreviations,
 or replace historic characters.  Those marks can all be diplomatically
 meaningful.
 
-``invented_character_rate`` is a conservative string observation, not a claim
-about authorial intent: it reports characters inserted by a deterministic
-minimum-edit alignment with scorer-only gold.  When several minimum-edit
-alignments exist, the alignment with the fewest insertions is selected.
+``partial_gold_character_error_rate`` treats the reference as positive evidence:
+it scores only reference characters that are missing or contradicted. Candidate
+insertions are free because incomplete gold cannot prove that visible extra text
+is invented.
+
+``invented_character_rate`` remains a conservative diagnostic, not a claim about
+authorial intent. It reports insertions from a deterministic minimum-edit
+alignment with scorer-only gold.
 """
 
 from __future__ import annotations
 
+import difflib
 import unicodedata
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from palimpsest.factory.han_variants import normalize_han_variants_v1
+from palimpsest.factory.recognized_text import (
+    normalize_recognized_text_v1,
+    recognized_reference_text,
+)
 from ..metrics import Metric, MetricDirection, MetricRegistry
 
 # Vocabulary that can only come from the digitization, never from the page.
@@ -126,6 +136,76 @@ def normalized_character_error_rate(candidate: str, reference: str) -> float:
     return edits.errors / max(edits.reference_characters, 1)
 
 
+def han_variant_v1_character_error_rate(candidate: str, reference: str) -> float:
+    """Return CER after the same conservative Han-form mapping on both sides."""
+
+    return normalized_character_error_rate(
+        normalize_han_variants_v1(candidate),
+        normalize_han_variants_v1(reference),
+    )
+
+
+def partial_gold_character_error_rate(candidate: str, reference: str) -> float:
+    """Return minimum missing or contradicted reference characters per reference.
+
+    The alignment preserves reference order. Skipping a candidate character is
+    free, while deleting or substituting a reference character costs one. This
+    makes incomplete gold usable as positive evidence without treating
+    image-supported candidate text outside the annotation as an error.
+    """
+
+    candidate = normalize_diplomatic(candidate)
+    reference = normalize_diplomatic(reference)
+    if not reference:
+        return 0.0
+
+    previous = [0] * (len(candidate) + 1)
+    for reference_index, reference_character in enumerate(reference, start=1):
+        current = [reference_index]
+        for candidate_index, candidate_character in enumerate(candidate, start=1):
+            current.append(
+                min(
+                    current[candidate_index - 1],
+                    previous[candidate_index] + 1,
+                    previous[candidate_index - 1]
+                    + (reference_character != candidate_character),
+                )
+            )
+        previous = current
+    return previous[-1] / len(reference)
+
+
+def han_variant_v1_partial_gold_character_error_rate(
+    candidate: str, reference: str
+) -> float:
+    """Return positive-reference error after symmetric Han-form normalization."""
+
+    return partial_gold_character_error_rate(
+        normalize_han_variants_v1(candidate),
+        normalize_han_variants_v1(reference),
+    )
+
+
+def recognized_text_v1_character_error_rate(candidate: str, reference: str) -> float:
+    """Return CER after symmetric recognized-text normalization."""
+
+    return normalized_character_error_rate(
+        normalize_recognized_text_v1(candidate),
+        normalize_recognized_text_v1(reference),
+    )
+
+
+def recognized_text_v1_partial_gold_character_error_rate(
+    candidate: str, reference: str
+) -> float:
+    """Return positive-reference CER after recognized-text normalization."""
+
+    return partial_gold_character_error_rate(
+        normalize_recognized_text_v1(candidate),
+        normalize_recognized_text_v1(reference),
+    )
+
+
 def invented_character_rate(candidate: str, reference: str) -> float:
     """Return the fraction of candidate characters inserted relative to gold."""
 
@@ -133,6 +213,150 @@ def invented_character_rate(candidate: str, reference: str) -> float:
     if edits.candidate_characters == 0:
         return 0.0
     return edits.insertions / edits.candidate_characters
+
+
+_LINE_BAND_NAMES = ("first_third", "middle_third", "last_third")
+_DISPLACED_LINE_RATIO = 0.6
+
+
+def character_error_structure(
+    candidate: str, reference: str, *, max_confusions: int = 10
+) -> dict[str, object]:
+    """Aggregated gold-alignment diagnostics for ``R_train`` side information.
+
+    The result reports counts, per-band rates, and single-character
+    substitution pairs only. It never emits a multi-character gold span, so a
+    reader cannot reconstruct the reference text from this structure.
+
+    ``totals`` reuses :func:`character_edits`, so its counts match the scored
+    ``character_error_rate`` exactly. The line-level blocks use a
+    deterministic ``difflib.SequenceMatcher`` alignment and are diagnostics,
+    not scores.
+    """
+
+    edits = character_edits(candidate, reference)
+    reference_lines = [
+        line for line in normalize_diplomatic(reference).split("\n") if line.strip()
+    ]
+    candidate_lines = [
+        line for line in normalize_diplomatic(candidate).split("\n") if line.strip()
+    ]
+
+    pairs: list[tuple[int, str, str]] = []
+    missing: list[tuple[int, str]] = []
+    extra: list[str] = []
+    line_matcher = difflib.SequenceMatcher(
+        a=reference_lines, b=candidate_lines, autojunk=False
+    )
+    for tag, a_start, a_end, b_start, b_end in line_matcher.get_opcodes():
+        if tag == "equal":
+            for offset in range(a_end - a_start):
+                pairs.append(
+                    (
+                        a_start + offset,
+                        reference_lines[a_start + offset],
+                        candidate_lines[b_start + offset],
+                    )
+                )
+        elif tag == "replace":
+            paired = min(a_end - a_start, b_end - b_start)
+            for offset in range(paired):
+                pairs.append(
+                    (
+                        a_start + offset,
+                        reference_lines[a_start + offset],
+                        candidate_lines[b_start + offset],
+                    )
+                )
+            for index in range(a_start + paired, a_end):
+                missing.append((index, reference_lines[index]))
+            extra.extend(candidate_lines[b_start + paired : b_end])
+        elif tag == "delete":
+            for index in range(a_start, a_end):
+                missing.append((index, reference_lines[index]))
+        else:
+            extra.extend(candidate_lines[b_start:b_end])
+
+    def band_name(index: int) -> str:
+        if not reference_lines:
+            return _LINE_BAND_NAMES[0]
+        return _LINE_BAND_NAMES[min(2, index * 3 // len(reference_lines))]
+
+    band_counts = {
+        name: {"reference_characters": 0, "errors": 0} for name in _LINE_BAND_NAMES
+    }
+    confusions: Counter[tuple[str, str]] = Counter()
+    for index, gold_line, candidate_line in pairs:
+        pair_edits = character_edits(candidate_line, gold_line)
+        counts = band_counts[band_name(index)]
+        counts["reference_characters"] += pair_edits.reference_characters
+        counts["errors"] += pair_edits.errors
+        pair_matcher = difflib.SequenceMatcher(
+            a=gold_line, b=candidate_line, autojunk=False
+        )
+        for tag, a_start, a_end, b_start, b_end in pair_matcher.get_opcodes():
+            if tag != "replace":
+                continue
+            for gold_char, candidate_char in zip(
+                gold_line[a_start:a_end], candidate_line[b_start:b_end]
+            ):
+                confusions[(gold_char, candidate_char)] += 1
+    for index, gold_line in missing:
+        counts = band_counts[band_name(index)]
+        counts["reference_characters"] += len(gold_line)
+        counts["errors"] += len(gold_line)
+
+    displaced = 0
+    consumed: set[int] = set()
+    for _, gold_line in missing:
+        best_ratio = 0.0
+        best_position: int | None = None
+        for position, candidate_line in enumerate(extra):
+            if position in consumed:
+                continue
+            ratio = difflib.SequenceMatcher(
+                a=gold_line, b=candidate_line, autojunk=False
+            ).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_position = position
+        if best_position is not None and best_ratio >= _DISPLACED_LINE_RATIO:
+            displaced += 1
+            consumed.add(best_position)
+
+    return {
+        "totals": {
+            "reference_characters": edits.reference_characters,
+            "candidate_characters": edits.candidate_characters,
+            "substitutions": edits.substitutions,
+            "deletions": edits.deletions,
+            "insertions": edits.insertions,
+            "error_rate": edits.errors / max(edits.reference_characters, 1),
+        },
+        "lines": {
+            "gold_lines": len(reference_lines),
+            "candidate_lines": len(candidate_lines),
+            "matched_lines": len(pairs),
+            "missing_lines": len(missing),
+            "extra_lines": len(extra),
+            "displaced_lines": displaced,
+            "extra_line_characters": sum(len(line) for line in extra),
+        },
+        "line_bands": {
+            name: {
+                "reference_characters": counts["reference_characters"],
+                "errors": counts["errors"],
+                "error_rate": counts["errors"] / max(counts["reference_characters"], 1),
+            }
+            for name, counts in band_counts.items()
+        },
+        "confusion_pairs": [
+            {"gold": gold_char, "candidate": candidate_char, "count": count}
+            for (gold_char, candidate_char), count in sorted(
+                confusions.items(), key=lambda item: (-item[1], item[0])
+            )[:max_confusions]
+        ],
+    }
 
 
 def contamination_hits(text: str) -> int:
@@ -252,19 +476,127 @@ def _record_text(record: Mapping[str, object]) -> str | None:
     return None
 
 
+_PRIMARY_SCOPE = "primary_scope"
+
+
+def _scoped_candidate_text(
+    output: Mapping[str, object], gold: Mapping[str, object]
+) -> str | None:
+    """Candidate text for gold-dependent metrics under the gold scope.
+
+    Scope rides in the gold record as ``gold_scope``. When the gold covers
+    only the primary layer and the output declares layers, only the primary
+    layers are scored, so faithful commentary reading never counts as
+    invented text. Flat outputs and full-scope gold score the flat text.
+    Malformed layer declarations return ``None``, which the runner treats as
+    an unobservable metric rather than a silent pass.
+    """
+
+    layers = output.get("layers")
+    if layers is None:
+        return _record_text(output)
+    if (
+        isinstance(layers, (str, bytes))
+        or not isinstance(layers, Sequence)
+        or not layers
+    ):
+        return None
+    texts_by_kind: list[tuple[str, str]] = []
+    for layer in layers:
+        if not isinstance(layer, Mapping):
+            return None
+        kind = layer.get("kind")
+        text = layer.get("text")
+        if not isinstance(kind, str) or not kind.strip() or not isinstance(text, str):
+            return None
+        texts_by_kind.append((kind, text))
+    if gold.get("gold_scope") == _PRIMARY_SCOPE:
+        return "\n".join(text for kind, text in texts_by_kind if kind == "primary")
+    flat = _record_text(output)
+    if flat is not None:
+        return flat
+    return "\n".join(text for _, text in texts_by_kind)
+
+
+def _recognized_candidate_text(output: Mapping[str, object]) -> str | None:
+    """Return the full-page candidate view for recognized-text metrics."""
+
+    if output.get("layers") is not None:
+        return _scoped_candidate_text(output, {})
+
+    candidate = _record_text(output)
+    if candidate is None:
+        return None
+    if "commentary" not in output:
+        return candidate
+    commentary = output["commentary"]
+    if not isinstance(commentary, str):
+        return None
+    if commentary.strip():
+        return f"{candidate}\n{commentary}"
+    return candidate
+
+
 def _score_character_error_rate(
     output: Mapping[str, object], gold: Mapping[str, object]
 ) -> float | None:
-    candidate, reference = _record_text(output), _record_text(gold)
+    candidate, reference = _scoped_candidate_text(output, gold), _record_text(gold)
     if candidate is None or reference is None:
         return None
     return normalized_character_error_rate(candidate, reference)
 
 
+def _score_partial_gold_character_error_rate(
+    output: Mapping[str, object], gold: Mapping[str, object]
+) -> float | None:
+    candidate, reference = _scoped_candidate_text(output, gold), _record_text(gold)
+    if candidate is None or reference is None:
+        return None
+    return partial_gold_character_error_rate(candidate, reference)
+
+
+def _score_han_variant_v1_character_error_rate(
+    output: Mapping[str, object], gold: Mapping[str, object]
+) -> float | None:
+    candidate, reference = _scoped_candidate_text(output, gold), _record_text(gold)
+    if candidate is None or reference is None:
+        return None
+    return han_variant_v1_character_error_rate(candidate, reference)
+
+
+def _score_han_variant_v1_partial_gold_character_error_rate(
+    output: Mapping[str, object], gold: Mapping[str, object]
+) -> float | None:
+    candidate, reference = _scoped_candidate_text(output, gold), _record_text(gold)
+    if candidate is None or reference is None:
+        return None
+    return han_variant_v1_partial_gold_character_error_rate(candidate, reference)
+
+
+def _score_recognized_text_v1_character_error_rate(
+    output: Mapping[str, object], gold: Mapping[str, object]
+) -> float | None:
+    reference = recognized_reference_text(gold)
+    candidate = _recognized_candidate_text(output)
+    if candidate is None or reference is None:
+        return None
+    return recognized_text_v1_character_error_rate(candidate, reference)
+
+
+def _score_recognized_text_v1_partial_gold_character_error_rate(
+    output: Mapping[str, object], gold: Mapping[str, object]
+) -> float | None:
+    reference = recognized_reference_text(gold)
+    candidate = _recognized_candidate_text(output)
+    if candidate is None or reference is None:
+        return None
+    return recognized_text_v1_partial_gold_character_error_rate(candidate, reference)
+
+
 def _score_invented_character_rate(
     output: Mapping[str, object], gold: Mapping[str, object]
 ) -> float | None:
-    candidate, reference = _record_text(output), _record_text(gold)
+    candidate, reference = _scoped_candidate_text(output, gold), _record_text(gold)
     if candidate is None or reference is None:
         return None
     return invented_character_rate(candidate, reference)
@@ -288,7 +620,7 @@ def _score_region_completeness(
 def _score_page_completeness(
     output: Mapping[str, object], gold: Mapping[str, object]
 ) -> float | None:
-    candidate, reference = _record_text(output), _record_text(gold)
+    candidate, reference = _scoped_candidate_text(output, gold), _record_text(gold)
     if candidate is None or reference is None:
         return None
     return page_completeness(candidate, reference)
@@ -330,6 +662,31 @@ def register_read_metrics(registry: MetricRegistry) -> None:
             "character_error_rate",
             MetricDirection.MINIMIZE,
             _score_character_error_rate,
+        ),
+        Metric(
+            "partial_gold_character_error_rate",
+            MetricDirection.MINIMIZE,
+            _score_partial_gold_character_error_rate,
+        ),
+        Metric(
+            "han_variant_v1_character_error_rate",
+            MetricDirection.MINIMIZE,
+            _score_han_variant_v1_character_error_rate,
+        ),
+        Metric(
+            "han_variant_v1_partial_gold_character_error_rate",
+            MetricDirection.MINIMIZE,
+            _score_han_variant_v1_partial_gold_character_error_rate,
+        ),
+        Metric(
+            "recognized_text_v1_character_error_rate",
+            MetricDirection.MINIMIZE,
+            _score_recognized_text_v1_character_error_rate,
+        ),
+        Metric(
+            "recognized_text_v1_partial_gold_character_error_rate",
+            MetricDirection.MINIMIZE,
+            _score_recognized_text_v1_partial_gold_character_error_rate,
         ),
         Metric(
             "region_completeness", MetricDirection.MAXIMIZE, _score_region_completeness

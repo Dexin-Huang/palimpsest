@@ -67,6 +67,17 @@ class ReproducibilityWaiver:
 
 
 @dataclass(frozen=True, slots=True)
+class CanaryCostWaiver:
+    schema_version: int
+    waiver_id: str
+    canary_fingerprint: str
+    approved_by: str
+    reason: str
+    created_at: str
+    waiver_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
 class CanaryOutcome:
     name: str
     status: Literal["passed", "failed", "unknown"]
@@ -153,6 +164,7 @@ class PromotionRecord:
     canary: CanaryEvidence | None
     source_promotion_id: str | None
     waiver_fingerprint: str | None
+    canary_cost_waiver: CanaryCostWaiver | None
 
 
 def verify_qualified_report(report: Mapping[str, object]) -> VerifiedReport:
@@ -228,6 +240,28 @@ def record_reproducibility_waiver(
     }
     fingerprint = content_fingerprint(payload)
     return ReproducibilityWaiver(
+        **payload,
+        waiver_id=fingerprint,
+        waiver_fingerprint=fingerprint,
+    )
+
+
+def record_canary_cost_waiver(
+    *, canary_fingerprint: str, approved_by: str, reason: str, created_at: str
+) -> CanaryCostWaiver:
+    """Approve unknown cost for one reviewed terminal canary."""
+
+    payload = {
+        "schema_version": _SCHEMA_VERSION,
+        "canary_fingerprint": _digest(
+            canary_fingerprint, field="cost waiver canary_fingerprint"
+        ),
+        "approved_by": _nonempty(approved_by, field="cost waiver approved_by"),
+        "reason": _nonempty(reason, field="cost waiver reason"),
+        "created_at": _timestamp(created_at, field="cost waiver created_at"),
+    }
+    fingerprint = content_fingerprint(payload)
+    return CanaryCostWaiver(
         **payload,
         waiver_id=fingerprint,
         waiver_fingerprint=fingerprint,
@@ -423,22 +457,30 @@ def create_promotion_record(
     canary: CanaryEvidence | None,
     approved_by: str,
     created_at: str,
+    cost_waiver: CanaryCostWaiver | None = None,
 ) -> PromotionRecord:
-    """Create a final promote decision only from a passing matching canary."""
+    """Create a final promote decision from reviewed matching canary evidence."""
 
     _verify_proposal(proposal)
     if proposal.action != "promote":
         raise PromotionError("A promotion record requires a promote proposal")
     if canary is None:
         raise PromotionError("A passing canary is required for promotion")
-    _verify_passing_canary(canary, proposal)
+    approver = _nonempty(approved_by, field="approved_by")
+    _verify_passing_canary(
+        canary,
+        proposal,
+        cost_waiver=cost_waiver,
+        approved_by=approver,
+    )
     return _decision_record(
         action="promote",
         proposal=proposal,
-        approved_by=approved_by,
+        approved_by=approver,
         created_at=created_at,
         canary=canary,
         source_promotion_id=None,
+        canary_cost_waiver=cost_waiver,
     )
 
 
@@ -512,6 +554,7 @@ def create_rollback_record(
         created_at=created_at,
         canary=canary,
         source_promotion_id=promotion.promotion_id,
+        canary_cost_waiver=None,
     )
 
 
@@ -849,6 +892,7 @@ def _decision_record(
     created_at: str,
     canary: CanaryEvidence | None,
     source_promotion_id: str | None,
+    canary_cost_waiver: CanaryCostWaiver | None,
 ) -> PromotionRecord:
     payload = {
         "schema_version": _SCHEMA_VERSION,
@@ -866,6 +910,7 @@ def _decision_record(
         "canary": canary,
         "source_promotion_id": source_promotion_id,
         "waiver_fingerprint": proposal.waiver_fingerprint,
+        "canary_cost_waiver": canary_cost_waiver,
     }
     promotion_id = content_fingerprint(_decision_payload(payload))
     return PromotionRecord(**payload, promotion_id=promotion_id)
@@ -1030,10 +1075,14 @@ def _verify_waiver(waiver: ReproducibilityWaiver, fingerprint: str) -> None:
         )
 
 
-def _verify_passing_canary(canary: CanaryEvidence, proposal: RecipeProposal) -> None:
+def _verify_passing_canary(
+    canary: CanaryEvidence,
+    proposal: RecipeProposal,
+    *,
+    cost_waiver: CanaryCostWaiver | None,
+    approved_by: str,
+) -> None:
     _verify_canary_identity(canary, proposal)
-    if canary.status != "passed":
-        raise PromotionError("Only a passing canary allows promotion")
     blocking = [
         outcome.name
         for outcome in canary.downstream_outcomes
@@ -1041,8 +1090,6 @@ def _verify_passing_canary(canary: CanaryEvidence, proposal: RecipeProposal) -> 
     ]
     if blocking:
         raise PromotionError(f"Required canary outcomes did not pass: {blocking}")
-    if canary.unknown_cost:
-        raise PromotionError("Canary cost evidence is unknown")
     for name, value in (
         ("book", canary.book_valid),
         ("EPUB", canary.epub_valid),
@@ -1053,6 +1100,58 @@ def _verify_passing_canary(canary: CanaryEvidence, proposal: RecipeProposal) -> 
             raise PromotionError(f"Canary {name} validation {state}")
     if canary.human_review_required and canary.human_review_passed is not True:
         raise PromotionError("Required canary human review did not pass")
+    if canary.status == "failed":
+        raise PromotionError("Only a passing canary allows promotion")
+    if canary.unknown_cost:
+        if canary.status != "unknown":
+            raise PromotionError("Unknown canary cost must produce unknown status")
+        if cost_waiver is None:
+            raise PromotionError("Canary cost evidence is unknown")
+        _verify_cost_waiver(
+            cost_waiver,
+            canary_fingerprint=canary.canary_fingerprint,
+            approved_by=approved_by,
+        )
+    else:
+        if cost_waiver is not None:
+            raise PromotionError("Canary cost waiver requires unknown cost evidence")
+        if canary.status != "passed":
+            raise PromotionError("Only a passing canary allows promotion")
+
+
+def _verify_cost_waiver(
+    waiver: CanaryCostWaiver,
+    *,
+    canary_fingerprint: str,
+    approved_by: str,
+) -> None:
+    if not isinstance(waiver, CanaryCostWaiver):
+        raise PromotionError("Canary cost waiver has the wrong record type")
+    _schema(waiver.schema_version, field="cost waiver.schema_version")
+    _digest(waiver.canary_fingerprint, field="cost waiver.canary_fingerprint")
+    _nonempty(waiver.approved_by, field="cost waiver.approved_by")
+    _nonempty(waiver.reason, field="cost waiver.reason")
+    _timestamp(waiver.created_at, field="cost waiver.created_at")
+    _digest(waiver.waiver_id, field="cost waiver.waiver_id")
+    _digest(waiver.waiver_fingerprint, field="cost waiver.waiver_fingerprint")
+    payload = {
+        "schema_version": waiver.schema_version,
+        "canary_fingerprint": waiver.canary_fingerprint,
+        "approved_by": waiver.approved_by,
+        "reason": waiver.reason,
+        "created_at": waiver.created_at,
+    }
+    expected = content_fingerprint(payload)
+    if (
+        waiver.schema_version != _SCHEMA_VERSION
+        or waiver.canary_fingerprint != canary_fingerprint
+        or waiver.approved_by != approved_by
+        or waiver.waiver_id != expected
+        or waiver.waiver_fingerprint != expected
+    ):
+        raise PromotionError(
+            "Canary cost waiver is invalid, has another approver, or names another canary"
+        )
 
 
 def _verify_canary_identity(canary: CanaryEvidence, proposal: RecipeProposal) -> None:
@@ -1105,6 +1204,12 @@ def _decision_payload(payload: Mapping[str, object]) -> dict[str, object]:
         result["canary"] = {
             **_canary_payload(canary),
             "canary_fingerprint": canary.canary_fingerprint,
+        }
+    cost_waiver = result.get("canary_cost_waiver")
+    if isinstance(cost_waiver, CanaryCostWaiver):
+        result["canary_cost_waiver"] = {
+            name: getattr(cost_waiver, name)
+            for name in CanaryCostWaiver.__slots__
         }
     return result
 
@@ -1188,7 +1293,12 @@ def _verify_recipe_decision_match(
         raise PromotionError("Promotion record does not match its recipe proposal")
     if record.action == "promote":
         assert record.canary is not None
-        _verify_passing_canary(record.canary, proposal)
+        _verify_passing_canary(
+            record.canary,
+            proposal,
+            cost_waiver=record.canary_cost_waiver,
+            approved_by=record.approved_by,
+        )
     elif record.canary is not None:
         _verify_canary_identity(record.canary, proposal)
 
@@ -1292,8 +1402,23 @@ def _decision_from_mapping(raw: Mapping[str, object], *, field: str) -> Promotio
         canary = _canary_from_mapping(raw_canary, field=f"{field}.canary")
     else:
         raise PromotionError(f"{field}.canary must be an object or null")
+    raw_cost_waiver = raw.get("canary_cost_waiver")
+    if raw_cost_waiver is None:
+        cost_waiver = None
+    elif isinstance(raw_cost_waiver, Mapping):
+        _strict_keys(
+            raw_cost_waiver,
+            set(CanaryCostWaiver.__slots__),
+            field=f"{field}.canary_cost_waiver",
+        )
+        cost_waiver = CanaryCostWaiver(**dict(raw_cost_waiver))  # type: ignore[arg-type]
+    else:
+        raise PromotionError(
+            f"{field}.canary_cost_waiver must be an object or null"
+        )
     values = dict(raw)
     values["canary"] = canary
+    values["canary_cost_waiver"] = cost_waiver
     record = PromotionRecord(**values)  # type: ignore[arg-type]
     _verify_decision_record(record)
     return record
@@ -1469,6 +1594,14 @@ def _verify_decision_record(record: PromotionRecord) -> None:
         _digest(record.source_promotion_id, field="promotion source_promotion_id")
     if record.waiver_fingerprint is not None:
         _digest(record.waiver_fingerprint, field="promotion waiver_fingerprint")
+    if record.canary_cost_waiver is not None:
+        if record.canary is None:
+            raise PromotionError("Canary cost waiver requires canary evidence")
+        _verify_cost_waiver(
+            record.canary_cost_waiver,
+            canary_fingerprint=record.canary.canary_fingerprint,
+            approved_by=record.approved_by,
+        )
     if record.action == "promote":
         if record.canary is None or record.source_promotion_id is not None:
             raise PromotionError(
@@ -1477,6 +1610,8 @@ def _verify_decision_record(record: PromotionRecord) -> None:
     elif record.action == "rollback":
         if record.source_promotion_id is None:
             raise PromotionError("Rollback records must name their source promotion")
+        if record.canary_cost_waiver is not None:
+            raise PromotionError("Rollback records cannot carry canary cost waivers")
     else:
         raise PromotionError(f"Invalid promotion action: {record.action!r}")
     payload = {

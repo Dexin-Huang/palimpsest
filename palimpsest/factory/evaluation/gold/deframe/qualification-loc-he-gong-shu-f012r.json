@@ -1,0 +1,18 @@
+{
+  "crop_bbox": [69, 65, 3342, 3190],
+  "edge_annotation_regions": [
+    [70, 900, 80, 600],
+    [3310, 900, 80, 600]
+  ],
+  "fixture_method": "single-operator visual parchment-boundary annotation from held-out LOC source",
+  "frame_regions": [
+    [0, 3290, 3480, 236]
+  ],
+  "manuscript_regions": [
+    [0, 350, 1650, 2600],
+    [1740, 350, 1740, 2600]
+  ],
+  "rights": "Public Domain; Library of Congress",
+  "source_sha256": "f637385d8b91400ab16fbf1ea694af1d218646167d7a3b2c49d9ecb7e46445b7",
+  "source_size": [3480, 3526]
+}

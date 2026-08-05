@@ -165,8 +165,10 @@ def _reject_environment_values(value: object, *, field: str = "record") -> None:
     elif isinstance(value, list | tuple):
         for index, item in enumerate(value):
             _reject_environment_values(item, field=f"{field}[{index}]")
-    elif isinstance(value, str) and (
-        "${" in value or re.search(r"%[A-Za-z_][A-Za-z0-9_]*%", value)
+    elif (
+        isinstance(value, str)
+        and field != "record.options.extension_source"
+        and ("${" in value or re.search(r"%[A-Za-z_][A-Za-z0-9_]*%", value))
     ):
         raise RecordError(f"Environment interpolation is forbidden in {field}")
 

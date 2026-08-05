@@ -1,0 +1,20 @@
+{
+  "crop_bbox": [30, 25, 285, 1125],
+  "edge_annotation_regions": [
+    [35, 30, 270, 420],
+    [35, 400, 80, 400]
+  ],
+  "fixture_method": "single-operator visual irregular-fragment annotation from source image, frozen before candidate execution",
+  "frame_regions": [
+    [0, 0, 342, 25],
+    [0, 25, 30, 1125],
+    [315, 25, 27, 1125],
+    [0, 1150, 342, 50]
+  ],
+  "manuscript_regions": [
+    [35, 25, 275, 1120]
+  ],
+  "rights": "British Museum / International Dunhuang Programme; source terms apply",
+  "source_sha256": "f93012051638ae02800d25a462922ae087451defd3a3678c287d5e23a1a22b30",
+  "source_size": [342, 1200]
+}

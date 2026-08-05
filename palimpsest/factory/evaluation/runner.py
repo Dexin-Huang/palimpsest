@@ -27,6 +27,9 @@ from palimpsest.factory.core.executors import make as make_executor
 from palimpsest.factory.evaluation.candidate import ResolvedCandidate
 from palimpsest.factory.evaluation.judging import JudgeExecutionResult, JudgeExecutor
 from palimpsest.factory.evaluation.metrics import MetricDirection, MetricObservation
+from palimpsest.factory.evaluation.station_metrics.imaging import (
+    image_artifact_observation,
+)
 from palimpsest.factory.evaluation.response_schemas import ResponseSchema
 from palimpsest.factory.evaluation.report import (
     CaseSideOutcome,
@@ -86,6 +89,12 @@ def _validated_run_id(value: str) -> str:
             "letters, numbers, periods, underscores, and hyphens"
         )
     return value
+
+
+def _evaluation_cost(station: object, reported: float | None) -> float | None:
+    if reported is None and getattr(station, "uses_model", None) is False:
+        return 0.0
+    return reported
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,6 +303,10 @@ class EvaluationRunner:
         station = registry.get(candidate.station, candidate.variant)
         _validate_case_inputs(case, station)
         self._materialize_case(case, station, library_root)
+        params = _json_value(candidate.params)
+        options = _json_value(candidate.options)
+        if not isinstance(params, Mapping) or not isinstance(options, Mapping):
+            raise AssertionError("Candidate params and options must be JSON objects")
         spec = CellSpec(
             doc_id=case.doc_id,
             station=candidate.station,
@@ -305,8 +318,8 @@ class EvaluationRunner:
             model=candidate.model,
             prompt_name=candidate.prompt_name,
             prompt_sha256=candidate.prompt_hash,
-            params=dict(candidate.params),
-            options=dict(candidate.options),
+            params=dict(params),
+            options=dict(options),
         )
 
         started = time.perf_counter()
@@ -338,7 +351,8 @@ class EvaluationRunner:
                 latency_seconds=time.perf_counter() - started,
                 tokens_in=execution_outcome.tokens_in,
                 tokens_out=execution_outcome.tokens_out,
-                cost_usd=execution_outcome.cost_usd,
+                cost_usd=_evaluation_cost(station, execution_outcome.cost_usd),
+                process_stats=execution_outcome.process_stats,
             )
         except Exception as error:
             return CaseSideOutcome(
@@ -354,8 +368,18 @@ class EvaluationRunner:
                 tokens_out=getattr(
                     execution_outcome, "tokens_out", getattr(error, "tokens_out", None)
                 ),
-                cost_usd=getattr(
-                    execution_outcome, "cost_usd", getattr(error, "cost_usd", None)
+                cost_usd=_evaluation_cost(
+                    station,
+                    getattr(
+                        execution_outcome,
+                        "cost_usd",
+                        getattr(error, "cost_usd", None),
+                    ),
+                ),
+                process_stats=getattr(
+                    execution_outcome,
+                    "process_stats",
+                    getattr(error, "process_stats", None),
                 ),
                 error_kind=getattr(error, "kind", type(error).__name__.lower()),
                 error_message=str(error),
@@ -970,6 +994,50 @@ def _load_successful_output(
     )
 
 
+def _load_metric_output(
+    runner: EvaluationRunner,
+    outcome: CaseSideOutcome,
+    candidate: ResolvedCandidate,
+    case: EvaluationCase,
+    *,
+    side: str,
+) -> Mapping[str, object] | None:
+    if not outcome.succeeded:
+        return None
+    output_format = contract(candidate.produces).format
+    if output_format == "json":
+        return _load_successful_output(
+            outcome,
+            output_kind=candidate.produces,
+            case_id=case.case_id,
+            side=side,
+        )
+    if output_format != "jpeg":
+        return None
+
+    image_inputs: list[CaseAsset] = []
+    for kind in (*candidate.consumes, *candidate.optional_consumes):
+        if contract(kind).format != "jpeg":
+            continue
+        value = case.inputs.get(kind)
+        if isinstance(value, Mapping):
+            value = value.get(case.page_id)
+        if isinstance(value, CaseAsset):
+            image_inputs.append(value)
+    if len(image_inputs) != 1:
+        raise ValueError(
+            f"{side} output for case {case.case_id!r} requires exactly one "
+            f"declared image source; found {len(image_inputs)}"
+        )
+    assert outcome.output_path is not None
+    source = image_inputs[0]
+    return image_artifact_observation(
+        Path(outcome.output_path),
+        runner._verify_asset(source),
+        source_sha256=source.sha256,
+    )
+
+
 def _metric_definitions(suite: EvaluationSuite) -> Mapping[str, object]:
     definitions: dict[str, object] = {}
     for binding in (*suite.primary_metrics, *suite.hard_limits):
@@ -994,16 +1062,18 @@ def _score_cases(
     observations = {name: [] for name in definitions}
     for outcome in outcomes:
         case = by_case[outcome.case_id]
-        baseline_output = _load_successful_output(
+        baseline_output = _load_metric_output(
+            runner,
             outcome.baseline,
-            output_kind=baseline.produces,
-            case_id=case.case_id,
+            baseline,
+            case,
             side="baseline",
         )
-        challenger_output = _load_successful_output(
+        challenger_output = _load_metric_output(
+            runner,
             outcome.challenger,
-            output_kind=challenger.produces,
-            case_id=case.case_id,
+            challenger,
+            case,
             side="challenger",
         )
         gold = _load_gold(runner, case)

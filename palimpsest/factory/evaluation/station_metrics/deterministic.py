@@ -30,6 +30,7 @@ _REQUIRED_COLOPHON_FIELDS = {
     "translated_by",
     "referenced_by",
     "emended_by",
+    "finalized_by",
     "pipeline",
     "cost_usd_total",
     "cost_usd_known",
@@ -208,53 +209,7 @@ def _book_schema_is_valid(book: Mapping[str, object]) -> bool:
         validate_payload("book", book)
     except ValueError:
         return False
-    language = book.get("language")
-    chapters = book.get("chapters")
-    evidence = book.get("evidence")
-    colophon = book.get("colophon")
-    if not isinstance(language, Mapping) or not all(
-        isinstance(language.get(key), str) and language.get(key)
-        for key in ("original", "translation")
-    ):
-        return False
-    if (
-        not isinstance(chapters, Sequence)
-        or isinstance(chapters, (str, bytes))
-        or not chapters
-    ):
-        return False
-    seen: set[str] = set()
-    for chapter in chapters:
-        if not isinstance(chapter, Mapping):
-            return False
-        required = ("id", "heading", "translation", "original", "pages", "source_pages")
-        if any(key not in chapter for key in required):
-            return False
-        chapter_id = chapter.get("id")
-        pages = chapter.get("pages")
-        source_pages = chapter.get("source_pages")
-        if not isinstance(chapter_id, str) or not chapter_id or chapter_id in seen:
-            return False
-        seen.add(chapter_id)
-        if not all(
-            isinstance(chapter.get(key), str)
-            for key in ("heading", "translation", "original")
-        ):
-            return False
-        if not isinstance(pages, Mapping) or not all(
-            isinstance(pages.get(key), str) and pages.get(key) for key in ("from", "to")
-        ):
-            return False
-        if not isinstance(source_pages, Sequence) or isinstance(
-            source_pages, (str, bytes)
-        ):
-            return False
-    return (
-        isinstance(evidence, Mapping)
-        and isinstance(evidence.get("pages"), Sequence)
-        and not isinstance(evidence.get("pages"), (str, bytes))
-        and isinstance(colophon, Mapping)
-    )
+    return True
 
 
 def _score_book_schema_validity(
@@ -266,8 +221,8 @@ def _score_book_schema_validity(
 def _score_book_content_identity(
     output: Mapping[str, object], gold: Mapping[str, object]
 ) -> float | None:
-    expected = gold.get("chapters")
-    actual = output.get("chapters")
+    expected = gold.get("sections")
+    actual = output.get("sections")
     if not isinstance(actual, Sequence) or isinstance(actual, (str, bytes)):
         return None
     if not isinstance(expected, Sequence) or isinstance(expected, (str, bytes)):
@@ -279,18 +234,18 @@ def _score_book_evidence_coverage(
     output: Mapping[str, object], gold: Mapping[str, object]
 ) -> float | None:
     required = gold.get("required_source_pages")
-    evidence = _nested(output, "evidence", "pages")
+    folios = output.get("folios")
     if not isinstance(required, Sequence) or isinstance(required, (str, bytes)):
         return None
-    if not isinstance(evidence, Sequence) or isinstance(evidence, (str, bytes)):
+    if not isinstance(folios, Sequence) or isinstance(folios, (str, bytes)):
         return None
     available = {
-        page.get("page_id")
-        for page in evidence
-        if isinstance(page, Mapping)
-        and isinstance(page.get("page_id"), str)
-        and isinstance(page.get("source_image_url"), str)
-        and isinstance(page.get("diplomatic"), str)
+        folio.get("page_id")
+        for folio in folios
+        if isinstance(folio, Mapping)
+        and isinstance(folio.get("page_id"), str)
+        and isinstance(_nested(folio, "images", "original", "source_url"), str)
+        and isinstance(_nested(folio, "evidence", "diplomatic", "text"), str)
     }
     expected = [page for page in required if isinstance(page, str)]
     if len(expected) != len(required):
