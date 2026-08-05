@@ -183,7 +183,7 @@ def test_rig_rejects_runtime_drift_and_moving_models(
         lambda _sources: {**_RUNTIME, "executors": {"omp": "omp/changed"}},
     )
 
-    with pytest.raises(rig.RigError, match="runtime versions differ"):
+    with pytest.raises(rig.RigError, match="runtime differs"):
         rig.verify_rig(archive)
 
     moving_record = yaml.safe_load(_READ_CANDIDATE.read_text(encoding="utf-8"))
@@ -241,3 +241,35 @@ def test_rig_cli_rejects_incomplete_commands(argv: list[str]) -> None:
     with pytest.raises(SystemExit) as raised:
         build_parser().parse_args(argv)
     assert raised.value.code == 2
+
+
+def testresolve_subprocess_executable_ignores_shims(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shim_dir = tmp_path / "shims"
+    binary_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    binary_dir.mkdir()
+    (shim_dir / "omp.cmd").write_bytes(b"@echo shim")
+    (binary_dir / "omp.exe").write_bytes(b"real binary")
+    monkeypatch.setenv("PATH", f"{shim_dir}{rig.os.pathsep}{binary_dir}")
+
+    resolved = rig.resolve_subprocess_executable("omp")
+    if rig.os.name == "nt":
+        # The .cmd shim in the earlier PATH entry must not win.
+        assert resolved == binary_dir / "omp.exe"
+    else:
+        assert resolved is None or resolved.name == "omp"
+
+
+@pytest.mark.skipif(
+    rig.resolve_subprocess_executable("omp") is None,
+    reason="OMP executor is not installed",
+)
+def testomp_executor_pin_binds_bytes() -> None:
+    pin = rig.omp_executor_pin()
+    assert set(pin) == {"version", "executable_sha256"}
+    assert pin["version"].startswith("omp/")
+    assert len(pin["executable_sha256"]) == 64
+    # Deterministic across invocations on an unchanged installation.
+    assert rig.omp_executor_pin() == pin

@@ -1,9 +1,11 @@
 """Portable, content-addressed agent-rig bundles.
 
 A rig freezes one model-backed candidate, its skill prompt, the registered
-station implementation source closure, and the local runtime versions that can
-change harness behavior. Import validates compatibility with the installed
-Palimpsest runtime; it never executes or installs bundled source code.
+station implementation source closure, and the local runtime that can change
+harness behavior - package versions plus the executor bytes of the omp
+binary that agent cells spawn. Import validates compatibility with the
+installed Palimpsest runtime; it never executes or installs bundled source
+code.
 """
 
 from __future__ import annotations
@@ -290,6 +292,61 @@ def _file_record(path: str, role: str, content: bytes) -> dict[str, object]:
     }
 
 
+def _executor_version(command: tuple[str, ...], *, label: str) -> str:
+    try:
+        completed = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise RigError(f"Cannot resolve {label} executor version: {error}") from error
+    version = completed.stdout.strip() or completed.stderr.strip()
+    if not version:
+        raise RigError(f"{label} executor returned an empty version")
+    return version
+
+
+def resolve_subprocess_executable(name: str) -> Path | None:
+    """Resolve ``name`` the way ``subprocess.run([name, ...])`` does on Windows:
+    CreateProcess walks PATH for ``name.exe`` and ignores ``.cmd``/``.ps1``
+    shims. Pinning the shim would hash an installation agent cells never run.
+    """
+
+    if os.name == "nt":
+        for entry in os.environ.get("PATH", "").split(os.pathsep):
+            if not entry:
+                continue
+            candidate = Path(entry) / f"{name}.exe"
+            if candidate.is_file():
+                return candidate
+        return None
+    which = shutil.which(name)
+    return Path(which) if which is not None else None
+
+
+def omp_executor_pin() -> dict[str, object]:
+    """Pin the OMP executor by bytes, not by version string.
+
+    Agent cells spawn ``omp`` through ``subprocess``, so the pin targets the
+    exact binary that resolution yields and reads the version from that same
+    file. Import re-derives this pin and refuses a rig whose executor bytes
+    drifted from export time.
+    """
+
+    executable = resolve_subprocess_executable("omp")
+    if executable is None:
+        raise RigError(
+            "No subprocess-resolvable omp executable is on PATH; "
+            "shell shims (.cmd/.ps1) are not what agent cells run"
+        )
+    version = _executor_version((str(executable), "--version"), label="OMP")
+    digest = hashlib.sha256(executable.read_bytes()).hexdigest()
+    return {"version": version, "executable_sha256": digest}
+
+
 def _runtime_manifest(source_paths: tuple[Path, ...]) -> dict[str, object]:
     packages: dict[str, str] = {}
     try:
@@ -306,25 +363,12 @@ def _runtime_manifest(source_paths: tuple[Path, ...]) -> dict[str, object]:
     except metadata.PackageNotFoundError as error:
         raise RigError(f"Cannot resolve rig runtime package: {error}") from error
 
-    executors: dict[str, str] = {}
+    executors: dict[str, object] = {}
     relative_sources = {
         path.resolve().relative_to(_PACKAGE_ROOT).as_posix() for path in source_paths
     }
     if "factory/agent_cell.py" in relative_sources:
-        try:
-            completed = subprocess.run(
-                ["omp", "--version"],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-        except (OSError, subprocess.SubprocessError) as error:
-            raise RigError(f"Cannot resolve OMP executor version: {error}") from error
-        version = completed.stdout.strip() or completed.stderr.strip()
-        if not version:
-            raise RigError("OMP executor returned an empty version")
-        executors["omp"] = version
+        executors["omp"] = omp_executor_pin()
 
     return {
         "python": {
@@ -597,7 +641,7 @@ def _verify_local_compatibility(
 
     runtime = _runtime_manifest(tuple(station.production_source_paths))
     if runtime != manifest["runtime"]:
-        raise RigError("Installed runtime versions differ from the rig")
+        raise RigError("Installed runtime differs from the rig (versions or executor bytes)")
     return candidate
 
 
