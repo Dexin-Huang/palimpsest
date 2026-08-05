@@ -1,0 +1,17 @@
+schema_version: 1
+id: transcribe/zh-qwen-full-image-development-v1
+station: transcribe
+variant: default
+model: token-plan/qwen3.8-max
+prompt: transcribe/zh/full_image
+params:
+  temperature: 0.1
+  media_resolution: high
+  max_output_tokens: 32768
+  thinking_level: high
+options: {}
+notes: >-
+  Development-only raw full-image transcription candidate; not qualification
+  evidence. Qwen3.8-Max one-shot baseline that replaced the retired Gemini
+  development baselines (measured: recognized v1 macro 0.0402 on the ten-page
+  gold canary vs gemini 0.0553).

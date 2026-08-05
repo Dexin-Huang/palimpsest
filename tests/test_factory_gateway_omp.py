@@ -17,7 +17,7 @@ from palimpsest.factory.gateway import (
     ModelRequest,
     ModelResponse,
 )
-from palimpsest.factory.gateway import client, gemini, omp
+from palimpsest.factory.gateway import client, omp
 
 
 def _assistant_frame(
@@ -91,8 +91,8 @@ def test_omp_maps_multimodal_structured_request(monkeypatch, tmp_path):
         kwargs["stdout"].write(
             (
                 _assistant_frame(
-                    provider="google",
-                    model="gemini-3.6-flash",
+                    provider="token-plan",
+                    model="qwen3.8-max",
                 )
                 + "\n"
             ).encode("utf-8")
@@ -109,7 +109,7 @@ def test_omp_maps_multimodal_structured_request(monkeypatch, tmp_path):
 
     response = omp.generate(
         ModelRequest(
-            model="google/gemini-3.6-flash",
+            model="token-plan/qwen3.8-max",
             prompt="Read the folio.",
             system="Transcribe faithfully.",
             images=(source_image, ImageContent(b"png", mime="image/png")),
@@ -127,7 +127,7 @@ def test_omp_maps_multimodal_structured_request(monkeypatch, tmp_path):
         "--mode",
         "json",
         "--model",
-        "google/gemini-3.6-flash",
+        "token-plan/qwen3.8-max",
     ]
     assert "--no-tools" in observed["command"]
     assert observed["command"][observed["command"].index("--thinking") + 1] == "medium"
@@ -140,7 +140,7 @@ def test_omp_maps_multimodal_structured_request(monkeypatch, tmp_path):
     )
     assert observed["images"] == [b"jpeg", b"png"]
     assert response.text == '{"answer":"ink"}'
-    assert response.model == "google/gemini-3.6-flash"
+    assert response.model == "token-plan/qwen3.8-max"
     assert response.prompt_tokens == 123
     assert response.output_tokens == 25
     assert response.thought_tokens == 15
@@ -166,7 +166,7 @@ def test_omp_zeroes_reported_cost_for_codex_subscription(monkeypatch):
 
 
 def test_omp_omits_thinking_when_unspecified(tmp_path):
-    request = ModelRequest(model="google/gemini-3.6-flash", prompt="Read")
+    request = ModelRequest(model="token-plan/qwen3.8-max", prompt="Read")
 
     command = omp._command(
         "omp-test",
@@ -216,24 +216,27 @@ def test_gateway_caps_concurrent_calls_per_provider(monkeypatch):
     assert maximum == 3
 
 
-def test_gateway_routes_slash_qualified_google_models_through_omp(monkeypatch):
+def test_gateway_routes_token_plan_models_through_omp(monkeypatch):
     expected = SimpleNamespace(text="routed")
     monkeypatch.setattr(omp, "generate", lambda request: expected)
 
     response = client.generate(
-        ModelRequest(model="google/gemini-3.6-flash", prompt="Route me")
+        ModelRequest(model="token-plan/qwen3.8-max", prompt="Route me")
     )
 
     assert response is expected
 
 
-def test_gateway_routes_bare_gemini_models_to_direct_api(monkeypatch):
-    expected = SimpleNamespace(text="direct")
-    monkeypatch.setattr(gemini, "generate", lambda request: expected)
+def test_gateway_rejects_retired_google_models():
+    with pytest.raises(RuntimeError, match="Gemini was retired 2026-08"):
+        client.generate(
+            ModelRequest(model="google/gemini-3.6-flash", prompt="Read")
+        )
 
-    response = client.generate(ModelRequest(model="gemini-3.6-flash", prompt="Read"))
 
-    assert response is expected
+def test_gateway_rejects_retired_bare_gemini_models():
+    with pytest.raises(RuntimeError, match="Gemini was retired 2026-08"):
+        client.generate(ModelRequest(model="gemini-3.6-flash", prompt="Read"))
 
 
 def test_omp_hard_timeout_is_terminal(monkeypatch):
@@ -486,15 +489,15 @@ def test_real_omp_to_generate_json_boundary_carries_truncation(monkeypatch):
             _assistant_frame(
                 text='{"answer":',
                 stop_reason="length",
-                provider="google",
-                model="gemini-3.6-flash",
+                provider="token-plan",
+                model="qwen3.8-max",
             )
         ),
     )
 
     with pytest.raises(GatewayError, match="truncated unparseable JSON") as raised:
         client.generate_json(
-            ModelRequest(model="google/gemini-3.6-flash", prompt="Read"),
+            ModelRequest(model="token-plan/qwen3.8-max", prompt="Read"),
             attempts=3,
         )
 

@@ -158,7 +158,7 @@ def _write_resources(root: Path) -> tuple[Path, Path, Path]:
             "media_resolution": "low",
             "max_output_tokens": 32768,
             "thinking_level": "low",
-            "secondary_model": "google/gemini-3.6-flash",
+            "secondary_model": "token-plan/qwen3.8-max",
             "secondary_thinking_level": None,
             "adjudicator_model": "anthropic/claude-fable-5",
             "adjudicator_thinking_level": "high",
@@ -172,7 +172,7 @@ def _write_resources(root: Path) -> tuple[Path, Path, Path]:
             {
                 **candidate_template,
                 "id": "read/lifecycle-baseline",
-                "model": "gemini-3.6-flash-001",
+                "model": "qwen3.8-max-001",
             },
             sort_keys=False,
         ),
@@ -183,7 +183,7 @@ def _write_resources(root: Path) -> tuple[Path, Path, Path]:
             {
                 **candidate_template,
                 "id": "read/lifecycle-challenger",
-                "model": "gemini-3.7-flash-001",
+                "model": "qwen3.8-max-002",
             },
             sort_keys=False,
         ),

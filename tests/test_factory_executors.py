@@ -147,7 +147,7 @@ def test_worker_refuses_mismatched_prompt_hash(workspace):
         library_root=str(workspace),
         config_fingerprint="cfg",
         input_fingerprint="inp",
-        model="gemini-3.1-flash-lite",
+        model="qwen3.8-max",
         prompt_name="read/la/diplomatic",
         prompt_sha256="0" * 64,
     )

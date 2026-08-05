@@ -189,7 +189,7 @@ palimpsest/
       ledger.py
     gateway/
       client.py
-      gemini.py
+      omp.py
       pricing.py
     workspace/
       layout.py

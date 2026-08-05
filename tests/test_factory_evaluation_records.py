@@ -67,7 +67,7 @@ def _candidate_record(**changes: object) -> dict[str, object]:
         "id": "read/direct-model-v1",
         "station": "read",
         "variant": "direct/v1",
-        "model": "gemini-2.5-flash-001",
+        "model": "qwen3.8-max-001",
         "prompt": "read/la/diplomatic",
         "params": {"temperature": 0.1},
         "options": {"language": "la"},
@@ -107,7 +107,7 @@ def test_candidate_resolves_strict_immutable_identity_and_all_behavior_fields(
 
     fingerprints = {candidate.fingerprint}
     mutations = (
-        {"model": "gemini-2.5-pro-001"},
+        {"model": "qwen3.8-max-002"},
         {"prompt": "read/la/other"},
         {"params": {"temperature": 0.2}},
         {"options": {"language": "grc"}},
@@ -166,7 +166,7 @@ def test_moving_candidate_and_judge_are_explicitly_non_qualifying(
     tmp_path: Path,
 ) -> None:
     candidate_path = tmp_path / "candidate.yaml"
-    _write_yaml(candidate_path, _candidate_record(model="gemini-flash-latest"))
+    _write_yaml(candidate_path, _candidate_record(model="qwen3.8-max-latest"))
     candidate = load_candidate(
         candidate_path,
         registry={"read": {"direct/v1": _station()}},
@@ -181,7 +181,7 @@ def test_moving_candidate_and_judge_are_explicitly_non_qualifying(
         {
             "schema_version": 1,
             "id": "read-pairwise/judge-v1",
-            "model": "gemini-pro-latest",
+            "model": "qwen3.8-max-latest",
             "prompt": "evaluation/read/pairwise",
             "response_schema": "pairwise_preference/v1",
             "params": {"temperature": 0.1},
@@ -315,7 +315,7 @@ def _fixed_judge(tmp_path: Path):
         {
             "schema_version": 1,
             "id": "read-pairwise/judge-v1",
-            "model": "gemini-2.5-pro-001",
+            "model": "qwen3.8-max-001",
             "prompt": "evaluation/read/pairwise",
             "response_schema": "pairwise_preference/v1",
             "params": {"temperature": 0.1},

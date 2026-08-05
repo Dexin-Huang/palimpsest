@@ -1,9 +1,10 @@
-"""Luna-first semantic-region transcription with contextual Gemini readings.
+"""Luna-first semantic-region transcription with contextual machine readings.
 
 The variant preserves the ``transcribe`` socket.  RF-DETR supplies cell anchors,
 Luna maps every anchored cell into an ordered semantic region graph, Python
-validates the graph and creates contextual crops, Gemini reads those regions,
-and the same Luna session resumes to submit one text per validated region.
+validates the graph and creates contextual crops, an independent reader model
+(Qwen3.8-Max; originally the retired Gemini reader) reads those regions, and
+the same Luna session resumes to submit one text per validated region.
 Diplomatic text is rendered deterministically from the sealed region order.
 """
 
@@ -59,7 +60,8 @@ from palimpsest.factory.usage import combine_cost, combine_count
 
 _LAYOUT_TIMEOUT_SECONDS = 360
 _LAYOUT_REVIEW_TIMEOUT_SECONDS = 240
-_REGION_READER_MODEL = "gemini-3.5-flash"
+_REGION_READER_MODEL = "token-plan/qwen3.8-max"
+# Gemini-era knobs kept for schema stability; the qwen path maps or ignores them.
 _REGION_READER_THINKING = "high"
 _REGION_READER_MEDIA_RESOLUTION = "high"
 _MAX_REGIONS = 20
@@ -106,7 +108,7 @@ _LAYOUT_REVIEW_TASK = """Review the validated semantic map against evidence/regi
 
 _ASSEMBLY_TASK = """Now transcribe the page from its validated semantic map.
 
-Read evidence/region-map.json, evidence/region-readings.json, evidence/region-overlay.jpg, the full page, and the contextual crops under evidence/regions/. Gemini's region readings are independent evidence, never authority. Preserve exact written forms; do not modernize or normalize Han variants. Return one text for every mapped region ID, including an empty string for seal_or_nontext regions with no writing. Keep each title, folio marker, catalogue label, and translator attribution in its mapped region so deterministic rendering cannot drop or detach it.
+Read evidence/region-map.json, evidence/region-readings.json, evidence/region-overlay.jpg, the full page, and the contextual crops under evidence/regions/. The independent machine region readings are evidence, never authority. Preserve exact written forms; do not modernize or normalize Han variants. Return one text for every mapped region ID, including an empty string for seal_or_nontext regions with no writing. Keep each title, folio marker, catalogue label, and translator attribution in its mapped region so deterministic rendering cannot drop or detach it.
 
 Call verify_regions with the complete region list. Re-read every reported mismatch. Use inspect_glyph only for a genuinely disputed detector cell when you already have 2-4 literal alternatives grounded in the page. Decide from visible strokes first. Then call submit_transcription exactly once with the complete final region list. The tool call is the only accepted output; do not place transcription in final prose."""
 
@@ -269,17 +271,17 @@ export default function regionalTranscriptionExtension(pi: ExtensionAPI) {
       unknown_region_ids: unknown,
       duplicate_region_ids: duplicates,
       empty_writing_region_ids: emptyWriting,
-      gemini_region_readings_absent_from_draft: readerMissing,
+      reader_region_readings_absent_from_draft: readerMissing,
       primary_repetition_rate: repetitionRate(primary),
       commentary_repetition_rate: repetitionRate(commentary),
-      note: "Gemini mismatches require crop review, not automatic replacement. Repetition must remain below the suite 0.1 hard limit.",
+      note: "Reader mismatches require crop review, not automatic replacement. Repetition must remain below the suite 0.1 hard limit.",
     };
   }
 
   pi.registerTool({
     name: "verify_regions",
     label: "Verify Regions",
-    description: "Verify complete region coverage, Gemini disagreements, and repetition before submission.",
+    description: "Verify complete region coverage, independent-reader disagreements, and repetition before submission.",
     loadMode: "essential",
     approval: "none",
     strict: true,
@@ -975,7 +977,7 @@ def _sum_process_stats(*runs: agent_cell.AgentRun) -> dict[str, int]:
 
 
 class OmpToolbelt8RegionsTranscribe(Transcribe):
-    """Luna layout graph, contextual Gemini reads, and regional assembly."""
+    """Luna layout graph, contextual machine reads, and regional assembly."""
 
     variant = "omp_toolbelt8_regions"
     param_keys = frozenset()
@@ -993,7 +995,7 @@ class OmpToolbelt8RegionsTranscribe(Transcribe):
         "factory/stations/align_rfdetr.py",
         "factory/stations/align_rfdetr_runtime.py",
         "factory/gateway/client.py",
-        "factory/gateway/gemini.py",
+        "factory/gateway/omp.py",
         "factory/gateway/protocol.py",
     )
 

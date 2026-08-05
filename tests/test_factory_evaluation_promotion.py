@@ -68,7 +68,7 @@ def _candidate(
             "media_resolution": "low",
             "max_output_tokens": 32768,
             "thinking_level": "low",
-            "secondary_model": "google/gemini-3.6-flash",
+            "secondary_model": "token-plan/qwen3.8-max",
             "secondary_thinking_level": None,
             "adjudicator_model": "anthropic/claude-fable-5",
             "adjudicator_thinking_level": "high",
@@ -135,8 +135,8 @@ def _recipe_root(
 
 
 def _proposal(tmp_path: Path):
-    baseline = _candidate("read/baseline", "1", model="gemini-3.6-flash")
-    challenger = _candidate("read/challenger", "2", model="gemini-3.7-flash")
+    baseline = _candidate("read/baseline", "1", model="qwen3.8-max-001")
+    challenger = _candidate("read/challenger", "2", model="qwen3.8-max-002")
     root = _recipe_root(tmp_path, baseline)
     proposal = propose_recipe_change(
         report=_report(baseline, challenger),
@@ -180,8 +180,8 @@ def _canary(proposal, *, status: str = "passed", outcome: str = "passed"):
 def test_unqualified_or_incomplete_report_cannot_propose(
     tmp_path: Path, status: str, decision: str, message: str
 ) -> None:
-    baseline = _candidate("read/baseline", "1", model="gemini-3.6-flash")
-    challenger = _candidate("read/challenger", "2", model="gemini-3.7-flash")
+    baseline = _candidate("read/baseline", "1", model="qwen3.8-max-001")
+    challenger = _candidate("read/challenger", "2", model="qwen3.8-max-002")
     root = _recipe_root(tmp_path, baseline)
 
     with pytest.raises(PromotionError, match=message):
@@ -196,8 +196,8 @@ def test_unqualified_or_incomplete_report_cannot_propose(
 
 
 def test_tampered_report_cannot_propose(tmp_path: Path) -> None:
-    baseline = _candidate("read/baseline", "1", model="gemini-3.6-flash")
-    challenger = _candidate("read/challenger", "2", model="gemini-3.7-flash")
+    baseline = _candidate("read/baseline", "1", model="qwen3.8-max-001")
+    challenger = _candidate("read/challenger", "2", model="qwen3.8-max-002")
     root = _recipe_root(tmp_path, baseline)
     report = _report(baseline, challenger)
     report["decision"] = "rejected"
@@ -229,8 +229,8 @@ def test_stale_recipe_compare_and_swap_never_changes_source(tmp_path: Path) -> N
 
 @pytest.mark.parametrize("recipe", ["../latin_manuscript", "nested/recipe", "C:escape"])
 def test_recipe_path_traversal_is_rejected(tmp_path: Path, recipe: str) -> None:
-    baseline = _candidate("read/baseline", "1", model="gemini-3.6-flash")
-    challenger = _candidate("read/challenger", "2", model="gemini-3.7-flash")
+    baseline = _candidate("read/baseline", "1", model="qwen3.8-max-001")
+    challenger = _candidate("read/challenger", "2", model="qwen3.8-max-002")
     root = _recipe_root(tmp_path, baseline)
 
     with pytest.raises(PromotionError, match="Invalid recipe name"):
@@ -375,9 +375,9 @@ def test_canary_cost_waiver_cannot_mask_other_evidence(tmp_path: Path) -> None:
 
 
 def test_moving_candidate_requires_exact_recorded_waiver(tmp_path: Path) -> None:
-    baseline = _candidate("read/baseline", "1", model="gemini-3.6-flash")
+    baseline = _candidate("read/baseline", "1", model="qwen3.8-max-001")
     moving = _candidate(
-        "read/moving", "2", model="gemini-flash-latest", model_identity="moving"
+        "read/moving", "2", model="qwen3.8-max-latest", model_identity="moving"
     )
     root = _recipe_root(tmp_path, baseline)
     report = _report(baseline, moving)
@@ -433,10 +433,10 @@ def test_manual_review_cuts_over_env_backed_moving_baseline_locally(
     moving = _candidate(
         "read/moving-baseline",
         "1",
-        model="gemini-flash-latest",
+        model="qwen3.8-max-latest",
         model_identity="moving",
     )
-    fixed = _candidate("read/fixed", "2", model="gemini-3.7-flash")
+    fixed = _candidate("read/fixed", "2", model="qwen3.8-max-002")
     root = _recipe_root(tmp_path, moving, retain_model_placeholder=True)
     monkeypatch.setenv("PALIMPSEST_MODEL_READING", moving.model)
     reason = f"baseline identity requires reproducibility waiver: {moving.fingerprint}"
@@ -506,13 +506,13 @@ def test_manual_review_rejects_two_nonautomatic_identities_and_other_blockers(
     moving_baseline = _candidate(
         "read/moving-baseline",
         "1",
-        model="gemini-flash-latest",
+        model="qwen3.8-max-latest",
         model_identity="moving",
     )
     moving_challenger = _candidate(
         "read/moving-challenger",
         "2",
-        model="gemini-pro-latest",
+        model="qwen3.9-max-latest",
         model_identity="moving",
     )
     root = _recipe_root(tmp_path, moving_baseline)
@@ -545,7 +545,7 @@ def test_manual_review_rejects_two_nonautomatic_identities_and_other_blockers(
             waiver=waiver,
         )
 
-    fixed = _candidate("read/fixed", "2", model="gemini-3.7-flash")
+    fixed = _candidate("read/fixed", "2", model="qwen3.8-max-002")
     blocker_report = _report(
         moving_baseline,
         fixed,

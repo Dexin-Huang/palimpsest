@@ -55,7 +55,7 @@ FACTORY_DB_PATH = Path(_env("PALIMPSEST_FACTORY_DB", str(LIBRARY_ROOT / "factory
 CATALOG_DB_PATH = Path(_env("PALIMPSEST_CATALOG_DB", str(LIBRARY_ROOT / "catalog.db")))
 
 # Model defaults used by recipe interpolation.
-MODEL_READING = _env("PALIMPSEST_MODEL_READING", "google/gemini-3.5-flash")
+MODEL_READING = _env("PALIMPSEST_MODEL_READING", "token-plan/qwen3.8-max")
 MODEL_READING_SECONDARY = _env(
     "PALIMPSEST_MODEL_READING_SECONDARY", "openai-codex/gpt-5.6-sol"
 )

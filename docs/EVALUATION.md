@@ -295,10 +295,10 @@ Target shape:
 
 ```yaml
 schema_version: 1
-id: read/la-direct-gemini-3.6-v1
+id: read/la-direct-qwen3.8-v1
 station: read
 variant: direct_multimodal/v1
-model: gemini-3.6-flash
+model: token-plan/qwen3.8-max
 prompt: read/la/diplomatic
 params:
   temperature: 0.1
@@ -416,8 +416,8 @@ Target shape:
 
 ```yaml
 schema_version: 1
-id: read-image-pairwise/gemini-3.6-v1
-model: gemini-3.6-flash
+id: read-image-pairwise/qwen3.8-v1
+model: token-plan/qwen3.8-max
 prompt: evaluation/read/image-pairwise
 response_schema: pairwise_preference/v1
 params:
@@ -508,7 +508,7 @@ operational_limits:
 
 judges:
   - metric: blind_image_pairwise
-    judge: read-image-pairwise/gemini-3.6-v1
+    judge: read-image-pairwise/qwen3.8-v1
 
 downstream_probes:
   - id: read-to-align/v1
@@ -652,9 +652,9 @@ Promotion history is append-only:
   "action": "promote",
   "recipe": "latin_manuscript",
   "station": "read",
-  "previous_candidate": "read/la-direct-gemini-3.6-v1",
+  "previous_candidate": "read/la-direct-qwen3.8-v1",
   "previous_fingerprint": "...",
-  "next_candidate": "read/la-direct-gemini-3.7-v1",
+  "next_candidate": "read/la-direct-qwen3.8-v2",
   "next_fingerprint": "...",
   "evaluation_run": "...",
   "report_fingerprint": "...",
@@ -857,7 +857,7 @@ A qualified report may generate a recipe proposal:
 
 ```yaml
 - station: read
-  candidate: read/la-direct-gemini-3.7-v1
+  candidate: read/la-direct-qwen3.8-v2
 ```
 
 The proposal records the exact current and proposed recipe hashes. Applying it
@@ -903,7 +903,9 @@ v1." It means restore one exact fingerprint.
 
 ## 10. Moving model aliases
 
-Provider aliases such as `gemini-flash-latest` are moving targets. They cannot
+Provider aliases that track the provider's latest snapshot (for example
+`-latest` selectors such as the retired `gemini-flash-latest`) are moving
+targets. They cannot
 support automatic evidence-based promotion because the provider may change the
 underlying model without changing the candidate specification, and the provider
 may not expose the concrete target.

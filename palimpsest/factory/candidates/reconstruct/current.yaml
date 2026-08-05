@@ -2,10 +2,15 @@ schema_version: 1
 id: reconstruct/current
 station: reconstruct
 variant: default
-model: gemini-3.5-flash-lite
+model: token-plan/qwen3.8-max
 prompt: reconstruct/generic/structure
 params:
   temperature: 0.1
   max_output_tokens: 32768
 options: {}
-notes: Fixed-model snapshot of the current reconstruction configuration for development conformance reporting.
+notes: >-
+  cut over to Qwen3.8-Max on 2026-08-05: Gemini retired repo-wide (exodia
+  registry rev 19, experiment 18); qwen one-shot measured 0.0402 recognized-v1
+  macro vs gemini 0.0553 on the gold canary; previously gemini-3.5-flash-lite.
+  Fixed-model snapshot of the current reconstruction configuration for
+  development conformance reporting.

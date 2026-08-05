@@ -116,9 +116,9 @@ def test_candidate_options_become_pickle_safe_at_executor_boundary() -> None:
             "tool_bindings": (
                 MappingProxyType(
                     {
-                        "id": "gemini_3_6_flash_draft_v1",
+                        "id": "qwen3_8_max_draft_v1",
                         "kind": "draft_model",
-                        "model": "google/gemini-3.6-flash",
+                        "model": "token-plan/qwen3.8-max",
                     }
                 ),
             )
@@ -130,9 +130,9 @@ def test_candidate_options_become_pickle_safe_at_executor_boundary() -> None:
     assert pickle.loads(pickle.dumps(serialized)) == {
         "tool_bindings": [
             {
-                "id": "gemini_3_6_flash_draft_v1",
+                "id": "qwen3_8_max_draft_v1",
                 "kind": "draft_model",
-                "model": "google/gemini-3.6-flash",
+                "model": "token-plan/qwen3.8-max",
             }
         ]
     }

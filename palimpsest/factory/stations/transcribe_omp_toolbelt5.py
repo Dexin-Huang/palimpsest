@@ -71,7 +71,9 @@ from palimpsest.factory.stations.transcribe_omp_toolbelt3 import (
     _split_registers,
 )
 
-_ADJUDICATOR_MODEL = "gemini-3.5-flash"
+# Adjudication rides the same qwen route; its media_resolution/thinking_level
+# request knobs keep their names and are mapped or ignored by the qwen path.
+_ADJUDICATOR_MODEL = "token-plan/qwen3.8-max"
 _ADJUDICATION_MAX_CALLS = 160
 _ADJUDICATION_PAD_FRACTION = 0.3
 _ADJUDICATION_MIN_SIDE = 256
@@ -607,7 +609,7 @@ class OmpToolbelt5Transcribe(Transcribe):
         "factory/stations/align_rfdetr.py",
         "factory/stations/align_rfdetr_runtime.py",
         "factory/gateway/client.py",
-        "factory/gateway/gemini.py",
+        "factory/gateway/omp.py",
     )
 
     def validate_options(self, options) -> None:

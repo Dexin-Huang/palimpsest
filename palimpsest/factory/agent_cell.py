@@ -11,7 +11,7 @@ report goes back to the agent that made the mistake.
 Two executors, selected per recipe slot (``executor: codex | omp``):
 - ``codex`` — the Codex CLI; models resolve against the user's OpenAI plan.
 - ``omp`` — oh-my-pi; models resolve against whatever providers the user
-  has logged into omp (``google/...`` works out of the box here; OpenAI
+  has logged into omp (``token-plan/...`` works out of the box here; OpenAI
   models need a one-time interactive ``omp`` ``/login``).
 
 The workspace lives under the document's ``runs/`` directory so every crop,

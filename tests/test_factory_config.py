@@ -66,7 +66,7 @@ def test_reading_model_takes_precedence_over_legacy_model(monkeypatch):
 def test_model_defaults_load_unchanged(monkeypatch):
     config = _load_config(monkeypatch)
 
-    assert config.MODEL_READING == "google/gemini-3.5-flash"
+    assert config.MODEL_READING == "token-plan/qwen3.8-max"
     assert config.MODEL_READING_SECONDARY == "openai-codex/gpt-5.6-sol"
     assert config.MODEL_EDITORIAL == "openai-codex/gpt-5.6-sol"
     assert config.MODEL_ADJUDICATOR == "openai-codex/gpt-5.6-sol"

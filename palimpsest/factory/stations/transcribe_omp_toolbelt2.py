@@ -12,8 +12,9 @@ transcribe-toolbelt-ancientdoc-development-v1):
   page first and reserves column crops for verification of flagged columns.
 
 New evidence channel: every column is independently transcribed at staging
-time by a second reader (gemini-3.5-flash, minimal thinking, count-anchored
-ceiling — the identity validated in read-column-agreement-development-v1).
+time by an independent second reader (Qwen3.8-Max, minimal thinking,
+count-anchored ceiling — the identity validated in
+read-column-agreement-development-v1 on the since-retired Gemini reader).
 Where the agent and the second reader agree, measured precision on healthy
 pages is 0.95-1.00, so ``verify_layers`` reports which columns the second
 reader contradicts and the agent re-reads only those crops.
@@ -58,7 +59,8 @@ _CROP_PAD_FRACTION = 0.25
 # Commentary is ~0.5x primary width; clusters closer than this are one layer.
 _MAX_WIDTH_RATIO = 0.72
 _MIN_LAYER_FRACTION = 0.15
-_SECOND_READER_MODEL = "gemini-3.5-flash"
+_SECOND_READER_MODEL = "token-plan/qwen3.8-max"
+# Gemini-era knob kept for schema stability; the qwen path maps or ignores it.
 _SECOND_READER_THINKING = "minimal"
 _ARTIFACT_NAME = "transcription.json"
 _JOURNAL_NAME = ".transcription-submissions.jsonl"
@@ -618,7 +620,7 @@ class OmpToolbelt2Transcribe(Transcribe):
         "factory/stations/align_rfdetr.py",
         "factory/stations/align_rfdetr_runtime.py",
         "factory/gateway/client.py",
-        "factory/gateway/gemini.py",
+        "factory/gateway/omp.py",
     )
 
     def validate_options(self, options) -> None:

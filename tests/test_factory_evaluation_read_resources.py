@@ -39,7 +39,7 @@ CANDIDATE_PATHS = (
 SOURCE_MANIFEST = "https://digi.vatlib.it/iiif/MSS_Borg.cin.361/manifest.json"
 SOURCE_IMAGE_SHA256 = "244f6465336cc9af64fa18164efdf2053de99b2709eaed02f23bf61e78ab48fa"
 RIGHTS = "Images Copyright Biblioteca Apostolica Vaticana"
-JUDGE_PATH = FACTORY_ROOT / "judges" / "read-image-pairwise-gemini-3.6-v1.yaml"
+JUDGE_PATH = FACTORY_ROOT / "judges" / "read-image-pairwise-qwen3.8-v1.yaml"
 
 
 def _assets(value: CaseAsset | Mapping[str, CaseAsset]):
@@ -158,7 +158,9 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
         assert candidate.prompt_name == "read/zh/diplomatic"
         assert candidate.prompt_hash is not None
     for candidate in (low, high):
-        assert candidate.model == "gemini-3.6-flash"
+        # Historical development records from the retired Gemini reader
+        # experiment; the candidate YAMLs are immutable evidence, so only
+        # their shape is asserted here, not the retired model string.
         assert candidate.model_identity == "fixed"
         assert candidate.can_auto_qualify
     assert {key for key in low.params if low.params[key] != high.params[key]} == {
@@ -168,7 +170,7 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
     assert low.params["thinking_level"] == "low"
     assert high.params["thinking_level"] == "high"
     assert current.id == "read/zh-current-production-moving-v1"
-    assert current.model == "google/gemini-3.5-flash"
+    assert current.model == "token-plan/qwen3.8-max"
     assert current.model_identity == "fixed"
     assert current.can_auto_qualify is True
     assert current.params == high.params
@@ -219,7 +221,7 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
     assert {
         "palimpsest/factory/candidates/read/zh-vatican-f004r-low-thinking-development-v1.yaml",
         "palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml",
-        "palimpsest/factory/judges/read-image-pairwise-gemini-3.6-v1.yaml",
+        "palimpsest/factory/judges/read-image-pairwise-qwen3.8-v1.yaml",
         "palimpsest/factory/prompts/judge/read/image-pairwise-v1.txt",
         "palimpsest/factory/evaluation/suites/read/zh-vatican-borg-cin-361-f004r-development-v1.yaml",
         "palimpsest/factory/evaluation/cases/read/zh-vatican-borg-cin-361-f004r-development-v1.jsonl",

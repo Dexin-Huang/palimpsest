@@ -85,7 +85,7 @@ def test_wheel_contains_and_resolves_factory_runtime_resources(tmp_path: Path) -
         "palimpsest/factory/prompts/read/la/diplomatic.txt",
         "palimpsest/factory/prompts/read/zh/diplomatic.txt",
         "palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml",
-        "palimpsest/factory/judges/read-image-pairwise-gemini-3.6-v1.yaml",
+        "palimpsest/factory/judges/read-image-pairwise-qwen3.8-v1.yaml",
         "palimpsest/factory/evaluation/suites/read/zh-vatican-borg-cin-361-f004r-development-v1.yaml",
         "palimpsest/factory/evaluation/cases/emend/assets/p001_clean.jpg",
         "palimpsest/factory/evaluation/gold/render_epub/expected-book-v2.epub",

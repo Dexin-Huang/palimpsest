@@ -188,7 +188,7 @@ def test_rig_rejects_runtime_drift_and_moving_models(
 
     moving_record = yaml.safe_load(_READ_CANDIDATE.read_text(encoding="utf-8"))
     moving_record["id"] = "read/rig-test-moving-model"
-    moving_record["model"] = "google/gemini-flash-latest"
+    moving_record["model"] = "token-plan/qwen3.8-max-latest"
     moving_path = tmp_path / "moving.yaml"
     moving_path.write_text(
         yaml.safe_dump(moving_record, sort_keys=False), encoding="utf-8"

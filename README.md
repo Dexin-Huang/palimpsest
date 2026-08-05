@@ -56,19 +56,18 @@ The remaining commands assume that environment is active. Verify it after
 installation with `python -m pip check`.
 
 Factory model selectors containing `/` execute through OMP. The production
-reading lane uses `google/gemini-3.5-flash` as its primary and
+reading lane uses `token-plan/qwen3.8-max` (Qwen3.8-Max) as its primary and
 `openai-codex/gpt-5.6-sol` as its independent secondary. A second Codex call
 adjudicates disagreements with high reasoning. The editorial lane uses Codex
 for survey, translation, and reconstruction. Ensure `omp` is on `PATH`. Start
 one interactive OMP session and run `/login openai-codex` before the first run.
-Configure OMP's Google provider too. Its Google backend accepts
-`GEMINI_API_KEY` from the environment. OMP owns provider routing and OpenAI
-OAuth refresh, so no OpenAI API key is required.
+OMP owns provider routing, the Token Plan (DashScope) credential, and OpenAI
+OAuth refresh, so no provider API key is required in the environment.
 
 Copy `.env.example` to `.env` to use or override that lane:
 
 ```env
-PALIMPSEST_MODEL_READING=google/gemini-3.5-flash
+PALIMPSEST_MODEL_READING=token-plan/qwen3.8-max
 PALIMPSEST_MODEL_READING_SECONDARY=openai-codex/gpt-5.6-sol
 PALIMPSEST_MODEL_EDITORIAL=openai-codex/gpt-5.6-sol
 PALIMPSEST_MODEL_ADJUDICATOR=openai-codex/gpt-5.6-sol
@@ -83,9 +82,10 @@ When migrating from `PALIMPSEST_MODEL_VISION`, rename it to
 `PALIMPSEST_MODEL_READING`. The legacy name is rejected when the new setting is
 absent; it is not accepted as an alias.
 
-`GEMINI_API_KEY` may be supplied for OMP's Google provider and is also used by
-the optional direct-provider override: set a model value to a bare `gemini...`
-selector to bypass OMP. Slash-qualified selectors always go through OMP. The
+Every model selector routes through OMP. The direct-provider override was
+removed when the Gemini draft engine was retired (2026-08): configuring a
+`google/*` or bare `gemini...` selector now fails loudly with the cutover
+error pointing at `token-plan/qwen3.8-max`. The
 `reference`, `emend`, and `finalize_edition` use the agent executor selected in
 each recipe and require that executor's CLI on `PATH`.
 

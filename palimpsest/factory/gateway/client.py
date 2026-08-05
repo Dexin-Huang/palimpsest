@@ -34,7 +34,7 @@ _provider_slots_lock = threading.Lock()
 
 
 def _provider_slot(model: str) -> threading.BoundedSemaphore:
-    provider = model.partition("/")[0] if "/" in model else "google-direct"
+    provider = model.partition("/")[0]
     with _provider_slots_lock:
         slot = _provider_slots.get(provider)
         if slot is None:
@@ -148,12 +148,13 @@ def _is_truncated(finish_reason: str | None) -> bool:
 
 
 def _resolve_provider(model: str):
+    if model.startswith(("google/", "gemini")):
+        raise RuntimeError(
+            "Gemini was retired 2026-08; use token-plan/qwen3.8-max "
+            "(see exodia tool registry rev 19)"
+        )
     if "/" in model:
         from palimpsest.factory.gateway.omp import generate as omp_generate
 
         return omp_generate
-    if model.startswith("gemini"):
-        from palimpsest.factory.gateway.gemini import generate as gemini_generate
-
-        return gemini_generate
     raise GatewayError(f"No provider registered for model: {model}")

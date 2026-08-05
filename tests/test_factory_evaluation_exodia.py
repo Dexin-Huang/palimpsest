@@ -424,14 +424,14 @@ def _harness(**overrides: object) -> dict[str, object]:
 
 def test_validate_candidate_accepts_bound_draft_model() -> None:
     candidate = _candidate(
-        runtime_requirements={"harness.tool.gemini_3_6_flash_draft_v1": "required"}
+        runtime_requirements={"harness.tool.qwen3_8_max_draft_v1": "required"}
     )
     harness_value = _harness(
         toolBindings=[
             {
-                "id": "gemini_3_6_flash_draft_v1",
+                "id": "qwen3_8_max_draft_v1",
                 "kind": "draft_model",
-                "model": "google/gemini-3.6-flash",
+                "model": "token-plan/qwen3.8-max",
             }
         ]
     )
@@ -479,24 +479,24 @@ def test_validate_candidate_rejects_empty_station_variant() -> None:
         [],
         [
             {
-                "id": "gemini_3_6_flash_draft_v1",
+                "id": "qwen3_8_max_draft_v1",
                 "kind": "draft_model",
-                "model": "google/gemini-3.6-flash",
+                "model": "token-plan/qwen3.8-max",
             },
             {
-                "id": "gemini_3_6_flash_draft_v1",
+                "id": "qwen3_8_max_draft_v1",
                 "kind": "draft_model",
-                "model": "google/gemini-3.6-flash",
+                "model": "token-plan/qwen3.8-max",
             },
         ],
         [
             {
-                "id": "gemini_3_6_flash_draft_v1",
+                "id": "qwen3_8_max_draft_v1",
                 "kind": "unknown",
-                "model": "google/gemini-3.6-flash",
+                "model": "token-plan/qwen3.8-max",
             }
         ],
-        [{"id": "gemini_3_6_flash_draft_v1", "kind": "draft_model"}],
+        [{"id": "qwen3_8_max_draft_v1", "kind": "draft_model"}],
         [1],
     ],
 )
@@ -504,7 +504,7 @@ def test_validate_candidate_rejects_bad_tool_bindings(
     bindings: list[object],
 ) -> None:
     candidate = _candidate(
-        runtime_requirements={"harness.tool.gemini_3_6_flash_draft_v1": "required"}
+        runtime_requirements={"harness.tool.qwen3_8_max_draft_v1": "required"}
     )
 
     with pytest.raises(exodia_evaluator.EvaluationIntegrityError):
@@ -524,9 +524,9 @@ def test_validate_candidate_rejects_tool_binding_not_required_by_rig() -> None:
             _harness(
                 toolBindings=[
                     {
-                        "id": "gemini_3_6_flash_draft_v1",
+                        "id": "qwen3_8_max_draft_v1",
                         "kind": "draft_model",
-                        "model": "google/gemini-3.6-flash",
+                        "model": "token-plan/qwen3.8-max",
                     }
                 ]
             ),

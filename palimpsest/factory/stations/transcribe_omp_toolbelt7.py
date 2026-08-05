@@ -423,7 +423,7 @@ class OmpToolbelt7Transcribe(Transcribe):
         "factory/stations/align_rfdetr.py",
         "factory/stations/align_rfdetr_runtime.py",
         "factory/gateway/client.py",
-        "factory/gateway/gemini.py",
+        "factory/gateway/omp.py",
     )
 
     def validate_options(self, options) -> None:

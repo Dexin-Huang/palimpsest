@@ -1,6 +1,6 @@
 schema_version: 1
-id: read-image-pairwise/gemini-3.6-v1
-model: gemini-3.6-flash
+id: read-image-pairwise/qwen3.8-v1
+model: token-plan/qwen3.8-max
 prompt: judge/read/image-pairwise-v1
 response_schema: pairwise_preference/v1
 params:

@@ -46,9 +46,7 @@ class Translate(Station):
     production_dependencies = (
         "factory/gateway/__init__.py",
         "factory/gateway/client.py",
-        "factory/gateway/gemini.py",
         "factory/gateway/omp.py",
-        "factory/gateway/pricing.py",
         "factory/gateway/protocol.py",
         "factory/seams.py",
         "factory/usage.py",

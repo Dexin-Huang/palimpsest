@@ -123,7 +123,7 @@ def test_language_resources_load_strictly_and_match_station_sockets() -> None:
 
         assert suite.cases == direct_cases
         assert candidate.variant == "default"
-        assert candidate.model == "gemini-3.5-flash-lite"
+        assert candidate.model == "token-plan/qwen3.8-max"
         assert candidate.can_auto_qualify
         assert not suite.qualification_eligible
         assert not suite.can_auto_qualify

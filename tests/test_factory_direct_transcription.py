@@ -82,7 +82,7 @@ line:
 def test_direct_recipe_is_raw_transcribe_then_audit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("PALIMPSEST_MODEL_READING", "google/gemini-3.6-flash")
+    monkeypatch.setenv("PALIMPSEST_MODEL_READING", "token-plan/qwen3.8-max")
     monkeypatch.setenv("PALIMPSEST_MODEL_ADJUDICATOR", "openai-codex/gpt-5.6-sol")
     recipes_dir = tmp_path / "recipes"
     _write_direct_recipe(recipes_dir)
@@ -109,7 +109,7 @@ def test_transcribe_sends_raw_image_once_and_records_reader_identity(
     station = Transcribe()
     job = _job(
         tmp_path,
-        model="google/gemini-3.6-flash",
+        model="token-plan/qwen3.8-max",
         prompt=_prompt(
             "transcribe/zh/full_image", "Please provide the full transcription."
         ),
@@ -128,7 +128,7 @@ def test_transcribe_sends_raw_image_once_and_records_reader_identity(
         requests.append(request)
         return {"transcription": "  天地玄黃  "}, ModelResponse(
             text='{"transcription":"天地玄黃"}',
-            model="gemini-3.6-flash-2026-07-01",
+            model="qwen3.8-max-2026-07-01",
             finish_reason="STOP",
             prompt_tokens=11,
             output_tokens=7,
@@ -154,8 +154,8 @@ def test_transcribe_sends_raw_image_once_and_records_reader_identity(
         "page_seq": 1,
         "canvas_id": "canvas-1",
         "text": "天地玄黃",
-        "requested_model": "google/gemini-3.6-flash",
-        "model": "gemini-3.6-flash-2026-07-01",
+        "requested_model": "token-plan/qwen3.8-max",
+        "model": "qwen3.8-max-2026-07-01",
         "finish_reason": "STOP",
     }
     assert (result.tokens_in, result.tokens_out, result.cost_usd) == (11, 10, 0.004)
@@ -167,7 +167,7 @@ def test_transcribe_rejects_incomplete_full_image_output(
     station = Transcribe()
     job = _job(
         tmp_path,
-        model="google/gemini-3.6-flash",
+        model="token-plan/qwen3.8-max",
         prompt=_prompt("transcribe/zh/full_image", "Transcribe."),
     )
     image_path = job.path_of("page_image")
@@ -180,7 +180,7 @@ def test_transcribe_rejects_incomplete_full_image_output(
             {"transcription": "partial"},
             ModelResponse(
                 text='{"transcription":"partial"}',
-                model="gemini-3.6-flash",
+                model="qwen3.8-max",
                 finish_reason="MAX_TOKENS",
                 prompt_tokens=5,
                 output_tokens=9,
@@ -221,8 +221,8 @@ def test_auditor_inspects_raw_image_and_preserves_reader_evidence(
             "page_seq": 1,
             "canvas_id": "canvas-1",
             "text": "天地元黃",
-            "requested_model": "google/gemini-3.6-flash",
-            "model": "gemini-3.6-flash-2026-07-01",
+            "requested_model": "token-plan/qwen3.8-max",
+            "model": "qwen3.8-max-2026-07-01",
             "finish_reason": "STOP",
         },
     )
@@ -261,8 +261,8 @@ def test_auditor_inspects_raw_image_and_preserves_reader_evidence(
     assert result.payload["candidate_readings"] == [
         {
             "role": "reader",
-            "requested_model": "google/gemini-3.6-flash",
-            "model": "gemini-3.6-flash-2026-07-01",
+            "requested_model": "token-plan/qwen3.8-max",
+            "model": "qwen3.8-max-2026-07-01",
             "raw_text": "天地元黃",
             "text": "天地元黃",
         }
@@ -289,7 +289,7 @@ def test_conductor_runs_raw_image_reader_and_auditor_end_to_end(
         doc_root / "metadata.json",
         {"doc_id": DOC_ID, "source_catalog": {"title": "Direct read test"}},
     )
-    monkeypatch.setenv("PALIMPSEST_MODEL_READING", "google/gemini-3.6-flash")
+    monkeypatch.setenv("PALIMPSEST_MODEL_READING", "token-plan/qwen3.8-max")
     monkeypatch.setenv("PALIMPSEST_MODEL_ADJUDICATOR", "openai-codex/gpt-5.6-sol")
 
     class FakeResponse:
@@ -310,10 +310,10 @@ def test_conductor_runs_raw_image_reader_and_auditor_end_to_end(
     )
 
     def fake_generate(request):
-        if request.model == "google/gemini-3.6-flash":
+        if request.model == "token-plan/qwen3.8-max":
             return {"transcription": "天地元黃"}, ModelResponse(
                 text="draft",
-                model="gemini-3.6-flash-2026-07-01",
+                model="qwen3.8-max-2026-07-01",
                 finish_reason="STOP",
                 prompt_tokens=10,
                 output_tokens=6,

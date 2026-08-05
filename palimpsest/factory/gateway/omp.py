@@ -190,6 +190,8 @@ def _validate_request(request: ModelRequest) -> None:
         or request.max_output_tokens < 1
     ):
         raise GatewayError(f"Invalid max output tokens: {request.max_output_tokens}")
+    # media_resolution is validated for recipe/schema stability but ignored:
+    # the OMP CLI has no image-resolution control (Gemini-era request param).
     if request.media_resolution not in {None, *_MEDIA_RESOLUTIONS}:
         raise GatewayError(f"Unknown media resolution: {request.media_resolution}")
     if request.thinking_level not in {None, *_THINKING_LEVELS}:

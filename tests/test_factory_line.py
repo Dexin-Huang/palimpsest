@@ -283,7 +283,9 @@ def run_line(ledger, library, **kw):
 @pytest.fixture
 def dual_read_models(monkeypatch):
     monkeypatch.setenv("PALIMPSEST_MODEL_READING", "openai-codex/gpt-5.6-sol")
-    monkeypatch.setenv("PALIMPSEST_MODEL_READING_SECONDARY", "google/gemini-3.6-flash")
+    monkeypatch.setenv(
+        "PALIMPSEST_MODEL_READING_SECONDARY", "token-plan/qwen3.8-max"
+    )
     monkeypatch.setenv("PALIMPSEST_MODEL_EDITORIAL", "anthropic/claude-fable-5")
     monkeypatch.setenv("PALIMPSEST_MODEL_ADJUDICATOR", "anthropic/claude-fable-5")
 
@@ -314,7 +316,7 @@ def test_recipe_loads_and_validates(dual_read_models):
         "media_resolution": "low",
         "max_output_tokens": 32768,
         "thinking_level": "low",
-        "secondary_model": "google/gemini-3.6-flash",
+        "secondary_model": "token-plan/qwen3.8-max",
         "secondary_thinking_level": None,
         "adjudicator_model": "anthropic/claude-fable-5",
         "adjudicator_thinking_level": "high",
@@ -385,7 +387,7 @@ def test_chinese_recipe_loads_and_validates(dual_read_models):
         "media_resolution": "high",
         "max_output_tokens": 32768,
         "thinking_level": "low",
-        "secondary_model": "google/gemini-3.6-flash",
+        "secondary_model": "token-plan/qwen3.8-max",
         "secondary_thinking_level": None,
         "adjudicator_model": "anthropic/claude-fable-5",
         "adjudicator_thinking_level": "high",
@@ -420,7 +422,7 @@ def test_chinese_printed_book_recipe_disables_scroll_seam_trimming(
     ]
     read = recipe.steps[5]
     assert read.model == "openai-codex/gpt-5.6-sol"
-    assert read.params["secondary_model"] == "google/gemini-3.6-flash"
+    assert read.params["secondary_model"] == "token-plan/qwen3.8-max"
     assert recipe.steps[7].model == "anthropic/claude-fable-5"
     translate = recipe.steps[8]
     assert translate.options == {"overlap": 1}

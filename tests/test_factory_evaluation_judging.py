@@ -35,7 +35,7 @@ from palimpsest.factory.gateway.protocol import GatewayError, ModelResponse
 
 ROOT = Path(__file__).resolve().parents[1]
 FACTORY_ROOT = ROOT / "palimpsest" / "factory"
-JUDGE_PATH = FACTORY_ROOT / "judges" / "read-image-pairwise-gemini-3.6-v1.yaml"
+JUDGE_PATH = FACTORY_ROOT / "judges" / "read-image-pairwise-qwen3.8-v1.yaml"
 SUITE_PATH = (
     FACTORY_ROOT
     / "evaluation"

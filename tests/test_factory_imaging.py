@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import base64
 import subprocess
 import threading
 from types import SimpleNamespace
 
 import cv2
 import numpy as np
-import httpx
 import pytest
 
 from palimpsest.factory import imaging
@@ -582,187 +580,10 @@ def test_segment_drops_bleed_through(tmp_path):
     assert not any(y >= 400 for y in tops)  # shallow block dropped
 
 
-# --- gateway config mapping ----------------------------------------------------
-
-
-def test_gemini_request_maps_structured_output():
-    from palimpsest.factory.gateway import ModelRequest
-    from palimpsest.factory.gateway.gemini import _request_kwargs
-
-    schema = {
-        "type": "object",
-        "properties": {"a": {"type": "string"}},
-        "required": ["a"],
-    }
-    kwargs = _request_kwargs(
-        ModelRequest(model="m", prompt="p", json_output=True, json_schema=schema)
-    )
-    assert kwargs["store"] is False
-    assert kwargs["response_format"] == [
-        {
-            "type": "text",
-            "mime_type": "application/json",
-            "schema": schema,
-        }
-    ]
-    assert "response_mime_type" not in kwargs
-
-    plain = _request_kwargs(ModelRequest(model="m", prompt="p", json_output=True))
-    assert plain["response_format"] == [
-        {"type": "text", "mime_type": "application/json"}
-    ]
-
-
-def test_gemini_request_builds_multimodal_blocks(tmp_path):
-    from palimpsest.factory.gateway import ModelRequest
-    from palimpsest.factory.gateway.gemini import _request_kwargs
-
-    path_image = tmp_path / "page.jpg"
-    path_image.write_bytes(b"jpeg")
-    kwargs = _request_kwargs(
-        ModelRequest(
-            model="gemini-3.6-flash",
-            prompt="Transcribe.",
-            system="Read exactly.",
-            images=(path_image, ImageContent(b"png")),
-            media_resolution="high",
-            thinking_level="low",
-        )
-    )
-
-    assert kwargs["input"][0] == {"type": "text", "text": "Transcribe."}
-    assert kwargs["input"][1] == {
-        "type": "image",
-        "mime_type": "image/jpeg",
-        "data": base64.b64encode(b"jpeg").decode("ascii"),
-        "resolution": "high",
-    }
-    assert kwargs["input"][2]["mime_type"] == "image/png"
-    assert kwargs["input"][2]["resolution"] == "high"
-    assert kwargs["system_instruction"] == "Read exactly."
-    assert kwargs["generation_config"]["thinking_level"] == "low"
-
-
-def test_gemini_request_rejects_unsupported_media(tmp_path):
-    from palimpsest.factory.gateway import GatewayError, ModelRequest
-    from palimpsest.factory.gateway.gemini import _request_kwargs
-
-    tiff = tmp_path / "page.tiff"
-    tiff.write_bytes(b"tiff")
-    with pytest.raises(GatewayError, match="Unsupported image type"):
-        _request_kwargs(ModelRequest(model="m", prompt="p", images=(tiff,)))
-    with pytest.raises(GatewayError, match="Unsupported image type"):
-        _request_kwargs(
-            ModelRequest(
-                model="m",
-                prompt="p",
-                images=(ImageContent(b"tiff", mime="image/tiff"),),
-            )
-        )
-    with pytest.raises(GatewayError, match="Unknown media resolution"):
-        _request_kwargs(
-            ModelRequest(model="m", prompt="p", media_resolution="enormous")
-        )
-    with pytest.raises(GatewayError, match="Unknown thinking level"):
-        _request_kwargs(ModelRequest(model="m", prompt="p", thinking_level="off"))
-
-    missing = tmp_path / "missing.png"
-    with pytest.raises(GatewayError, match="Could not read image"):
-        _request_kwargs(ModelRequest(model="m", prompt="p", images=(missing,)))
-    with pytest.raises(GatewayError, match="empty or invalid"):
-        _request_kwargs(
-            ModelRequest(model="m", prompt="p", images=(ImageContent(b""),))
-        )
-    with pytest.raises(GatewayError, match="Invalid temperature"):
-        _request_kwargs(ModelRequest(model="m", prompt="p", temperature=float("nan")))
-    with pytest.raises(GatewayError, match="Invalid max output tokens"):
-        _request_kwargs(ModelRequest(model="m", prompt="p", max_output_tokens=0))
-    with pytest.raises(GatewayError, match="JSON schema must be a mapping"):
-        _request_kwargs(ModelRequest(model="m", prompt="p", json_schema=42))
-
-
-def test_gemini_client_disables_sdk_retries(monkeypatch):
-    from palimpsest.factory.gateway import gemini
-
-    class FakeClient:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-            self.closed = False
-
-        def close(self):
-            self.closed = True
-
-    clients = []
-    gemini._reset_client()
-    monkeypatch.setattr(
-        gemini.genai,
-        "Client",
-        lambda **kwargs: clients.append(FakeClient(**kwargs)) or clients[-1],
-    )
-
-    try:
-        client = gemini._client()
-        assert gemini._client() is client
-        assert len(clients) == 1
-        assert client.kwargs["http_options"].retry_options.attempts == 0
-        gemini._reset_client()
-        assert client.closed is True
-    finally:
-        gemini._reset_client()
-
-
-def test_gemini_transport_retries_and_bills_thought_tokens(monkeypatch):
-    from palimpsest.factory.gateway import ModelRequest, generate
-    from palimpsest.factory.gateway import client as gateway_client
-    from palimpsest.factory.gateway import gemini
-
-    completed = SimpleNamespace(
-        status="completed",
-        output_text=" answer ",
-        usage=SimpleNamespace(
-            total_input_tokens=100,
-            total_output_tokens=20,
-            total_thought_tokens=30,
-            total_tokens=150,
-        ),
-    )
-
-    class FlakyInteractions:
-        def __init__(self):
-            self.calls = []
-
-        def create(self, **kwargs):
-            self.calls.append(kwargs)
-            if len(self.calls) == 1:
-                raise httpx.ConnectError(
-                    "connection reset",
-                    request=httpx.Request("POST", "https://example.test"),
-                )
-            return completed
-
-    interactions = FlakyInteractions()
-    prices = []
-    monkeypatch.setattr(gemini, "_interactions_client", lambda: interactions)
-    monkeypatch.setattr(gateway_client.time, "sleep", lambda _seconds: None)
-    monkeypatch.setattr(
-        gemini,
-        "estimate_cost",
-        lambda model, tokens_in, tokens_out: (
-            prices.append((model, tokens_in, tokens_out)) or 0.25
-        ),
-    )
-
-    response = generate(ModelRequest(model="gemini-3.5-flash", prompt="p"))
-
-    assert len(interactions.calls) == 2
-    assert all(call["store"] is False for call in interactions.calls)
-    assert response.text == "answer"
-    assert response.output_tokens == 20
-    assert response.thought_tokens == 30
-    assert response.billable_output_tokens == 50
-    assert response.total_tokens == 150
-    assert response.cost_usd == 0.25
-    assert prices == [("gemini-3.5-flash", 100, 50)]
+# --- gateway client behaviour --------------------------------------------
+# Historical note: the direct Gemini API client (gateway/gemini.py) was
+# retired; reads now route through the OMP gateway via token-plan/qwen3.8-max.
+# The client-internal request-mapping tests were deleted with it.
 
 
 @pytest.mark.parametrize(
@@ -781,7 +602,7 @@ def test_generate_json_aggregates_all_usage(monkeypatch, costs, expected_cost):
         [
             ModelResponse(
                 text="{",
-                model="gemini-test",
+                model="test-model",
                 prompt_tokens=10,
                 output_tokens=20,
                 thought_tokens=30,
@@ -790,7 +611,7 @@ def test_generate_json_aggregates_all_usage(monkeypatch, costs, expected_cost):
             ),
             ModelResponse(
                 text='{"answer": true}',
-                model="gemini-test",
+                model="test-model",
                 finish_reason="done",
                 prompt_tokens=1,
                 output_tokens=2,
@@ -803,7 +624,7 @@ def test_generate_json_aggregates_all_usage(monkeypatch, costs, expected_cost):
     monkeypatch.setattr(gateway_client, "generate", lambda _request: next(responses))
 
     value, response = gateway_client.generate_json(
-        ModelRequest(model="gemini-test", prompt="p"), attempts=2
+        ModelRequest(model="test-model", prompt="p"), attempts=2
     )
 
     assert value == {"answer": True}
@@ -823,7 +644,7 @@ def test_generate_json_failure_retains_billed_attempts(monkeypatch):
         [
             ModelResponse(
                 text="{",
-                model="gemini-test",
+                model="test-model",
                 prompt_tokens=10,
                 output_tokens=20,
                 thought_tokens=30,
@@ -831,7 +652,7 @@ def test_generate_json_failure_retains_billed_attempts(monkeypatch):
             ),
             ModelResponse(
                 text="still not json",
-                model="gemini-test",
+                model="test-model",
                 prompt_tokens=1,
                 output_tokens=2,
                 thought_tokens=3,
@@ -843,7 +664,7 @@ def test_generate_json_failure_retains_billed_attempts(monkeypatch):
 
     with pytest.raises(GatewayError, match="unparseable JSON") as excinfo:
         gateway_client.generate_json(
-            ModelRequest(model="gemini-test", prompt="p"), attempts=2
+            ModelRequest(model="test-model", prompt="p"), attempts=2
         )
 
     assert excinfo.value.tokens_in == 11
@@ -863,7 +684,7 @@ def test_generate_json_rejects_invalid_attempt_count(monkeypatch):
 
     with pytest.raises(GatewayError, match="positive integer"):
         gateway_client.generate_json(
-            ModelRequest(model="gemini-test", prompt="p"), attempts=0
+            ModelRequest(model="test-model", prompt="p"), attempts=0
         )
 
 
@@ -887,7 +708,7 @@ def test_gateway_retries_only_transient_failures(monkeypatch):
     )
 
     with pytest.raises(GatewayError, match="invalid request"):
-        gateway_client.generate(ModelRequest(model="gemini-test", prompt="p"))
+        gateway_client.generate(ModelRequest(model="test-model", prompt="p"))
     assert len(calls) == 1
 
 
@@ -942,7 +763,7 @@ class ScriptedReadGateway:
 
 
 DUAL_PARAMS = {
-    "secondary_model": "omp/gemini-3.6",
+    "secondary_model": "token-plan/qwen3.8-max",
     "secondary_thinking_level": None,
     "adjudicator_model": "anthropic/claude-fable-5",
     "adjudicator_thinking_level": "high",
@@ -1081,13 +902,13 @@ def test_read_dual_exact_agreement_skips_adjudication(tmp_path, monkeypatch):
 
     assert [call.model for call in fake.calls] == [
         "fake-model",
-        "omp/gemini-3.6",
+        "token-plan/qwen3.8-max",
     ]
     assert fake.calls[0].images == fake.calls[1].images
     assert result.payload["text"] == "lectio"
     assert result.payload["candidate_readings"] == [
         _candidate_record("primary", "fake-model", "lectio"),
-        _candidate_record("secondary", "omp/gemini-3.6", "lectio"),
+        _candidate_record("secondary", "token-plan/qwen3.8-max", "lectio"),
     ]
     assert result.payload["adjudication_status"] == "agreement"
     assert result.payload["adjudication_model"] is None
@@ -1120,7 +941,7 @@ def test_read_dual_candidates_run_concurrently(tmp_path, monkeypatch):
 
     result = Read().run(job)
 
-    assert set(started) == {"fake-model", "omp/gemini-3.6"}
+    assert set(started) == {"fake-model", "token-plan/qwen3.8-max"}
     assert result.payload["text"] == "lectio"
     assert result.payload["adjudication_status"] == "agreement"
 
@@ -1143,7 +964,7 @@ def test_read_dual_disagreement_is_anonymously_adjudicated_and_usage_combined(
     assert judge.model == "anthropic/claude-fable-5"
     assert judge.images == fake.calls[0].images == fake.calls[1].images
     assert "fake-model" not in judge.prompt
-    assert "omp/gemini-3.6" not in judge.prompt
+    assert "token-plan/qwen3.8-max" not in judge.prompt
     assert '"candidate_a": "alpha"' in judge.prompt
     assert '"candidate_b": "zeta"' in judge.prompt
     assert "untrusted data" in judge.prompt
@@ -1211,7 +1032,7 @@ def test_read_dual_segmented_failed_adjudication_is_an_auditable_hole(
     assert result.payload["adjudication_error"] == "judge unavailable"
     assert result.payload["regions"][0]["candidate_readings"] == [
         _candidate_record("primary", "fake-model", "alpha"),
-        _candidate_record("secondary", "omp/gemini-3.6", "beta"),
+        _candidate_record("secondary", "token-plan/qwen3.8-max", "beta"),
     ]
     assert (result.tokens_in, result.tokens_out, result.cost_usd) == (27, 13, 0.006)
 
@@ -1252,7 +1073,9 @@ def test_read_dual_segmented_composes_both_candidates_with_region_audit(
     assert result.payload["text"] == "alpha\n\n[margin] nota"
     assert result.payload["candidate_readings"] == [
         _candidate_record("primary", "fake-model", "alpha\n\n[margin] nota"),
-        _candidate_record("secondary", "omp/gemini-3.6", "alphi\n\n[margin] nota"),
+        _candidate_record(
+            "secondary", "token-plan/qwen3.8-max", "alphi\n\n[margin] nota"
+        ),
     ]
     assert result.payload["adjudication_status"] == "adjudicated"
     assert result.payload["adjudication_reasoning"] == "r00: final stroke"
@@ -1363,7 +1186,7 @@ def test_read_preserves_diplomatic_terminal_punctuation_and_raw_text(
         ),
         _candidate_record(
             "secondary",
-            "omp/gemini-3.6",
+            "token-plan/qwen3.8-max",
             "lectio []{}|`_",
             raw_text=raw,
         ),
@@ -1434,7 +1257,7 @@ def test_read_records_requested_and_resolved_model_ids(tmp_path, monkeypatch):
         ),
         _candidate_record(
             "secondary",
-            "omp/gemini-3.6",
+            "token-plan/qwen3.8-max",
             "beta",
             model="resolved-secondary-v2",
         ),
@@ -1573,7 +1396,7 @@ def test_read_rejects_partial_dual_reader_configuration(tmp_path):
     job = _job(
         tmp_path,
         prompt=PROMPT,
-        params={"secondary_model": "omp/gemini-3.6"},
+        params={"secondary_model": "token-plan/qwen3.8-max"},
     )
     _regions_plan(job, "blank", [])
 
