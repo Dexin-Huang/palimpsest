@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -108,6 +109,7 @@ class Read(Station):
         }
     )
     production_dependencies = (
+        "factory/config.py",
         "factory/gateway/__init__.py",
         "factory/gateway/client.py",
         "factory/gateway/gemini.py",
@@ -118,6 +120,14 @@ class Read(Station):
         "factory/stations/image_input.py",
         "factory/usage.py",
     )
+
+    def _single_reader_fallback(
+        self,
+        candidates: list[dict],
+        completed_readers: list[tuple[str, str, object, GatewayError | None]],
+        adjudicator_model: str,
+    ) -> _Reading | None:
+        return None
 
     def run(self, job: Job) -> StationResult:
         plan = read_json(job.path_of("page_regions"))
@@ -243,6 +253,8 @@ class Read(Station):
             }
             if "failed" in region_statuses:
                 status = "failed"
+            elif "single_reader_fallback" in region_statuses:
+                status = "single_reader_fallback"
             elif "adjudicated" in region_statuses:
                 status = "adjudicated"
             elif region_statuses == {"agreement"}:
@@ -362,18 +374,44 @@ class Read(Station):
                 params["secondary_thinking_level"],
             ),
         )
-        for role, model, thinking_level in readers:
+
+        def call_reader(model: str, thinking_level: str | None):
+            call_usage = _Usage()
             try:
-                raw_text, text, response = self._reader_call(
+                result = self._reader_call(
                     job,
                     images,
-                    usage,
+                    call_usage,
                     model=model,
                     thinking_level=thinking_level,
                     max_tokens=max_tokens,
                 )
             except GatewayError as error:
+                return None, error, call_usage
+            return result, None, call_usage
+
+        # The candidates are independent and normally use different providers.
+        # Launch them together; preserve recipe order when recording the audit.
+        with ThreadPoolExecutor(max_workers=len(readers)) as pool:
+            futures = [
+                (
+                    role,
+                    model,
+                    pool.submit(call_reader, model, thinking_level),
+                )
+                for role, model, thinking_level in readers
+            ]
+
+        completed_readers = []
+        for role, model, future in futures:
+            result, error, call_usage = future.result()
+            usage.merge(call_usage)
+            if error is not None:
                 usage.add_error(error)
+            completed_readers.append((role, model, result, error))
+
+        for role, model, result, error in completed_readers:
+            if error is not None:
                 if detect_truncation and _is_truncated(error):
                     return _Reading(
                         text="",
@@ -384,10 +422,18 @@ class Read(Station):
                     )
                 reader_errors.append(f"{role} reader failed: {error}")
             else:
+                raw_text, text, response = result
                 candidates.append(_candidate(role, model, raw_text, text, response))
                 responses.append(response)
 
         if reader_errors:
+            fallback = self._single_reader_fallback(
+                candidates,
+                completed_readers,
+                params["adjudicator_model"],
+            )
+            if fallback is not None:
+                return fallback
             return _Reading(
                 text="",
                 candidate_readings=candidates,
@@ -585,6 +631,11 @@ class _Usage:
         )
         self.cost_usd = combine_cost(self.cost_usd, response.cost_usd)
 
+    def merge(self, other: "_Usage") -> None:
+        self.tokens_in = combine_count(self.tokens_in, other.tokens_in)
+        self.tokens_out = combine_count(self.tokens_out, other.tokens_out)
+        self.cost_usd = combine_cost(self.cost_usd, other.cost_usd)
+
     def add_error(self, error: GatewayError) -> None:
         self.tokens_in = combine_count(self.tokens_in, error.tokens_in)
         self.tokens_out = combine_count(self.tokens_out, error.tokens_out)
@@ -625,4 +676,58 @@ def _tile(image: np.ndarray, bbox: list[int], pad: int) -> np.ndarray:
     return tile
 
 
+class TransientSingleReaderFallbackRead(Read):
+    """Commit one valid reader when its peer has a recoverable transient failure."""
+
+    variant = "dual-transient-fallback/v1"
+
+    def _single_reader_fallback(
+        self,
+        candidates: list[dict],
+        completed_readers: list[tuple[str, str, object, GatewayError | None]],
+        adjudicator_model: str,
+    ) -> _Reading | None:
+        failures = [
+            (role, model, error)
+            for role, model, _result, error in completed_readers
+            if error is not None
+        ]
+        successes = [
+            (role, result)
+            for role, _model, result, error in completed_readers
+            if error is None
+        ]
+        if len(candidates) != 1 or len(failures) != 1 or len(successes) != 1:
+            return None
+
+        failed_role, failed_model, error = failures[0]
+        successful_role, result = successes[0]
+        assert error is not None and result is not None
+        _raw_text, text, response = result
+        if (
+            not error.transient
+            or _is_truncated(error)
+            or _is_truncated(response)
+            or not text
+        ):
+            return None
+
+        return _Reading(
+            text=text,
+            candidate_readings=candidates,
+            adjudication_status="single_reader_fallback",
+            adjudication_requested_model=adjudicator_model,
+            adjudication_reasoning=(
+                f"Committed the {successful_role} candidate without adjudication "
+                f"because the {failed_role} reader failure was explicitly "
+                "classified transient."
+            ),
+            adjudication_error=(
+                f"{failed_role} reader transient failure "
+                f"(single-reader fallback; requested model {failed_model!r}): {error}"
+            ),
+        )
+
+
 register(Read())
+register(TransientSingleReaderFallbackRead())

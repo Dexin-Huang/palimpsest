@@ -63,6 +63,11 @@ class Translate(Station):
         paths.append(job.path_of("translation_brief"))
         return paths
 
+    def signature_extras(self, job: Job) -> tuple[str, ...]:
+        # The context window can be identical for adjacent pages, but each cell
+        # selects a different target from that window.
+        return (job.page_id or "",)
+
     def run(self, job: Job) -> StationResult:
         window = self._context_window(job)
         texts = {

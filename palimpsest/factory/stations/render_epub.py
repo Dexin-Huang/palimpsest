@@ -40,12 +40,13 @@ class RenderEpub(Station):
         out_path = self.output_path(job)
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
+        identity = book_model["identity"]
         book = epub.EpubBook()
         book.set_identifier(f"palimpsest:{job.doc_id}")
-        book.set_title(book_model["title"])
-        book.set_language(book_model["language"]["translation"])
-        if book_model.get("author"):
-            book.add_author(book_model["author"])
+        book.set_title(identity["title"])
+        book.set_language(book_model["languages"]["translation"])
+        if identity["author"]:
+            book.add_author(identity["author"])
 
         css = epub.EpubItem(
             uid="style",
@@ -56,7 +57,7 @@ class RenderEpub(Station):
         book.add_item(css)
 
         pages = [_title_page(book_model)]
-        if book_model.get("readers_note"):
+        if book_model["readers_note"]:
             pages.append(
                 _chapter_page(
                     "note",
@@ -64,32 +65,42 @@ class RenderEpub(Station):
                     _paragraphs(book_model["readers_note"]),
                 )
             )
-        evidence_by_id = {
-            page["page_id"]: page
-            for page in book_model.get("evidence", {}).get("pages", [])
-        }
-        for chapter in book_model["chapters"]:
-            original_heading = "Original text"
-            original_text = chapter["original"]
-            if chapter.get("reading"):
-                original_heading = "Original text (emended reading)"
-                original_text = chapter["reading"]
+        folios_by_id = {folio["page_id"]: folio for folio in book_model["folios"]}
+        apparatus_by_id = {entry["id"]: entry for entry in book_model["apparatus"]}
+        for section in book_model["sections"]:
+            content = section["content"]
+            section_apparatus = [
+                apparatus_by_id[apparatus_id]
+                for apparatus_id in section["apparatus_ids"]
+            ]
+            apparatus_html = (
+                "<h3>Apparatus</h3>" + _apparatus_html(section_apparatus)
+                if section_apparatus
+                else ""
+            )
             pages.append(
                 _chapter_page(
-                    chapter["id"],
-                    chapter["heading"],
-                    f'<p class="folios">ff. {chapter["pages"]["from"]}–'
-                    f"{chapter['pages']['to']}</p>"
-                    + _paragraphs(chapter["translation"])
-                    + f'<div class="original"><h3>{original_heading}</h3>'
-                    f"{_paragraphs(original_text)}</div>"
-                    + _source_evidence_html(chapter, evidence_by_id),
+                    section["id"],
+                    section["heading"],
+                    f'<p class="folios">ff. '
+                    f"{html.escape(_folio_label(section['folio_ids']))}</p>"
+                    + "<h3>Translation</h3>"
+                    + _paragraphs(content["translation"]["text"])
+                    + '<div class="original"><h3>Emended reading</h3>'
+                    + _paragraphs(content["emended_reading"]["text"])
+                    + "<h3>Diplomatic transcription</h3>"
+                    + _paragraphs(content["diplomatic_transcription"]["text"])
+                    + apparatus_html
+                    + "</div>"
+                    + _source_evidence_html(section, folios_by_id),
                 )
             )
-        if book_model.get("apparatus"):
+        if book_model["apparatus"]:
             pages.append(
                 _chapter_page(
-                    "apparatus", "Apparatus", _apparatus_html(book_model["apparatus"])
+                    "apparatus",
+                    "Complete Apparatus",
+                    _apparatus_html(book_model["apparatus"]),
                 )
             )
         pages.append(_chapter_page("colophon", "Colophon", _colophon_html(book_model)))
@@ -122,18 +133,18 @@ def _chapter_page(uid: str, heading: str, body_html: str) -> epub.EpubHtml:
 
 
 def _title_page(model: dict) -> epub.EpubHtml:
-    source = model.get("source", {})
-    lines = [f"<h1>{html.escape(model['title'])}</h1>"]
-    if model.get("author"):
-        lines.append(f"<p>{html.escape(model['author'])}</p>")
+    identity = model["identity"]
+    lines = [f"<h1>{html.escape(identity['title'])}</h1>"]
+    if identity["author"]:
+        lines.append(f"<p>{html.escape(identity['author'])}</p>")
     detail = " · ".join(
         html.escape(str(part))
-        for part in (source.get("shelfmark"), source.get("date"))
+        for part in (identity["shelfmark"], identity["date"])
         if part
     )
     if detail:
         lines.append(f'<p class="folios">{detail}</p>')
-    page = epub.EpubHtml(uid="title", title=model["title"], file_name="title.xhtml")
+    page = epub.EpubHtml(uid="title", title=identity["title"], file_name="title.xhtml")
     page.content = "".join(lines)
     return page
 
@@ -152,17 +163,13 @@ def _apparatus_html(apparatus: list[dict]) -> str:
     )
 
 
-def _source_evidence_html(chapter: dict, evidence_by_id: dict[str, dict]) -> str:
-    pages = [
-        evidence_by_id[page_id]
-        for page_id in chapter.get("source_pages", [])
-        if page_id in evidence_by_id
-    ]
-    if not pages:
-        return ""
+def _source_evidence_html(section: dict, folios_by_id: dict[str, dict]) -> str:
+    folios = [folios_by_id[page_id] for page_id in section["folio_ids"]]
     entries = []
-    for page in pages:
-        stats = (page.get("alignment") or {}).get("stats") or {}
+    for folio in folios:
+        page_id = folio["page_id"]
+        evidence = folio["evidence"]
+        stats = (evidence.get("alignment") or {}).get("stats") or {}
         coverage = ""
         if stats:
             coverage = (
@@ -170,17 +177,26 @@ def _source_evidence_html(chapter: dict, evidence_by_id: dict[str, dict]) -> str
                 f"{stats.get('transcribed', 0)} ink characters aligned.</p>"
             )
         entries.append(
-            f"<h4>Folio {html.escape(page['page_id'])}</h4>"
-            f"<p><a href='{html.escape(page['source_image_url'])}'>"
+            f"<h4>Folio {html.escape(page_id)}</h4>"
+            f"<p><a href='{html.escape(folio['images']['original']['source_url'])}'>"
             "View archive image</a></p>"
-            f"{coverage}{_paragraphs(page['diplomatic'])}"
+            f"{coverage}"
+            f"{_paragraphs(evidence['diplomatic']['text'])}"
         )
+    alignment_note = ""
+    if any(folio["evidence"].get("alignment") for folio in folios):
+        alignment_note = " Available coordinate-alignment coverage is summarized below."
     return (
         '<div class="sources"><h3>Source evidence</h3>'
-        "<p>The diplomatic readings below are tied to the cited folio images; "
-        "coordinate alignment data is preserved in the book model.</p>"
-        f"{''.join(entries)}</div>"
+        "<p>The diplomatic readings below are tied to the cited folio images."
+        f"{alignment_note}</p>{''.join(entries)}</div>"
     )
+
+
+def _folio_label(folio_ids: list[str]) -> str:
+    if len(folio_ids) == 1:
+        return folio_ids[0]
+    return f"{folio_ids[0]}–{folio_ids[-1]}"
 
 
 def _production_credit(colophon: dict) -> str:
@@ -189,6 +205,7 @@ def _production_credit(colophon: dict) -> str:
         ("translated", colophon.get("translated_by")),
         ("referenced", colophon.get("referenced_by")),
         ("emended", colophon.get("emended_by")),
+        ("finalized", colophon.get("finalized_by")),
     ]
     return " · ".join(
         f"{label} by {html.escape(str(model))}" for label, model in credits if model
@@ -209,9 +226,10 @@ def _colophon_html(model: dict) -> str:
     rows = [
         f"<p>{_production_credit(colophon)}.</p>",
         f"<p>{colophon.get('pages', 0)} pages · {_cost_text(colophon)}.</p>",
-        "<p>Produced by the Palimpsest factory. Every stage of this book — "
-        "transcription, alignment, translation, reconstruction, reference, "
-        "and emendation — is recorded with full provenance in the book model.</p>",
+        "<p>Produced by the Palimpsest factory. The book model records "
+        "provenance for its contributing editorial stages, including "
+        "final-edition review; the EPUB renderer records its own provenance "
+        "beside the file in the library workspace.</p>",
     ]
     return f'<div class="colophon">{"".join(rows)}</div>'
 

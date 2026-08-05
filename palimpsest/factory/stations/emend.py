@@ -29,9 +29,9 @@ TASK = (
     "exactly. Evidence: evidence/manuscript.json, evidence/variants.json, "
     "and the reference dossier evidence/reference.json. Photographs: "
     "images/ (attached; to zoom a disputed span, crop with python and view "
-    "the crop, writing crops to out/). Write the finished artifact to "
-    "out/emendations.json exactly per the AGENTS.md output contract, then "
-    "give the short final summary."
+    "the crop, writing crops to out/). Use node_repl filesystem APIs—not "
+    "apply_patch or a shell—to write out/emendations.json exactly per the "
+    "AGENTS.md output contract, then give the short final summary."
 )
 
 

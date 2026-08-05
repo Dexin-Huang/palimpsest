@@ -17,9 +17,9 @@ from palimpsest.factory.workspace.io import read_json
 from palimpsest.factory.workspace.layout import doc_dir
 
 TASK = (
-    "Perform the task defined in AGENTS.md. Read evidence/manuscript.json, "
-    "write out/reference.json exactly per the contract, then give the short "
-    "final summary."
+    "Perform the task defined in AGENTS.md. Read evidence/manuscript.json. "
+    "Use node_repl filesystem APIs—not apply_patch or a shell—to write "
+    "out/reference.json exactly per the contract, then give the short final summary."
 )
 
 
