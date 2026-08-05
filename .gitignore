@@ -45,3 +45,6 @@ site/
 nul
 experiments/**/out/
 experiments/testset/folios/
+
+# Content-addressed evaluation asset cache: refetch with 'palimpsest bench fetch'
+palimpsest/factory/evaluation/assets/
