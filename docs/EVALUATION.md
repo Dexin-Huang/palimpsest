@@ -1283,6 +1283,8 @@ palimpsest/factory/
     promotion.py          proposal, promotion, and rollback records
     canary.py             isolated protected production canaries
     assets.py             content-addressed external asset fetch
+    datasets/             alignment training-data curation and localization
+                          scoring (RF-DETR corpus, Kuzushiji, audits)
     suites/
       <station>/*.yaml
     cases/

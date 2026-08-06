@@ -399,6 +399,13 @@ docs/
   OPERATIONS.md             canonical operator and experiment runbook
 ```
 
+The research lane (unsupervised separation, frame detection, classifier
+training, and the exodia transcription scoring that measures the instrumented
+rig) lives in the separate
+[`palimpsest-research`](https://github.com/Dexin-Huang/palimpsest-research)
+repository and consumes this package as its factory. The pre-cutover tree is
+preserved on `archive/pre-research-cutover-2026-08-06`.
+
 Generated images, model artifacts, books, runs, the ledger, and the static site
 are local and ignored by Git. `metadata.json` and `page_list.json` are the
 portable source records for adopted workspaces.
