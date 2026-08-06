@@ -34,19 +34,21 @@ def _stage_object(library_root: Path, rows: list[dict]) -> str:
     return digest
 
 
-def _job(library_root: Path, *, quiet_max: int = 5) -> Job:
+def _job(
+    library_root: Path,
+    *,
+    quiet_max: int = 5,
+    characters: list[dict] | None = None,
+) -> Job:
     case_id = f"{_DOC}__{_PAGE['page_id']}"
+    if characters is None:
+        characters = [
+            {"bbox": [10.0, 10.0, 20.0, 20.0], "score": 0.9},
+            {"bbox": [10.0, 40.0, 20.0, 20.0], "score": 0.9},
+        ]
     detections = _stage_object(
         library_root,
-        [
-            {
-                "case_id": case_id,
-                "characters": [
-                    {"bbox": [10.0, 10.0, 20.0, 20.0], "score": 0.9},
-                    {"bbox": [10.0, 40.0, 20.0, 20.0], "score": 0.9},
-                ],
-            }
-        ],
+        [{"case_id": case_id, "characters": characters}],
     )
     verdicts = _stage_object(library_root, [{"case_id": case_id, "columns": []}])
     prompt_text = "Audit and correct the staged base transcription."
@@ -140,6 +142,25 @@ def test_blank_route_costs_nothing(
     monkeypatch.setattr(read_omp.agent_cell, "run", forbidden)
 
     result = OmpInstrumentedRead().run(_job(tmp_path))
+    validate_payload("page_transcription", result.payload)
+    assert result.payload["text"] == ""
+    assert result.payload["route"] == "blank"
+    assert result.payload["adjudication_status"] == "not_needed"
+    assert result.cost_usd is None
+
+
+def test_empty_pinned_detections_gate_blank_without_model_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_inputs(tmp_path, "full_page")
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("empty pinned detections must not reach any model")
+
+    monkeypatch.setattr(read_omp, "_stage_draft", forbidden)
+    monkeypatch.setattr(read_omp.agent_cell, "run", forbidden)
+
+    result = OmpInstrumentedRead().run(_job(tmp_path, characters=[]))
     validate_payload("page_transcription", result.payload)
     assert result.payload["text"] == ""
     assert result.payload["route"] == "blank"

@@ -371,10 +371,10 @@ def test_split_deframe_development_records_resolve_exactly() -> None:
     )
 
     assert baseline.fingerprint == (
-        "3dff499b4217f6e74df604324db94aed0e6bf2d470e727099dd1fe194f5ca215"
+        "2e34b40b89368ef46d45bf35113743b1cb82d5f09590cc88187ebda056f6612e"
     )
     assert challenger.fingerprint == (
-        "78aa06da6de2707863c7d4a2c76089a180ae6e5557189d32156a90b86dcdeb92"
+        "c12b8e7a6fba0370f07a0c5a19aef6ee1d125d75e3aad6253cfc8711258c10a3"
     )
     assert spread_suite.fingerprint == (
         "6a9c2a189cefec26b1533a96a326e24e521cc96e519e557893b569a0a468979a"
@@ -535,52 +535,52 @@ def test_split_deframe_development_records_resolve_exactly() -> None:
         (
             "fastsam-s-development-v1.yaml",
             "fastsam-s/v1",
-            "cbcc9dfbfa42174a8e7ecbc636d92ecc5678b45ca12a25cb881cb193a63780c7",
+            "bde9dc77f04f5029914b28787cc82213fea636435b848384e818166d18d21607",
         ),
         (
             "fastsam-s-development-v2.yaml",
             "fastsam-s/v1",
-            "1eb2997dc2add9712a3b3079dd3b48f01c2631adc1407c760afd9988dda08a55",
+            "0f858380474354a769c0834cd70bb96debd662c7c60c8eb0bbc8cbdbac33358f",
         ),
         (
             "efficientvit-sam-l0-development-v1.yaml",
             "efficientvit-sam-l0/v1",
-            "79b427232063ec91268ff988f4788058399a233ceb83313927bf225c1ac291fc",
+            "9e367536fcbc6a737c3ea55f405f9c40ae95cac3a67378af7f4ecdc3dfa0eaec",
         ),
         (
             "efficientvit-sam-l0-development-v2.yaml",
             "efficientvit-sam-l0/v1",
-            "caae8215339c3cc9c944e7f261cf0e4128313bb7e12edc8771fc8fe8000e1d81",
+            "3c291769e03e9741a4caa170c9bce8908823066898a2017bc96fe4428bf040a9",
         ),
         (
             "efficientvit-sam-l0-development-v3.yaml",
             "efficientvit-sam-l0/v1",
-            "5452544815a823aebec321f28f21866fed7bdf28995b6e99ef7953edb9d20b34",
+            "f9b67dbe63fa178105f06dac7681c674f179eb80c1a9c0c958f699efe1313512",
         ),
         (
             "efficientvit-sam-l0-development-v4.yaml",
             "efficientvit-sam-l0-adaptive/v1",
-            "3e359a3685aa3b8f720ef4f4ca3890ca93f0707cc64438adb990e7305c65e1c2",
+            "c6c2184c50fd593739fd9e1fcd0df544a4ce65eff7e8d05405bfefc1b9de4b42",
         ),
         (
             "efficientvit-sam-l0-development-v5.yaml",
             "efficientvit-sam-l0-adaptive/v1",
-            "8635cee4c3d8b325ce6df780115ba70ad1b547c5c43e927f15eca0e76894e664",
+            "69336904ac7583ce9f06ff8f4f3c59833d6f0a1fd71cc24e0c8788b33d1fda5f",
         ),
         (
             "efficientvit-sam-l0-hybrid-development-v1.yaml",
             "efficientvit-sam-l0-hybrid/v1",
-            "b88298a3888786556bbe9d3060e4139f05906f4082be52ecc02dde715f7090f5",
+            "04092ce941d8a767c62ec1bd19b7db70bf9e5db70127889e67e600aecefc338f",
         ),
         (
             "efficientvit-sam-l0-hybrid-development-v2.yaml",
             "efficientvit-sam-l0-hybrid/v2",
-            "be55aec887034b056360829fec5bb9a6a87d94e55d64ef8475baa4ad546d36f6",
+            "8e831b5f759585788d6752e49ec51031d1bd96516fea380078b9d3bbfa95d9af",
         ),
         (
             "efficientvit-sam-l0-hybrid-development-v3.yaml",
             "efficientvit-sam-l0-resilient-hybrid/v1",
-            "16c2f649e036366892be75b44ad7595eff2c869e1766b868b63ffeb4b648a271",
+            "0463ad9572648cc86be906373ef61090bf49243964c00dba869cc4a65ac82c79",
         ),
     ),
 )
@@ -628,7 +628,7 @@ def test_topology_aware_deframe_candidate_is_immutable_and_same_socket() -> None
     assert candidate.variant == "topology-aware/v1"
     assert (
         candidate.fingerprint
-        == "0dff787a310fde3d6680ca46c063d70118183630ab6e4088e1cd7d02f060e5cd"
+        == "da0e4c72604adc6118cbe199855a6e1652a74566f515f59379842f50611a8926"
     )
     assert candidate.model is None
     validate_candidate_suite(candidate, suite)

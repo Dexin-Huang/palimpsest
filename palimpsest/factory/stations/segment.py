@@ -81,6 +81,29 @@ class Segment(Station):
         )
 
 
+class PassthroughSegment(Segment):
+    """No-CV full-page plan so recipes can hand the instrumented rig raw archive
+    bytes (its certified input domain) with the contract chain intact."""
+
+    variant = "passthrough/v1"
+    option_keys = frozenset()
+    production_dependencies = ("factory/stations/image_input.py",)
+
+    def run(self, job: Job) -> StationResult:
+        image = load_image(job, "page_image_clean")
+        h, w = image.shape[:2]
+        return StationResult(
+            payload={
+                "doc_id": job.doc_id,
+                "page_id": job.page_id,
+                "route": "full_page",
+                "image": {"width": w, "height": h},
+                "glyph_height_px": 0.0,
+                "regions": [],
+            }
+        )
+
+
 def analyze(image: np.ndarray, options: dict) -> dict:
     """The pure analysis: image in, route + regions out. Also the entry
     point for the offline tuning harness (``factory tune``)."""
@@ -354,3 +377,4 @@ def _classify(
 
 
 register(Segment())
+register(PassthroughSegment())

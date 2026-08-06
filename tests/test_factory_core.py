@@ -18,6 +18,7 @@ from palimpsest.factory.core.cell import CellOutcome
 from palimpsest.factory.core.conductor import CellReport, Conductor, RunReport
 from palimpsest.factory.core.ledger import Ledger, fingerprint
 from palimpsest.factory.core.recipe import Recipe, StationSpec
+from palimpsest.factory.core.recipe import load as load_recipe
 from palimpsest.factory.core.station import Station
 from palimpsest.factory.gateway import GatewayError, ModelRequest, generate
 from palimpsest.factory.workspace import io as ws_io
@@ -56,6 +57,43 @@ def test_adopt_creates_work_order(ledger):
     assert item["doc_id"] == doc_id
     assert item["status"] == "active"
     assert item["recipe"] == "latin_manuscript"
+
+
+def test_switch_recipe_updates_existing_work_order(ledger):
+    doc_id = _adopt_test_item(ledger)
+    ledger.switch_recipe(doc_id, "chinese_scroll_rig")
+    assert ledger.item(doc_id)["recipe"] == "chinese_scroll_rig"
+
+
+def test_switch_recipe_requires_existing_work_order(ledger):
+    with pytest.raises(ValueError, match="adopt it first"):
+        ledger.switch_recipe("missing_doc", "chinese_scroll_rig")
+
+
+def test_switch_recipe_refuses_while_work_run_is_running(ledger):
+    doc_id = _adopt_test_item(ledger)
+    with ledger._conn:
+        ledger._conn.execute(
+            """
+            INSERT INTO work_runs (doc_id, owner, status, started_at, heartbeat_at)
+            VALUES (?, 'test-owner', 'running', ?, ?)
+            """,
+            (doc_id, "2026-08-05T00:00:00Z", "2026-08-05T00:00:00Z"),
+        )
+    with pytest.raises(ValueError, match="has a running work run"):
+        ledger.switch_recipe(doc_id, "chinese_scroll_rig")
+
+
+def test_chinese_scroll_rig_recipe_pins_raw_lane_sensors():
+    recipe = load_recipe("chinese_scroll_rig")
+    read = next(step for step in recipe.steps if step.station.name == "read")
+    sensors = read.options["sensors"]
+    assert sensors["detections_sha256"] == (
+        "817f75698ac6b1e48bd17eb4da99a9547512a0604ec60037114cd2c13b108be0"
+    )
+    assert sensors["classifier_verdicts_sha256"] == (
+        "0eb299c0046d83bd2b61e3a99aae836c1aafb55aff74a088708da13f60f6c51e"
+    )
 
 
 def test_work_claim_excludes_other_processes(tmp_path):

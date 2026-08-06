@@ -26,6 +26,8 @@ metadata + page_list
 
 The page line preserves the evidence layer: source image, cleaned image,
 diplomatic transcription, translation, and their provenance remain separate.
+The `deframe`, `dewatermark`, and `flatten` stations also have
+`passthrough/v1` variants, so a recipe can hand the reader raw archive bytes.
 The manuscript line reconstructs continuity, checks received readings, records
 editorial changes in an apparatus, then gives a Sol agent the explicit goal of
 reconciling every reader-facing translation and heading against the final
@@ -137,6 +139,9 @@ under a strict JSON schema. The transcription artifact retains the final text,
 both candidate readings and their model IDs, the adjudication status, reasoning
 and unresolved items, plus combined token and cost usage across every attempted
 call.
+The `read/omp_instrumented` variant runs the instrumented rig (draft reads
+plus RF-DETR count and glyph-classifier witnesses, a quiet gate, and a foreman
+audit) behind the same socket.
 
 The conductor resumes from `library/factory.db`. Fresh cells are skipped;
 input drift reruns stale cells; configuration drift is reported as outdated

@@ -8,9 +8,10 @@ contract directly: draft reads become ``candidate_readings`` and the foreman
 verdict becomes the ``adjudication_*`` fields.
 
 Sensor artifacts must be computed on the same ``page_image_clean`` geometry
-this variant reads; pins are recipe options. Blank routing from segment is
-honored before any model work. Measured lineage: exodia experiments 22-34
-(raw-image lane) and the factory bench lane.
+this variant reads; pins are recipe options. Blank pages are gated before any
+model work by segment routing or by empty pinned detections (the page listed
+in the pinned RF-DETR file with zero boxes). Measured lineage: exodia
+experiments 22-34 (raw-image lane) and the factory bench lane.
 """
 
 from __future__ import annotations
@@ -91,6 +92,13 @@ class OmpInstrumentedRead(Read):
             (verdicts_by_case[key] for key in case_keys if key in verdicts_by_case),
             None,
         )
+        if characters == []:
+            # Pinned RF-DETR evidence: the page exists in the detections file
+            # with zero boxes. That is a positive blank verdict, unlike a
+            # missing page (characters is None), which degrades to reading.
+            return StationResult(
+                payload=self._payload(job, "blank", _Reading("", [], "not_needed"))
+            )
 
         base_text, base_run = _stage_draft(
             run_root / f"{page_key}-base",

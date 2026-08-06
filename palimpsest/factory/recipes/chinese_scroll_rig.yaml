@@ -1,0 +1,67 @@
+# Raw-bytes lane: the prelude (deframe, dewatermark, flatten, segment) is
+# passthrough so the rig reads the archive image it was certified on; the
+# sensor pins are raw-lane instruments.
+name: chinese_scroll_rig
+language: zh
+line:
+  - station: acquire
+  - station: deframe
+    variant: passthrough/v1
+  - station: dewatermark
+    variant: passthrough/v1
+  - station: flatten
+    variant: passthrough/v1
+  - station: segment
+    variant: passthrough/v1
+  - station: read
+    variant: omp_instrumented
+    model: openai-codex/gpt-5.6-luna
+    prompt: transcribe/zh/foreman_v12
+    extension_source: |-
+      import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+
+      // The instrumented rig's policy lives in the foreman seed and the staged
+      // sensor dossier. The line contributes no extra tools.
+      export default function instrumentedForemanPolicy(_pi: ExtensionAPI) {}
+    tool_bindings:
+      - id: "qwen3_8_max_draft_v1"
+        kind: "draft_model"
+        model: "token-plan/qwen3.8-max"
+    sensors:
+      detections_sha256: "817f75698ac6b1e48bd17eb4da99a9547512a0604ec60037114cd2c13b108be0"
+      classifier_verdicts_sha256: "0eb299c0046d83bd2b61e3a99aae836c1aafb55aff74a088708da13f60f6c51e"
+    quiet_max_disagreements: 5
+  - station: align
+    variant: rfdetr-mth600/v1
+    checkpoint_sha256: cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d
+    nms_iou: 0.4
+    overlap: 96
+    rfdetr_version: 1.8.3
+    threshold: 0.31
+    tile_size: 512
+    torch_version: 2.7.0+cu118
+    torchvision_version: 0.22.0+cu118
+  - station: survey
+    model: ${PALIMPSEST_MODEL_EDITORIAL}
+    prompt: survey/generic/brief
+  - station: translate
+    model: ${PALIMPSEST_MODEL_EDITORIAL}
+    prompt: translate/zh/with_brief
+    overlap: 1
+    trim_seam_overlap: true
+  - station: assemble_page
+  - station: reconstruct
+    model: ${PALIMPSEST_MODEL_EDITORIAL}
+    prompt: reconstruct/generic/structure
+  - station: reference
+    model: gpt-5.6-sol
+    prompt: reference/generic/identify
+  - station: emend
+    model: gpt-5.6-luna
+    prompt: emend/generic/agent
+  - station: finalize_edition
+    model: gpt-5.6-sol
+    prompt: finalize/generic/edition
+  - station: publish
+    original_language: zh
+  - station: render_epub

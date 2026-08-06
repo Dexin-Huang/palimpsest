@@ -121,6 +121,21 @@ class Ledger:
             (doc_id,),
         ).fetchone()
 
+    def switch_recipe(self, doc_id: str, recipe: str) -> None:
+        if self.item(doc_id) is None:
+            raise ValueError(f"No work order: {doc_id}; adopt it first")
+        running = self._conn.execute(
+            "SELECT 1 FROM work_runs WHERE doc_id = ? AND status = 'running'",
+            (doc_id,),
+        ).fetchone()
+        if running is not None:
+            raise ValueError(f"Work order {doc_id} has a running work run")
+        with self._conn:
+            self._conn.execute(
+                "UPDATE items SET recipe = ? WHERE doc_id = ?",
+                (recipe, doc_id),
+            )
+
     def set_item_status(self, doc_id: str, status: str) -> None:
         if status not in {"active", "complete", "parked", "failed"}:
             raise ValueError(f"Unknown item status: {status!r}")

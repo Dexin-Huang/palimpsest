@@ -79,6 +79,11 @@ def add_commands(subparsers) -> None:
 
     adopt.add_argument("--recipe", required=True)
     adopt.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    adopt.add_argument(
+        "--switch",
+        action="store_true",
+        help="Update the recipe of an existing work order",
+    )
 
     run.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     run.add_argument(
@@ -937,6 +942,11 @@ def cmd_adopt(args: argparse.Namespace) -> None:
     from palimpsest.factory.workspace.layout import metadata_path, page_list_path
 
     recipe = load_recipe(args.recipe)
+    if args.switch:
+        with Ledger(args.db) as ledger:
+            ledger.switch_recipe(args.doc_id, recipe.name)
+        print(f"{args.doc_id} recipe switched to {recipe.name}")
+        return
     metadata = read_json(metadata_path(args.doc_id, args.library_root))
     page_list = read_json(page_list_path(args.doc_id, args.library_root))
     validate_records(args.doc_id, metadata, page_list)

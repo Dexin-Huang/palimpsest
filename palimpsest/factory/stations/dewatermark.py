@@ -38,4 +38,20 @@ class Dewatermark(Station):
         return StationResult()
 
 
+class PassthroughDewatermark(Dewatermark):
+    """Copy the input bytes untouched so recipes can hand the instrumented rig
+    raw archive bytes (its certified input domain) with the contract chain intact."""
+
+    variant = "passthrough/v1"
+    option_keys = frozenset()
+    production_dependencies = ()
+
+    def run(self, job: Job) -> StationResult:
+        atomic_write_bytes(
+            self.output_path(job), job.path_of("page_image_framed").read_bytes()
+        )
+        return StationResult()
+
+
 register(Dewatermark())
+register(PassthroughDewatermark())

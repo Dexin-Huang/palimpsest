@@ -180,17 +180,17 @@ flowchart TB
 | `align` | `077860b4def09ca7` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
 | `assemble_page` | `c95b74499c394ba5` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
 | `audit_transcription` | `ddc373a62f71bf05` | page | `page_image`, `page_transcription_draft` | `page_transcription_audit` | yes |
-| `deframe` | `340aac0f24dd5e62` | page | `page_image` | `page_image_framed` | no |
-| `dewatermark` | `db23f3882882fb7f` | page | `page_image_framed` | `page_image_unmarked` | no |
+| `deframe` | `904d45ddcaaab4cb` | page | `page_image` | `page_image_framed` | no |
+| `dewatermark` | `b016d96452765c72` | page | `page_image_framed` | `page_image_unmarked` | no |
 | `emend` | `67ba2713fb97056e` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
 | `finalize_edition` | `7691b7115d1f4e81` | manuscript | `page_transcription`, `manuscript`, `reference`, `emendations` | `edition` | yes |
-| `flatten` | `40e26e0939df020f` | page | `page_image_unmarked` | `page_image_clean` | no |
-| `publish` | `26b77c6bd853896a` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
+| `flatten` | `a7fd8bd7d83e801d` | page | `page_image_unmarked` | `page_image_clean` | no |
+| `publish` | `732efe190982f59a` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
 | `read` | `7d14f8ea21ddec98` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
 | `reconstruct` | `08653466fee549d6` | manuscript | `page_assembled` | `manuscript` | yes |
 | `reference` | `a9b9f2fea30fd22c` | manuscript | `manuscript` | `reference` | yes |
 | `render_epub` | `b8dadc29d6be9bd8` | manuscript | `book` | `book_epub` | no |
-| `segment` | `4a3c1edd72a927ca` | page | `page_image_clean` | `page_regions` | no |
+| `segment` | `bc818149478a0ba8` | page | `page_image_clean` | `page_regions` | no |
 | `survey` | `2821108031dfb90a` | manuscript | `page_transcription` | `translation_brief` | yes |
 | `transcribe` | `f5a9bdb5c868bec5` | page | `page_image` | `page_transcription_draft` | yes |
 | `translate` | `10e83beb41263834` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
