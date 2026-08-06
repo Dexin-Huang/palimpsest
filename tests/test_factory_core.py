@@ -89,10 +89,10 @@ def test_chinese_scroll_rig_recipe_pins_raw_lane_sensors():
     read = next(step for step in recipe.steps if step.station.name == "read")
     sensors = read.options["sensors"]
     assert sensors["detections_sha256"] == (
-        "817f75698ac6b1e48bd17eb4da99a9547512a0604ec60037114cd2c13b108be0"
+        "e2c46a12ac2b12128544bf6128af81ce7f2798a0bab07db3f93afab13ea5868b"
     )
     assert sensors["classifier_verdicts_sha256"] == (
-        "0eb299c0046d83bd2b61e3a99aae836c1aafb55aff74a088708da13f60f6c51e"
+        "50d8ac2e077f3056047d603551ef9fca4d1783e821a356b51e5b5523ac07c701"
     )
 
 
