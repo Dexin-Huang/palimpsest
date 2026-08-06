@@ -233,6 +233,7 @@ records absent from a completed refresh are tombstoned rather than deleted.
 | `site` | Rebuild the static library from published book models |
 | `bench` | Verify, run, report, canary, promote, and roll back immutable evaluations |
 | `rig` | Export or import one fixed-model agent harness |
+| `export-library` | Export validated books and reader assets without a presentation layer |
 
 Run `python -m palimpsest <command> --help` for command-specific options.
 
@@ -242,7 +243,7 @@ Export one candidate as a `.palrig` archive:
 
 ```bash
 python -m palimpsest rig export \
-  --candidate palimpsest/factory/candidates/transcribe/example.yaml \
+  --candidate palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml \
   --output example.palrig
 ```
 

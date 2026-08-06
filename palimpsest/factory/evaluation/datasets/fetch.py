@@ -35,7 +35,9 @@ MTHV2_ARCHIVE_SIZE = 4_932_243_090
 CORPORA = ("TKH", "MTH1000", "MTH1200")
 DEVELOPMENT_RESERVE_PER_CORPUS = 80
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_ROOT = REPOSITORY_ROOT / "scratch" / "ocr_benchmark" / "mthv2" / "v1"
+DEFAULT_ROOT = (
+    REPOSITORY_ROOT / "library" / "evaluations" / "raw-assets" / "mthv2" / "v1"
+)
 ANCIENTDOC_REPOSITORY = "ByteDance/AncientDoc"
 ANCIENTDOC_REVISION = "149c447ebff66792cee28e02000682820858f17b"
 ANCIENTDOC_LABEL_SHA256 = (
@@ -50,7 +52,7 @@ ANCIENTDOC_RESOLVE_ROOT = (
     f"/resolve/{ANCIENTDOC_REVISION}"
 )
 DEFAULT_ANCIENTDOC_ROOT = (
-    REPOSITORY_ROOT / "scratch" / "ocr_benchmark" / "ancientdoc" / "v1"
+    REPOSITORY_ROOT / "library" / "evaluations" / "raw-assets" / "ancientdoc" / "v1"
 )
 _ANCIENTDOC_IMAGE_NAME = re.compile(
     r"(?P<book>.+?)(?P<page>page_\d+\.(?:png|jpg|jpeg))$", re.I

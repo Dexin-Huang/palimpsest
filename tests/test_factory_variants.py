@@ -45,9 +45,7 @@ def test_compatible_variants_coexist_with_conservative_default(
 
     assert registry.get("socket_test") is default
     assert registry.get("socket_test", "experimental/v1") is experimental
-    assert registry.variants("socket_test") == [default, experimental]
     assert registry.all_stations() == [default]
-    assert registry.all_variants() == [default, experimental]
 
 
 def test_duplicate_station_variant_fails_registration(

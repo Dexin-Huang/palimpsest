@@ -175,39 +175,30 @@ def test_read_metric_registration_uses_scorer_only_gold(tmp_path: Path) -> None:
 
     assert {metric.name for metric in registry.all()} == {
         "blind_image_pairwise",
-        "character_error_rate",
         "contamination_rate",
         "empty_output_rate",
         "invented_character_rate",
         "partial_gold_character_error_rate",
-        "han_variant_v1_character_error_rate",
         "han_variant_v1_partial_gold_character_error_rate",
-        "recognized_text_v1_character_error_rate",
         "recognized_text_v1_partial_gold_character_error_rate",
         "page_completeness",
-        "region_completeness",
         "repetition_rate",
     }
-    assert registry.get("character_error_rate").direction is MetricDirection.MINIMIZE
-    assert (
-        registry.get("partial_gold_character_error_rate").direction
-        is MetricDirection.MINIMIZE
-    )
+    assert registry.get("partial_gold_character_error_rate").direction is MetricDirection.MINIMIZE
     assert (
         registry.get("han_variant_v1_partial_gold_character_error_rate").direction
-        is MetricDirection.MINIMIZE
-    )
-    assert (
-        registry.get("recognized_text_v1_character_error_rate").direction
         is MetricDirection.MINIMIZE
     )
     assert (
         registry.get("recognized_text_v1_partial_gold_character_error_rate").direction
         is MetricDirection.MINIMIZE
     )
-    assert registry.get("region_completeness").direction is MetricDirection.MAXIMIZE
+    assert (
+        registry.get("recognized_text_v1_partial_gold_character_error_rate").direction
+        is MetricDirection.MINIMIZE
+    )
     assert registry.observe("blind_image_pairwise", output, scorer_gold) is None
-    assert registry.observe("character_error_rate", output, scorer_gold) == 0.0
+    assert registry.observe("partial_gold_character_error_rate", output, scorer_gold) == 0.0
     assert (
         registry.observe("partial_gold_character_error_rate", output, scorer_gold)
         == 0.0
@@ -220,11 +211,10 @@ def test_read_metric_registration_uses_scorer_only_gold(tmp_path: Path) -> None:
         )
         == 0.0
     )
-    assert registry.observe("region_completeness", output, scorer_gold) == 1.0
-    assert registry.observe("character_error_rate", output, {}) is None
+    assert registry.observe("partial_gold_character_error_rate", output, {}) is None
     assert (
         registry.observe(
-            "recognized_text_v1_character_error_rate",
+            "recognized_text_v1_partial_gold_character_error_rate",
             output,
             scorer_gold,
         )
@@ -309,12 +299,12 @@ def test_scope_aware_scoring_scores_primary_layer_only() -> None:
     primary_gold = {"text": "main one\nmain two", "gold_scope": "primary_scope"}
     full_gold = {"text": "main one\nmain two\nnote text"}
 
-    assert registry.observe("character_error_rate", layered_output, primary_gold) == 0.0
+    assert registry.observe("partial_gold_character_error_rate", layered_output, primary_gold) == 0.0
     assert (
         registry.observe("invented_character_rate", layered_output, primary_gold) == 0.0
     )
     assert registry.observe("page_completeness", layered_output, primary_gold) == 1.0
-    assert registry.observe("character_error_rate", layered_output, full_gold) == 0.0
+    assert registry.observe("partial_gold_character_error_rate", layered_output, full_gold) == 0.0
 
     flat_output = {"text": "main one\nmain two\nnote text"}
     flat_invented = registry.observe(
@@ -329,4 +319,4 @@ def test_scope_aware_scoring_scores_primary_layer_only() -> None:
     assert registry.observe("empty_output_rate", layered_output, primary_gold) == 0.0
 
     broken_layers = {"text": "x", "layers": [{"kind": "primary"}]}
-    assert registry.observe("character_error_rate", broken_layers, primary_gold) is None
+    assert registry.observe("partial_gold_character_error_rate", broken_layers, primary_gold) is None

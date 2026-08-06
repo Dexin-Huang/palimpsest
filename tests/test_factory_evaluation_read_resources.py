@@ -12,6 +12,7 @@ from setuptools.build_meta import build_wheel
 from palimpsest.factory.evaluation.candidate import load_candidate
 from palimpsest.factory.evaluation.judge import load_judge
 from palimpsest.factory.evaluation.metrics import MetricRegistry
+from palimpsest.factory.evaluation.probes import trusted_probes
 from palimpsest.factory.evaluation.response_schemas import trusted_response_schemas
 from palimpsest.factory.evaluation.station_metrics.read import register_read_metrics
 from palimpsest.factory.evaluation.suite import (
@@ -32,8 +33,6 @@ SUITE_PATH = (
 )
 CANDIDATE_ROOT = FACTORY_ROOT / "candidates" / "read"
 CANDIDATE_PATHS = (
-    CANDIDATE_ROOT / "zh-vatican-f004r-low-thinking-development-v1.yaml",
-    CANDIDATE_ROOT / "zh-vatican-f004r-high-thinking-development-v1.yaml",
     CANDIDATE_ROOT / "zh-current-production-moving-v1.yaml",
 )
 SOURCE_MANIFEST = "https://digi.vatlib.it/iiif/MSS_Borg.cin.361/manifest.json"
@@ -61,7 +60,7 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
     suite = load_suite(
         SUITE_PATH,
         metric_resolver=metrics,
-        probe_resolver={},
+        probe_resolver=trusted_probes(),
         judge_resolver={judge.id: judge},
         verify_local=True,
     )
@@ -147,7 +146,7 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
     assert suite.judges[0].judge == judge
     assert judge.response_schema == "pairwise_preference/v1"
 
-    low, high, current = candidates
+    (current,) = candidates
     for candidate in candidates:
         assert candidate.station == "read"
         assert candidate.variant == "default"
@@ -157,23 +156,10 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
         assert candidate.produces == "page_transcription"
         assert candidate.prompt_name == "read/zh/diplomatic"
         assert candidate.prompt_hash is not None
-    for candidate in (low, high):
-        # Historical development records from the retired Gemini reader
-        # experiment; the candidate YAMLs are immutable evidence, so only
-        # their shape is asserted here, not the retired model string.
-        assert candidate.model_identity == "fixed"
-        assert candidate.can_auto_qualify
-    assert {key for key in low.params if low.params[key] != high.params[key]} == {
-        "thinking_level"
-    }
-    assert set(low.params) == set(high.params)
-    assert low.params["thinking_level"] == "low"
-    assert high.params["thinking_level"] == "high"
     assert current.id == "read/zh-current-production-moving-v1"
     assert current.model == "token-plan/qwen3.8-max"
     assert current.model_identity == "fixed"
     assert current.can_auto_qualify is True
-    assert current.params == high.params
 
     wheel_source = tmp_path / "wheel-source"
     shutil.copytree(PROJECT_ROOT / "palimpsest", wheel_source / "palimpsest")
@@ -219,8 +205,7 @@ def test_tracked_chinese_read_development_resources_load_and_ship(
     }
     assert tracked_resources <= wheel_names
     assert {
-        "palimpsest/factory/candidates/read/zh-vatican-f004r-low-thinking-development-v1.yaml",
-        "palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml",
+                "palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml",
         "palimpsest/factory/judges/read-image-pairwise-qwen3.8-v1.yaml",
         "palimpsest/factory/prompts/judge/read/image-pairwise-v1.txt",
         "palimpsest/factory/evaluation/suites/read/zh-vatican-borg-cin-361-f004r-development-v1.yaml",

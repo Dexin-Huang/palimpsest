@@ -659,19 +659,9 @@ def register_read_metrics(registry: MetricRegistry) -> None:
 
     for metric in (
         Metric(
-            "character_error_rate",
-            MetricDirection.MINIMIZE,
-            _score_character_error_rate,
-        ),
-        Metric(
             "partial_gold_character_error_rate",
             MetricDirection.MINIMIZE,
             _score_partial_gold_character_error_rate,
-        ),
-        Metric(
-            "han_variant_v1_character_error_rate",
-            MetricDirection.MINIMIZE,
-            _score_han_variant_v1_character_error_rate,
         ),
         Metric(
             "han_variant_v1_partial_gold_character_error_rate",
@@ -679,17 +669,9 @@ def register_read_metrics(registry: MetricRegistry) -> None:
             _score_han_variant_v1_partial_gold_character_error_rate,
         ),
         Metric(
-            "recognized_text_v1_character_error_rate",
-            MetricDirection.MINIMIZE,
-            _score_recognized_text_v1_character_error_rate,
-        ),
-        Metric(
             "recognized_text_v1_partial_gold_character_error_rate",
             MetricDirection.MINIMIZE,
             _score_recognized_text_v1_partial_gold_character_error_rate,
-        ),
-        Metric(
-            "region_completeness", MetricDirection.MAXIMIZE, _score_region_completeness
         ),
         Metric("page_completeness", MetricDirection.MAXIMIZE, _score_page_completeness),
         Metric(

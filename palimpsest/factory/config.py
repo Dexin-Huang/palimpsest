@@ -1,8 +1,11 @@
 """Factory configuration: the one place for paths and model defaults.
 
 Env-backed via ``.env`` at the project root. Recipes reference these values
-with ``${VAR}`` interpolation; nothing else in the factory reads ``os.environ``
-directly.
+with ``${VAR}`` interpolation. The factory reads ``os.environ`` directly only
+for the four operator knobs in ``.env.example`` that live outside recipe
+interpolation (PALIMPSEST_OMP_COMMAND, PALIMPSEST_RETAIN_OUTPUTS,
+PALIMPSEST_RFDETR_PYTHON, PALIMPSEST_RFDETR_OBJECT_ROOT); everything else
+resolves through this module.
 """
 
 from __future__ import annotations

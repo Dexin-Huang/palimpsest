@@ -52,7 +52,7 @@ into an empty success.
 
 ## Harnesses
 
-Configured executors may invoke OMP, Codex CLI, or Claude Code. Harness-specific
+Configured executors may invoke OMP or the Codex CLI. Harness-specific
 code owns process invocation and session accounting. Station code owns the
 instruction, staged evidence, artifact parsing, and domain validation. The
 common executor contract keeps the conductor independent of any harness.

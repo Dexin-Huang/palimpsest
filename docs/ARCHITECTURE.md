@@ -92,8 +92,8 @@ repair happen before the artifact returns to the conductor.
 ### Gateway layer
 
 `palimpsest/factory/gateway/client.py` is the provider-neutral model API.
-Provider adapters own client construction and response parsing. Pricing,
-structured-output decoding, retries, usage, and error classification are
+Provider adapters own client construction and response parsing. Structured
+output decoding, retries, usage, and error classification are
 centralized here rather than repeated in stations.
 
 ### Storage layer
@@ -190,7 +190,7 @@ palimpsest/
     gateway/
       client.py
       omp.py
-      pricing.py
+      protocol.py
     workspace/
       layout.py
       io.py

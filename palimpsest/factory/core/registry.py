@@ -77,29 +77,6 @@ def all_stations() -> list[Station]:
     return [_graph_representative(name) for name in sorted(_STATIONS)]
 
 
-def all_variants() -> list[Station]:
-    """Return every registered station implementation in stable order."""
-    _ensure_loaded()
-    return [
-        variants_by_name[variant]
-        for name in sorted(_STATIONS)
-        for variants_by_name in (_STATIONS[name],)
-        for variant in sorted(variants_by_name)
-    ]
-
-
-def variants(name: str) -> list[Station]:
-    """Return all registered implementations of one logical station."""
-    _ensure_loaded()
-    try:
-        variants_by_name = _STATIONS[name]
-    except KeyError:
-        raise KeyError(
-            f"Unknown station: {name!r}. Registered: {sorted(_STATIONS)}"
-        ) from None
-    return [variants_by_name[variant] for variant in sorted(variants_by_name)]
-
-
 def get(name: str, variant: str | None = None) -> Station:
     """Resolve an explicit variant or the conservative production default."""
     _ensure_loaded()

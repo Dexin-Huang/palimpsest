@@ -108,7 +108,6 @@ def test_undefined_imaging_denominators_are_unknown_and_omissions_are_failures()
         "segment_region_recall",
         "segment_mean_intersection_over_union",
         "segment_region_intersection_recall",
-        "segment_text_region_recall",
         "segment_marginalia_recall",
         "segment_reading_order_accuracy",
         "segment_protected_completeness",
@@ -371,10 +370,10 @@ def test_split_deframe_development_records_resolve_exactly() -> None:
     )
 
     assert baseline.fingerprint == (
-        "2e34b40b89368ef46d45bf35113743b1cb82d5f09590cc88187ebda056f6612e"
+        "06030373e41cd2b434af8d63a425c042cda72e65ff3479fdc22ac563ff30dedc"
     )
     assert challenger.fingerprint == (
-        "c12b8e7a6fba0370f07a0c5a19aef6ee1d125d75e3aad6253cfc8711258c10a3"
+        "d42aaf5de00c7bbc45e10aeaf7f669eb0c4f56564e5b6fb801007bc4b7048b11"
     )
     assert spread_suite.fingerprint == (
         "6a9c2a189cefec26b1533a96a326e24e521cc96e519e557893b569a0a468979a"

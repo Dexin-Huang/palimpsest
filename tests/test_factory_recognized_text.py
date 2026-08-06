@@ -166,7 +166,6 @@ def test_recognized_metrics_score_full_page_commentary_exactly_once() -> None:
     }
 
     for metric_name in (
-        "recognized_text_v1_character_error_rate",
         "recognized_text_v1_partial_gold_character_error_rate",
     ):
         assert registry.observe(metric_name, flat_output, gold) == 0.0
@@ -176,7 +175,7 @@ def test_recognized_metrics_score_full_page_commentary_exactly_once() -> None:
 
     assert (
         registry.observe(
-            "recognized_text_v1_character_error_rate",
+            "recognized_text_v1_partial_gold_character_error_rate",
             {"transcription": "二十 六", "commentary": []},
             gold,
         )

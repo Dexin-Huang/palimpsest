@@ -942,8 +942,9 @@ def register_imaging_metrics(registry: MetricRegistry) -> None:
         Metric(
             "segment_region_intersection_recall", maximize, _score_region_intersection
         ),
-        Metric("segment_text_region_recall", maximize, _score_text_region_recall),
-        Metric("segment_marginalia_recall", maximize, _score_marginalia_recall),
+        Metric(
+            "segment_marginalia_recall", maximize, _score_marginalia_recall
+        ),
         Metric("segment_reading_order_accuracy", maximize, _score_reading_order),
         Metric(
             "segment_protected_completeness", maximize, _score_protected_completeness
