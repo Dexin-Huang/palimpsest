@@ -360,8 +360,8 @@ line:
         load_recipe("out_of_order", recipes_dir=tmp_path)
 
 
-def test_chinese_recipe_loads_and_validates(dual_read_models):
-    recipe = load_recipe("chinese_scroll")
+def test_chinese_rig_recipe_loads_and_validates(dual_read_models):
+    recipe = load_recipe("chinese_scroll_rig")
     assert [spec.station.name for spec in recipe.steps] == [
         "acquire",
         "deframe",
@@ -381,50 +381,27 @@ def test_chinese_recipe_loads_and_validates(dual_read_models):
         "render_epub",
     ]
     read = recipe.steps[5]
-    assert read.model == "openai-codex/gpt-5.6-sol"
-    assert read.params == {
-        "temperature": 0.1,
-        "media_resolution": "high",
-        "max_output_tokens": 32768,
-        "thinking_level": "low",
-        "secondary_model": "token-plan/qwen3.8-max",
-        "secondary_thinking_level": None,
-        "adjudicator_model": "anthropic/claude-fable-5",
-        "adjudicator_thinking_level": "high",
-    }
+    assert read.station.variant == "omp_instrumented"
+    assert read.model == "openai-codex/gpt-5.6-luna"
+    assert read.prompt_name == "transcribe/zh/foreman_v12"
+    assert read.options["quiet_max_disagreements"] == 5
+    assert read.options["tool_bindings"] == [
+        {
+            "id": "qwen3_8_max_draft_v1",
+            "kind": "draft_model",
+            "model": "token-plan/qwen3.8-max",
+        }
+    ]
     assert recipe.steps[8].options == {
         "overlap": 1,
         "trim_seam_overlap": True,
     }
 
 
-def test_chinese_printed_book_recipe_disables_scroll_seam_trimming(
-    dual_read_models,
-):
-    recipe = load_recipe("chinese_printed_book")
-    assert [spec.station.name for spec in recipe.steps] == [
-        "acquire",
-        "deframe",
-        "dewatermark",
-        "flatten",
-        "segment",
-        "read",
-        "align",
-        "survey",
-        "translate",
-        "assemble_page",
-        "reconstruct",
-        "reference",
-        "emend",
-        "finalize_edition",
-        "publish",
-        "render_epub",
-    ]
-    read = recipe.steps[5]
-    assert read.model == "openai-codex/gpt-5.6-sol"
-    assert read.params["secondary_model"] == "token-plan/qwen3.8-max"
-    assert recipe.steps[7].model == "anthropic/claude-fable-5"
-    translate = recipe.steps[8]
+def test_latin_recipe_disables_scroll_seam_trimming(dual_read_models):
+    recipe = load_recipe("latin_manuscript")
+    translate = recipe.steps[7]
+    assert translate.station.name == "translate"
     assert translate.options == {"overlap": 1}
 
 

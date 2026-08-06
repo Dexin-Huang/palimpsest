@@ -302,8 +302,7 @@ generation parameters, and station options without changing conductor code.
 The repository currently ships:
 
 - `latin_manuscript`
-- `chinese_scroll`
-- `chinese_printed_book`
+- `chinese_scroll_rig`
 
 Recipe keys are strict. Unknown parameters or station options fail during load,
 before a network request or paid model call.

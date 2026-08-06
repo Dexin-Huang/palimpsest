@@ -18,7 +18,7 @@ from palimpsest.factory.evaluation.candidate import (
 
 _CANDIDATE = Path(
     "palimpsest/factory/candidates/transcribe/"
-    "zh-luna-toolbelt8-regions-development-v1.yaml"
+    "zh-qwen-full-image-development-v1.yaml"
 )
 _READ_CANDIDATE = Path(
     "palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml"
@@ -115,10 +115,10 @@ def test_rig_manifest_names_the_complete_agent_identity(
     candidate = manifest["candidate"]
     assert manifest["record_kind"] == "palimpsest-agent-rig"
     assert manifest["rig_fingerprint"] == bundle.rig_fingerprint
-    assert candidate["model"] == "openai-codex/gpt-5.6-luna"
+    assert candidate["model"] == "token-plan/qwen3.8-max"
     assert candidate["model_identity"] == "fixed"
-    assert candidate["prompt_name"] == "transcribe/zh/toolbelt3"
-    assert candidate["options"]["extension_source"].startswith("import type")
+    assert candidate["prompt_name"] == "transcribe/zh/full_image"
+    assert candidate["options"] == {}
     assert manifest["runtime"] == _RUNTIME
     assert "candidate.yaml" in names
     assert "prompt.txt" in names

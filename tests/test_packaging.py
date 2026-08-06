@@ -80,8 +80,7 @@ def test_wheel_contains_and_resolves_factory_runtime_resources(tmp_path: Path) -
     assert packaged_data == expected_resources
     assert {
         "palimpsest/factory/recipes/latin_manuscript.yaml",
-        "palimpsest/factory/recipes/chinese_scroll.yaml",
-        "palimpsest/factory/recipes/chinese_printed_book.yaml",
+        "palimpsest/factory/recipes/chinese_scroll_rig.yaml",
         "palimpsest/factory/prompts/read/la/diplomatic.txt",
         "palimpsest/factory/prompts/read/zh/diplomatic.txt",
         "palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml",
@@ -133,7 +132,7 @@ from palimpsest.factory.publication_contract import schema_paths
 
 recipes = [
     load(name)
-    for name in ("latin_manuscript", "chinese_scroll", "chinese_printed_book")
+    for name in ("latin_manuscript", "chinese_scroll_rig")
 ]
 prompts = {{
     spec.prompt_name: prompt_store.load(spec.prompt_name)
@@ -163,10 +162,9 @@ print(json.dumps({{
     assert Path(proof["module"]).is_relative_to(install_root)
     assert proof["recipes"] == [
         "latin_manuscript",
-        "chinese_scroll",
-        "chinese_printed_book",
+        "chinese_scroll_rig",
     ]
-    assert {"read/la/diplomatic", "read/zh/diplomatic"} <= set(proof["prompts"])
+    assert {"read/la/diplomatic", "transcribe/zh/foreman_v12"} <= set(proof["prompts"])
     assert proof["schemas"] == [
         "book-object-v1.schema.json",
         "library-object-v1.schema.json",

@@ -16,9 +16,6 @@ flowchart TB
   kind_page_transcription --> station_assemble_page
   kind_page_translation --> station_assemble_page
   station_assemble_page --> kind_page_assembled
-  kind_page_image --> station_audit_transcription
-  kind_page_transcription_draft --> station_audit_transcription
-  station_audit_transcription --> kind_page_transcription_audit
   kind_page_image --> station_deframe
   station_deframe --> kind_page_image_framed
   kind_page_image_framed --> station_dewatermark
@@ -71,8 +68,6 @@ flowchart TB
   style station_align fill:#eef2ec,stroke:#9ab08f
   station_assemble_page(["assemble_page<br/><i>page</i>"])
   style station_assemble_page fill:#eef2ec,stroke:#9ab08f
-  station_audit_transcription(["audit_transcription ✱<br/><i>page</i>"])
-  style station_audit_transcription fill:#eef2ec,stroke:#9ab08f
   station_deframe(["deframe<br/><i>page</i>"])
   style station_deframe fill:#eef2ec,stroke:#9ab08f
   station_dewatermark(["dewatermark<br/><i>page</i>"])
@@ -118,7 +113,6 @@ flowchart TB
   style kind_page_list fill:#fdf6e3,stroke:#c9b99a
   kind_page_regions["page_regions"]
   kind_page_transcription["page_transcription"]
-  kind_page_transcription_audit["page_transcription_audit"]
   kind_page_transcription_draft["page_transcription_draft"]
   kind_page_translation["page_translation"]
   kind_reference["reference"]
@@ -179,7 +173,6 @@ flowchart TB
 | `acquire` | `c4fa662158caebc4` | page | `page_list` | `page_image` | no |
 | `align` | `077860b4def09ca7` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
 | `assemble_page` | `c95b74499c394ba5` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
-| `audit_transcription` | `ddc373a62f71bf05` | page | `page_image`, `page_transcription_draft` | `page_transcription_audit` | yes |
 | `deframe` | `904d45ddcaaab4cb` | page | `page_image` | `page_image_framed` | no |
 | `dewatermark` | `b016d96452765c72` | page | `page_image_framed` | `page_image_unmarked` | no |
 | `emend` | `67ba2713fb97056e` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |

@@ -99,8 +99,7 @@ page dependency required by its next station is present.
 The maintained recipes are:
 
 - `latin_manuscript`
-- `chinese_scroll`
-- `chinese_printed_book`
+- `chinese_scroll_rig`
 
 Recipe interpolation accepts only the named model settings in factory
 configuration. Missing settings fail during recipe loading rather than during

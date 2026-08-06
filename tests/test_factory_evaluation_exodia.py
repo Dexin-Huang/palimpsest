@@ -462,10 +462,10 @@ def test_validate_candidate_rejects_missing_station_variant() -> None:
 def test_validate_candidate_accepts_station_variant() -> None:
     _validated_candidate, harness = exodia_evaluator._validate_candidate(
         _candidate(),
-        _harness(variant="omp_toolbelt6"),
+        _harness(variant="omp_instrumented"),
     )
 
-    assert harness["variant"] == "omp_toolbelt6"
+    assert harness["variant"] == "omp_instrumented"
 
 
 def test_validate_candidate_rejects_empty_station_variant() -> None:
