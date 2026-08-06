@@ -369,7 +369,7 @@ class Conductor:
         prompts: dict[str, prompt_store.Prompt],
         previous_runs: dict[tuple[str, str | None], sqlite3.Row],
     ) -> CellReport:
-        """Execute or skip one cell; failures stay contained in its page chain."""
+        """Execute or skip one cell; a page failure halts the line at the batch barrier."""
         station = spec.station
         prompt = prompts.get(spec.prompt_name) if spec.prompt_name else None
         config = StationConfig(

@@ -18,6 +18,7 @@ import yaml
 
 from palimpsest.factory import config
 from palimpsest.factory.core import registry
+from palimpsest.factory.core.contracts import SOURCE_KINDS, contract
 from palimpsest.factory.core.contracts import SOURCE_KINDS
 from palimpsest.factory.core.station import Station
 
@@ -81,6 +82,11 @@ def _spec(slot: dict) -> StationSpec:
     station = registry.get(slot["station"], slot.get("variant"))
     if station.uses_model and not (slot.get("model") and slot.get("prompt")):
         raise ValueError(f"Station {station.name!r} requires 'model' and 'prompt'")
+    if not station.uses_model and (slot.get("model") or slot.get("prompt")):
+        raise ValueError(
+            f"Station {station.name!r} is local but received 'model' or "
+            "'prompt'; they would silently change freshness identity"
+        )
 
     params = slot.get("params") or {}
     options = {key: value for key, value in slot.items() if key not in _SPEC_KEYS}

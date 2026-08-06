@@ -101,6 +101,19 @@ def test_wheel_contains_and_resolves_factory_runtime_resources(tmp_path: Path) -
         for name in members
     )
 
+    source_files = {
+        path.relative_to(source_root).as_posix()
+        for path in (source_root / "palimpsest").rglob("*")
+        if path.is_file()
+    }
+    stray = {
+        name for name in members if name.startswith("palimpsest/") and name not in source_files
+    }
+    assert not stray, (
+        "wheel ships files absent from the source tree "
+        f"(stale build/ leak?): {sorted(stray)[:5]}"
+    )
+
     install_root = tmp_path / "installed"
     subprocess.run(
         [
@@ -171,3 +184,12 @@ print(json.dumps({{
     ]
     assert proof["name"] == "palimpsest-cli"
     assert proof["version"] == "0.2.0"
+
+
+def test_checkout_has_no_stale_build_tree() -> None:
+    # setuptools build_py copies into build/lib but never removes files that
+    # vanished from the source; a stale build/ silently ships retired modules
+    # (e.g. gateway/gemini.py) in every wheel built from this checkout.
+    assert not (PROJECT_ROOT / "build").exists(), (
+        "stale build/ tree would leak deleted modules into the wheel; delete it"
+    )

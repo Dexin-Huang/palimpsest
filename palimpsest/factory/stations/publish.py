@@ -15,6 +15,7 @@ from palimpsest.factory.core.artifact import (
     content_fingerprint,
     provenance_fingerprint,
     provenance_matches,
+    read_provenance,
 )
 from palimpsest.factory.core.contracts import (
     BOOK_PROFILE,
@@ -351,6 +352,14 @@ class Publish(Station):
     ) -> bool:
         if not alignment_path.is_file():
             return False
+        stamp = read_provenance(alignment_path)
+        if stamp is None:
+            return False
+        station_name = stamp.get("station", "align")
+        variant = stamp.get("station_variant")
+        station = (
+            get(station_name, variant) if variant else get(station_name)
+        )
         output_fingerprint = content_fingerprint(alignment_path)
         input_fingerprint = fingerprint(
             content_fingerprint(job.path_of("page_image_clean", page_id)),
@@ -359,8 +368,8 @@ class Publish(Station):
         return provenance_matches(
             alignment_path,
             {
-                "station": "align",
-                "station_fingerprint": get("align").implementation_fingerprint,
+                "station": station_name,
+                "station_fingerprint": station.implementation_fingerprint,
                 "input_fingerprint": input_fingerprint,
                 "output_fingerprint": output_fingerprint,
             },

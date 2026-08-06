@@ -27,9 +27,9 @@ dist/
 !.claude/skills/palimpsest-station-development/**
 .playwright-cli/
 .labyrinth/
+.omp/
 
-# Scratch work
-scratch/
+# Local scratch and temp
 tmp/
 
 # Canonical library sources; all derived work stays local
