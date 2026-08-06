@@ -1,4 +1,4 @@
-﻿# Secrets
+# Secrets
 .env
 .env.*
 !.env.example
@@ -44,6 +44,7 @@ site/
 # Windows device file
 nul
 experiments/**/out/
+experiments/**/outv*/
 experiments/testset/folios/
 
 # Content-addressed evaluation asset cache: refetch with 'palimpsest bench fetch'
