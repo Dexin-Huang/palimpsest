@@ -55,7 +55,11 @@ from palimpsest.factory.evaluation.suite import (
     EvaluationSuite,
     validate_candidate_suite,
 )
-from palimpsest.factory.workspace.io import atomic_write_json, read_json
+from palimpsest.factory.workspace.io import (
+    atomic_write_json,
+    read_json,
+    utc_now,
+)
 from palimpsest.factory.workspace.layout import artifact_path, page_list_path
 
 AssetResolver = Callable[[CaseAsset], Path]
@@ -502,14 +506,6 @@ def _validate_pair(
         raise ValueError("Evaluation case IDs must be unique")
 
 
-def _utc_now() -> str:
-    return (
-        datetime.now(timezone.utc)
-        .isoformat(timespec="microseconds")
-        .replace("+00:00", "Z")
-    )
-
-
 def _json_value(value: object) -> object:
     if isinstance(value, Enum):
         return value.value
@@ -523,6 +519,9 @@ def _json_value(value: object) -> object:
         return [_json_value(item) for item in value]
     if isinstance(value, Path):
         return str(value)
+    if isinstance(value, float) and not math.isfinite(value):
+        # Unknown usage/cost surfaces as non-finite floats; persist JSON null.
+        return None
     return value
 
 
@@ -1175,6 +1174,7 @@ def _run_probes(
 ) -> tuple[Mapping[str, object], ...]:
     results: list[Mapping[str, object]] = []
     for probe in suite.downstream_probes:
+        required = suite.promotion.require_all_downstream_probes
         try:
             raw = probe.definition(tuple(outcomes), tuple(cases))
             if not isinstance(raw, Mapping):
@@ -1184,10 +1184,11 @@ def _run_probes(
                 raise ValueError(
                     "probe result status must be 'passed', 'failed', or 'unknown'"
                 )
-            result = {"id": probe.id, **dict(raw)}
+            result = {"id": probe.id, "required": required, **dict(raw)}
         except Exception as error:
             result = {
                 "id": probe.id,
+                "required": required,
                 "status": "unknown",
                 "reason": f"{type(error).__name__}: {error}",
             }
@@ -1940,7 +1941,7 @@ def run_evaluation(
                     ] = evidence
     else:
         effective_ceiling = requested_ceiling
-        started_at = _utc_now()
+        started_at = utc_now()
         store.begin_run(
             run_id=run_id,
             suite_id=suite.id,
@@ -2159,7 +2160,7 @@ def run_evaluation(
             status="completed",
             decision=decision,
             started_at=started_at,
-            finished_at=_utc_now(),
+            finished_at=utc_now(),
             suite=suite,
             baseline=baseline,
             challenger=challenger,
@@ -2204,7 +2205,7 @@ def run_evaluation(
                 status="failed",
                 decision="error",
                 started_at=started_at,
-                finished_at=_utc_now(),
+                finished_at=utc_now(),
                 suite=suite,
                 baseline=baseline,
                 challenger=challenger,

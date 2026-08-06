@@ -13,7 +13,6 @@ import numpy as np
 
 from palimpsest.factory import agent_cell
 from palimpsest.factory.core.registry import register
-from palimpsest.factory.config import LIBRARY_ROOT
 from palimpsest.factory.core.station import Job, StationResult
 from palimpsest.factory.stations import instrumented_sensors
 from palimpsest.factory.stations.transcribe import Transcribe
@@ -192,6 +191,11 @@ _DRAFT_SUBMISSION_EXTENSION_BYTES = _submission_extension(
 ).encode("utf-8")
 
 
+def _run_identity(job: Job, run_name: str) -> tuple[str, Path]:
+    page_key = hashlib.sha256(str(job.page_id).encode("utf-8")).hexdigest()[:16]
+    return page_key, doc_dir(job.doc_id, job.library_root) / "runs" / run_name
+
+
 class OmpExtensionTranscribe(Transcribe):
     """Run one OMP reader with only image-read and structured-submit tools."""
 
@@ -209,17 +213,14 @@ class OmpExtensionTranscribe(Transcribe):
     def run(self, job: Job) -> StationResult:
         source_bytes, tool_bindings = _candidate_options(job.config.options)
         page_image = job.path_of("page_image")
-        page_key = hashlib.sha256(str(job.page_id).encode("utf-8")).hexdigest()[:16]
-        run_root = (
-            doc_dir(job.doc_id, job.library_root) / "runs" / "transcribe_omp_extension"
-        )
+        page_key, run_root = _run_identity(job, "transcribe_omp_extension")
         workspace = agent_cell.stage_workspace(
             run_root / page_key,
             skill=job.config.prompt.text,
             evidence={},
             images=[page_image],
         )
-        detail_tiles = _stage_detail_tiles(workspace, image=page_image)
+        _stage_detail_tiles(workspace, image=page_image)
         extension_dir = workspace / ".omp" / "extensions"
         extension_dir.mkdir(parents=True)
         (extension_dir / "00-submit-transcription.ts").write_bytes(
@@ -391,18 +392,6 @@ def _encoded_extension_source(source: Any) -> bytes:
             f"extension_source exceeds the {MAX_EXTENSION_BYTES}-byte limit"
         )
     return encoded
-
-
-def _extension_source_bytes(options: Mapping[str, Any]) -> bytes:
-    """Exact single-option contract kept for the toolbelt station variants."""
-
-    if set(options) != {"extension_source"}:
-        missing = sorted({"extension_source"} - set(options))
-        unknown = sorted(set(options) - {"extension_source"})
-        raise ValueError(
-            f"Expected only extension_source; missing={missing}, unknown={unknown}"
-        )
-    return _encoded_extension_source(options["extension_source"])
 
 
 def _candidate_options(
@@ -672,12 +661,17 @@ def _instrumented_options(
     return encoded, binding, sensors, quiet_value
 
 
+
+
+
 class OmpInstrumentedTranscribe(Transcribe):
     """The instrumented rig: base read, sensors, quiet gate, foreman audit.
 
     The candidate model is the escalation foreman; the base and shadow reads
     run on the bound draft_model engine. Sensor artifacts are content-addressed
-    objects verified before use. Measured lineage: exodia experiments 22-34.
+    objects verified before use. The rig orchestration is shared with the read
+    socket's OmpInstrumentedRead (``_run_instrumented``); only the payload
+    shape differs. Measured lineage: the instrumented-rig campaign; see palimpsest-research.
     """
 
     variant = "omp_instrumented"
@@ -688,6 +682,7 @@ class OmpInstrumentedTranscribe(Transcribe):
     production_dependencies = (
         "factory/agent_cell.py",
         "factory/stations/transcribe.py",
+        "factory/stations/read_omp.py",
         "factory/stations/instrumented_sensors.py",
         "factory/recognized_text.py",
     )
@@ -695,86 +690,33 @@ class OmpInstrumentedTranscribe(Transcribe):
     def validate_options(self, options: Mapping[str, Any]) -> None:
         _instrumented_options(options)
 
-    def _load_object(self, job: Job, sha256_hex: str, label: str) -> Path:
-        # Isolated evaluation roots carry only materialized case inputs, so
-        # candidate-scoped objects fall back to the shared library store. The
-        # content hash makes any byte source equally trustworthy.
-        candidates = (
-            job.library_root / "evaluations" / "objects" / sha256_hex,
-            LIBRARY_ROOT / "evaluations" / "objects" / sha256_hex,
-        )
-        for path in candidates:
-            if path.is_file():
-                digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                if digest != sha256_hex:
-                    raise ValueError(f"{label} object content drifted: {digest}")
-                return path
-        raise FileNotFoundError(f"{label} object is missing: {candidates[0]}")
-
     def run(self, job: Job) -> StationResult:
+        # Lazy import keeps the rig's home (read_omp) importable first; the
+        # instrumented orchestration is shared with the read socket.
+        from palimpsest.factory.stations.read_omp import _run_instrumented
+
         source_bytes, binding, sensor_digests, quiet_max = _instrumented_options(
             job.config.options
         )
-        page_image = job.path_of("page_image")
-        page_key = hashlib.sha256(str(job.page_id).encode("utf-8")).hexdigest()[:16]
-        run_root = (
-            doc_dir(job.doc_id, job.library_root) / "runs" / "transcribe_omp_instrumented"
+        outcome = _run_instrumented(
+            job,
+            image=job.path_of("page_image"),
+            run_name="transcribe_omp_instrumented",
+            context_lines=[
+                "# Page provenance",
+                "- Dataset: historical Chinese xylograph corpus.",
+                f"- Document: {job.doc_id}",
+                f"- Page id: {job.page_id}.",
+                "- Genre: Buddhist canon print (Tripitaka family). Formulaic litany and",
+                "  repeated parallel phrases are normal. The final printed column usually",
+                "  carries the scripture title, scroll number, sheet number, and a",
+                "  collation cipher.",
+            ],
+            binding=binding,
+            sensor_digests=sensor_digests,
+            quiet_max=quiet_max,
+            extension_source=source_bytes,
         )
-
-        # Resolve instrument objects before any paid model session.
-        detections_by_case = instrumented_sensors.load_jsonl_keyed(
-            self._load_object(job, sensor_digests["detections_sha256"], "detections"),
-            "characters",
-        )
-        verdicts_by_case = instrumented_sensors.load_jsonl_keyed(
-            self._load_object(
-                job, sensor_digests["classifier_verdicts_sha256"], "classifier verdicts"
-            ),
-            "columns",
-        )
-        case_keys = (f"{job.doc_id}__{job.page_id}", str(job.doc_id))
-        characters = next(
-            (detections_by_case[key] for key in case_keys if key in detections_by_case),
-            None,
-        )
-        verdict_columns = next(
-            (verdicts_by_case[key] for key in case_keys if key in verdicts_by_case),
-            None,
-        )
-
-        base_text, base_run = _stage_draft(
-            run_root / f"{page_key}-base",
-            image=page_image,
-            model=binding["model"],
-        )
-        tokens = base_run.tokens
-        cost: float | None = base_run.cost_usd
-        alternates: list[str] = []
-        try:
-            shadow_text, shadow_run = _stage_draft(
-                run_root / f"{page_key}-shadow",
-                image=page_image,
-                model=binding["model"],
-            )
-        except agent_cell.AgentCellError:
-            # The shadow read is tremor evidence, never the result; a failed
-            # read degrades to count and classifier sensors alone.
-            cost = None
-        else:
-            if shadow_text != base_text:
-                alternates.append(shadow_text)
-            tokens += shadow_run.tokens
-            if cost is not None:
-                cost = (
-                    None
-                    if shadow_run.cost_usd is None
-                    else cost + shadow_run.cost_usd
-                )
-
-        sensors, flags = instrumented_sensors.compute_sensors(
-            base_text, characters, alternates, verdict_columns
-        )
-
         page = job.page or {}
         payload: dict[str, Any] = {
             "doc_id": job.doc_id,
@@ -784,74 +726,23 @@ class OmpInstrumentedTranscribe(Transcribe):
             "requested_model": job.config.model,
             "model": job.config.model,
             "base_model": binding["model"],
-            "sensor_flags": flags,
+            "sensor_flags": outcome.flags,
         }
-        if instrumented_sensors.is_quiet(flags, quiet_max):
-            payload["text"] = base_text.strip()
+        if outcome.quiet:
+            payload["text"] = outcome.base_text.strip()
             payload["finish_reason"] = "quiet_page_base_adopted"
             payload["changed_lines"] = 0
-            return StationResult(
-                payload=payload,
-                tokens_in=tokens,
-                cost_usd=cost,
-                process_stats=base_run.process_stats,
-            )
-
-        workspace = agent_cell.stage_workspace(
-            run_root / page_key,
-            skill=job.config.prompt.text,
-            evidence={},
-            images=[page_image],
-        )
-        _stage_detail_tiles(workspace, image=page_image)
-        extension_dir = workspace / ".omp" / "extensions"
-        extension_dir.mkdir(parents=True)
-        (extension_dir / "00-submit-transcription.ts").write_bytes(
-            _SUBMISSION_EXTENSION_BYTES
-        )
-        (extension_dir / "transcription.ts").write_bytes(source_bytes)
-        context_lines = [
-            "# Page provenance",
-            "- Dataset: historical Chinese xylograph corpus.",
-            f"- Document: {job.doc_id}",
-            f"- Page id: {job.page_id}.",
-            "- Genre: Buddhist canon print (Tripitaka family). Formulaic litany and",
-            "  repeated parallel phrases are normal. The final printed column usually",
-            "  carries the scripture title, scroll number, sheet number, and a",
-            "  collation cipher.",
-        ]
-        instrumented_sensors.write_dossier(
-            workspace, context_lines, base_text, sensors, page_image
-        )
-
-        run = agent_cell.run(
-            workspace,
-            _FOREMAN_TASK,
-            model=job.config.model,
-            timeout_s=_DRAFT_SCHOLAR_TIMEOUT_SECONDS,
-            executor="omp",
-            tool_names=("read",),
-        )
-        transcription, layers = _read_submission(workspace)
-        changed = sum(
-            1
-            for base_line, final_line in zip(
-                base_text.splitlines(), transcription.splitlines()
-            )
-            if base_line != final_line
-        )
-        payload["text"] = transcription
-        payload["finish_reason"] = "submit_transcription"
-        payload["changed_lines"] = changed
-        if layers is not None:
-            payload["layers"] = layers
+        else:
+            payload["text"] = outcome.transcription
+            payload["finish_reason"] = "submit_transcription"
+            payload["changed_lines"] = outcome.changed
+            if outcome.layers is not None:
+                payload["layers"] = outcome.layers
         return StationResult(
             payload=payload,
-            tokens_in=tokens + run.tokens,
-            cost_usd=None
-            if cost is None or run.cost_usd is None
-            else cost + run.cost_usd,
-            process_stats=run.process_stats,
+            tokens_in=outcome.tokens,
+            cost_usd=outcome.cost,
+            process_stats=outcome.process_stats,
         )
 
 

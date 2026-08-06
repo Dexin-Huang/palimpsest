@@ -17,6 +17,12 @@ BOOTSTRAP_SAMPLES = 10_000
 
 
 
+
+from palimpsest.factory.workspace.io import (
+    read_jsonl,
+    sha256_bytes,
+    sha256_file,
+)
 def safe_rate(numerator: float, denominator: float) -> float | None:
     return None if denominator == 0 else numerator / denominator
 
@@ -162,17 +168,6 @@ def localization_metrics(
         },
     }
 
-
-def read_jsonl(path: Path) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
-    for line_number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), start=1):
-        if not line.strip():
-            continue
-        value = json.loads(line)
-        if not isinstance(value, dict):
-            raise ValueError(f"{path}:{line_number}: expected a JSON object")
-        records.append(value)
-    return records
 
 
 def index_predictions(

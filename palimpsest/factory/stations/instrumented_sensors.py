@@ -1,7 +1,7 @@
 """Instrument sensors for the instrumented transcription rig.
 
-One module owns the measured sensor stack (experiments 24-29 in the exodia
-research journal): reading-order column geometry, gap-cost count alignment,
+One module owns the measured sensor stack (the instrumented-rig
+campaign; see palimpsest-research): reading-order column geometry, gap-cost count alignment,
 similarity-paired independent readings with disagreement spans, classifier
 witness disputes, and the dossier staged for the foreman session.
 
@@ -12,12 +12,15 @@ the R_train lane; this module is the production home consumed by the
 
 from __future__ import annotations
 
+import hashlib
 import json
 import statistics
 import unicodedata
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from palimpsest.factory.config import LIBRARY_ROOT
+from palimpsest.factory.core.station import Job
 from palimpsest.factory.recognized_text import normalize_recognized_text_v2
 
 # Columns are separated by clear gutters wider than this fraction of the
@@ -225,7 +228,7 @@ def compute_sensors(
 ) -> tuple[dict, dict]:
     """Instrument evidence per line plus page-level flags.
 
-    Measured behavior (exodia experiments 24-29): count anchor covers 74
+    Measured behavior (instrumented-rig campaign): count anchor covers 74
     percent of omission and invention mass; classifier disputes recall 71
     percent of error lines at 4 percent false flags; similarity-paired
     independent readings supply exact disagreement spans.
@@ -405,6 +408,26 @@ def write_dossier(
     (tools_dir / "context.md").write_text(
         "\n".join(context_lines) + "\n", encoding="utf-8", newline="\n"
     )
+
+
+def load_object(job: Job, sha256_hex: str, label: str) -> Path:
+    """Resolve a content-addressed sensor artifact to a verified local path.
+
+    Isolated evaluation roots carry only materialized case inputs, so
+    candidate-scoped objects fall back to the shared library store. The
+    content hash makes any byte source equally trustworthy.
+    """
+    candidates = (
+        job.library_root / "evaluations" / "objects" / sha256_hex,
+        LIBRARY_ROOT / "evaluations" / "objects" / sha256_hex,
+    )
+    for path in candidates:
+        if path.is_file():
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            if digest != sha256_hex:
+                raise ValueError(f"{label} object content drifted: {digest}")
+            return path
+    raise FileNotFoundError(f"{label} object is missing: {candidates[0]}")
 
 
 def load_jsonl_keyed(path: Path, value_field: str) -> dict[str, list]:

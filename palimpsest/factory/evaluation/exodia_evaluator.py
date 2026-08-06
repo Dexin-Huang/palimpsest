@@ -40,7 +40,7 @@ import yaml
 
 from palimpsest.factory.core.artifact import content_fingerprint
 from palimpsest.factory.evaluation.candidate import load_candidate
-from palimpsest.factory.evaluation.inline_extension import (
+from palimpsest.factory.evaluation.transcribe_extension import (
     OMP_EXTENSION_MEDIA_TYPE,
     render_candidate,
 )
@@ -1119,11 +1119,13 @@ def evaluate(request: object) -> dict[str, object]:
 
         metrics = MetricRegistry()
         register_station_metrics(metrics)
+        from palimpsest.factory.evaluation.probes import trusted_probes
+
         try:
             suite = load_suite(
                 suite_path,
                 metric_resolver=metrics,
-                probe_resolver={},
+                probe_resolver=trusted_probes(),
                 judge_resolver={},
                 cases_root=cases_root,
                 asset_root=evaluation_root,

@@ -19,20 +19,13 @@ COLORS = {
 }
 
 
-def read_jsonl(path: Path) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8-sig").splitlines(), start=1
-    ):
-        if not line.strip():
-            continue
-        record = json.loads(line)
-        if not isinstance(record, dict):
-            raise ValueError(f"{path}:{line_number}: expected a JSON object")
-        records.append(record)
-    return records
 
 
+from palimpsest.factory.workspace.io import (
+    read_jsonl,
+    sha256_bytes,
+    sha256_file,
+)
 def index_records(records: list[dict[str, object]], label: str) -> dict[str, dict[str, object]]:
     indexed: dict[str, dict[str, object]] = {}
     for record in records:

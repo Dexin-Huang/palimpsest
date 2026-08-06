@@ -11,7 +11,6 @@ import argparse
 import hashlib
 import json
 import math
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -22,6 +21,7 @@ from palimpsest.factory.config import (
     MODEL_PROVIDER_WORKERS,
 )
 from palimpsest.factory.core.ledger import Ledger
+from palimpsest.factory.workspace.io import utc_now
 
 
 def add_commands(subparsers) -> None:
@@ -366,6 +366,7 @@ def _trusted_resolvers(
 ) -> tuple[object, Mapping[str, object], Mapping[str, object]]:
     from palimpsest.factory.evaluation.judge import load_judge
     from palimpsest.factory.evaluation.metrics import MetricRegistry
+    from palimpsest.factory.evaluation.probes import trusted_probes
     from palimpsest.factory.evaluation.station_metrics import register_station_metrics
     from palimpsest.factory.evaluation.response_schemas import trusted_response_schemas
 
@@ -377,7 +378,7 @@ def _trusted_resolvers(
         for path in _tracked_yaml(judges_root)
         for judge in (load_judge(path, response_schema_resolver=response_schemas),)
     }
-    return metrics, {}, judges
+    return metrics, trusted_probes(), judges
 
 
 def _resolve_suite(
@@ -580,10 +581,6 @@ def _report_table(report: Mapping[str, object]) -> str:
                     )
                 )
     return "\n".join(lines)
-
-
-def _utc_now() -> str:
-    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def cmd_bench_list(args: argparse.Namespace) -> None:
@@ -841,7 +838,7 @@ def cmd_bench_promote(args: argparse.Namespace) -> None:
             workers=args.workers,
         )
         save_canary_evidence(args.canary_evidence_output, canary)
-    decision_at = _utc_now()
+    decision_at = utc_now()
     cost_waiver = (
         None
         if args.waive_unknown_canary_cost is None
@@ -897,7 +894,7 @@ def cmd_bench_rollback(args: argparse.Namespace) -> None:
         proposal,
         promotion=promotion,
         approved_by=args.approved_by,
-        created_at=_utc_now(),
+        created_at=utc_now(),
         canary=canary,
     )
     if args.proposal_output is not None:

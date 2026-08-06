@@ -15,28 +15,14 @@ CATEGORY = {"id": 1, "name": "character", "supercategory": "character"}
 MIN_VISIBLE_FRACTION = 0.80
 
 
-def read_jsonl(path: Path) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
-    for line_number, line in enumerate(
-        path.read_text(encoding="utf-8-sig").splitlines(), start=1
-    ):
-        if not line.strip():
-            continue
-        record = json.loads(line)
-        if not isinstance(record, dict):
-            raise ValueError(f"{path}:{line_number}: expected a JSON object")
-        records.append(record)
-    return records
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
-
+from palimpsest.factory.workspace.io import (
+    read_jsonl,
+    sha256_bytes,
+    sha256_file,
+)
 def tile_origins(length: int, tile_size: int, overlap: int) -> list[int]:
     if length <= 0 or tile_size <= 0:
         raise ValueError("image length and tile size must be positive")

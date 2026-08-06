@@ -30,6 +30,7 @@ from palimpsest.factory.gateway import (
     ModelRequest,
     generate_json,
 )
+from palimpsest.factory.gateway.client import is_truncated
 from palimpsest.factory.imaging import encode_png
 from palimpsest.factory.stations.image_input import load_image
 from palimpsest.factory.workspace.io import read_json
@@ -38,7 +39,6 @@ DEFAULT_SYSTEM_PROMPT = (
     "You are an expert paleographer transcribing digitized manuscript pages."
 )
 TILE_PAD_GLYPHS = 1.5
-_TRUNCATION_REASONS = ("MAX_TOKENS", "LENGTH", "INCOMPLETE")
 
 # Thinking models sometimes deliberate in their output; schemas leave no
 # channel for anything but the requested artifact.
@@ -343,7 +343,7 @@ class Read(Station):
                     max_tokens=max_tokens,
                 )
             except GatewayError as error:
-                if detect_truncation and _is_truncated(error):
+                if detect_truncation and is_truncated(error):
                     usage.add_error(error)
                     return _Reading(
                         text="",
@@ -358,7 +358,7 @@ class Read(Station):
                     _candidate("primary", job.config.model, raw_text, text, response)
                 ],
                 adjudication_status="not_configured",
-                truncated=detect_truncation and _is_truncated(response),
+                truncated=detect_truncation and is_truncated(response),
             )
 
         candidates = []
@@ -410,7 +410,7 @@ class Read(Station):
 
         for role, model, result, error in completed_readers:
             if error is not None:
-                if detect_truncation and _is_truncated(error):
+                if detect_truncation and is_truncated(error):
                     return _Reading(
                         text="",
                         candidate_readings=candidates,
@@ -440,7 +440,7 @@ class Read(Station):
                 adjudication_error="; ".join(reader_errors),
             )
 
-        if detect_truncation and any(_is_truncated(response) for response in responses):
+        if detect_truncation and any(is_truncated(response) for response in responses):
             return _Reading(
                 text="",
                 candidate_readings=candidates,
@@ -466,7 +466,7 @@ class Read(Station):
             )
         except GatewayError as error:
             usage.add_error(error)
-            if detect_truncation and _is_truncated(error):
+            if detect_truncation and is_truncated(error):
                 return _Reading(
                     text="",
                     candidate_readings=candidates,
@@ -490,7 +490,7 @@ class Read(Station):
             adjudication_model=response.model,
             adjudication_reasoning=value["reasoning"].strip(),
             unresolved=[item.strip() for item in value["unresolved"] if item.strip()],
-            truncated=detect_truncation and _is_truncated(response),
+            truncated=detect_truncation and is_truncated(response),
         )
 
     def _reader_call(
@@ -569,15 +569,6 @@ class Read(Station):
         )
         usage.add(response)
         return value, response
-
-
-def _is_truncated(response) -> bool:
-    return bool(
-        response.finish_reason
-        and any(
-            reason in response.finish_reason.upper() for reason in _TRUNCATION_REASONS
-        )
-    )
 
 
 def _candidate(
@@ -704,8 +695,8 @@ class TransientSingleReaderFallbackRead(Read):
         _raw_text, text, response = result
         if (
             not error.transient
-            or _is_truncated(error)
-            or _is_truncated(response)
+            or is_truncated(error)
+            or is_truncated(response)
             or not text
         ):
             return None

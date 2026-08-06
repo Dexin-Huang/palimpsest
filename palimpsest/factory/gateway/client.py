@@ -105,7 +105,7 @@ def generate_json(
                 if isinstance(error, json.JSONDecodeError)
                 else "JSON that violates the requested schema"
             )
-            if _is_truncated(response.finish_reason):
+            if is_truncated(response):
                 raise GatewayError(
                     f"Model returned truncated {last_failure}: {error}",
                     tokens_in=prompt_tokens,
@@ -143,8 +143,22 @@ def _schema_validator(schema: Any):
     return validator_class(schema)
 
 
-def _is_truncated(finish_reason: str | None) -> bool:
-    return finish_reason in {"INCOMPLETE", "LENGTH", "MAX_TOKENS"}
+_TRUNCATION_REASONS = ("MAX_TOKENS", "LENGTH", "INCOMPLETE")
+
+
+def is_truncated(response) -> bool:
+    """True when a response's finish reason marks its output as truncated.
+
+    Substring semantics: providers prefix or wrap the canonical reason (e.g.
+    ``stop: MAX_TOKENS`` or ``LENGTH_LIMIT``), so a bare membership check
+    would admit truncated output as complete.
+    """
+    return bool(
+        response.finish_reason
+        and any(
+            reason in response.finish_reason.upper() for reason in _TRUNCATION_REASONS
+        )
+    )
 
 
 def _resolve_provider(model: str):

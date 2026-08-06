@@ -1,4 +1,9 @@
-"""Deterministic Candidate records carrying exact inline OMP extension bytes."""
+"""Deterministic transcribe candidates carrying exact inline OMP extension bytes.
+
+The exodia harness renders bench-side ``transcribe`` candidates (direct and
+instrumented) into OMP agent extensions; the production ``read`` socket is
+driven by its own recipe-bound extension instead.
+"""
 
 from __future__ import annotations
 
