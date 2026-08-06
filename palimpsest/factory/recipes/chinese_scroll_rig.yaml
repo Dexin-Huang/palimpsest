@@ -16,7 +16,7 @@ line:
   - station: read
     variant: omp_instrumented
     model: openai-codex/gpt-5.6-luna
-    prompt: transcribe/zh/foreman_v12
+    prompt: read/zh/foreman_v12
     extension_source: |-
       import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 

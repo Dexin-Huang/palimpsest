@@ -19,8 +19,6 @@ from palimpsest.factory.stations import (
     segment,
     survey,
     translate,
-    transcribe,
-    transcribe_omp,
 )
 
 __all__ = [
@@ -41,7 +39,5 @@ __all__ = [
     "render_epub",
     "segment",
     "survey",
-    "transcribe",
-    "transcribe_omp",
     "translate",
 ]

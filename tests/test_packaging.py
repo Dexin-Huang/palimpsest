@@ -177,7 +177,7 @@ print(json.dumps({{
         "latin_manuscript",
         "chinese_scroll_rig",
     ]
-    assert {"read/la/diplomatic", "transcribe/zh/foreman_v12"} <= set(proof["prompts"])
+    assert {"read/la/diplomatic", "read/zh/foreman_v12"} <= set(proof["prompts"])
     assert proof["schemas"] == [
         "book-object-v1.schema.json",
         "library-object-v1.schema.json",

@@ -57,8 +57,6 @@ flowchart TB
   station_segment --> kind_page_regions
   kind_page_transcription --> station_survey
   station_survey --> kind_translation_brief
-  kind_page_image --> station_transcribe
-  station_transcribe --> kind_page_transcription_draft
   kind_page_transcription --> station_translate
   kind_translation_brief --> station_translate
   station_translate --> kind_page_translation
@@ -92,8 +90,6 @@ flowchart TB
   style station_segment fill:#eef2ec,stroke:#9ab08f
   station_survey(["survey ✱<br/><i>manuscript</i>"])
   style station_survey fill:#eef2ec,stroke:#9ab08f
-  station_transcribe(["transcribe ✱<br/><i>page</i>"])
-  style station_transcribe fill:#eef2ec,stroke:#9ab08f
   station_translate(["translate ✱<br/><i>page</i>"])
   style station_translate fill:#eef2ec,stroke:#9ab08f
   kind_book["book"]
@@ -113,7 +109,6 @@ flowchart TB
   style kind_page_list fill:#fdf6e3,stroke:#c9b99a
   kind_page_regions["page_regions"]
   kind_page_transcription["page_transcription"]
-  kind_page_transcription_draft["page_transcription_draft"]
   kind_page_translation["page_translation"]
   kind_reference["reference"]
   kind_translation_brief["translation_brief"]
@@ -139,8 +134,6 @@ flowchart TB
 | | | | *Illumination-flattened study image; what segment and read consume.* | |
 | `page_regions` | page | json | `doc_id`, `page_id`, `route`, `image`, `regions` | `<kind>/<page_id>.json` |
 | | | | *Polygon lassos + the routing decision (blank | full_page | segmented).* | |
-| `page_transcription_draft` | page | json | `doc_id`, `page_id`, `page_seq`, `canvas_id`, `text`, `requested_model`, `model`, `finish_reason` | `<kind>/<page_id>.json` |
-| | | | *Unreviewed full-image transcription from one direct reader call.* | |
 | `page_transcription` | page | json | `doc_id`, `page_id`, `text`, `route`, `regions`, `candidate_readings`, `adjudication_status`, `adjudication_requested_model`, `adjudication_model`, `adjudication_reasoning`, `unresolved`, `adjudication_error` | `<kind>/<page_id>.json` |
 | | | | *Diplomatic transcription; per-region texts when the page was segmented.* | |
 | `page_translation` | page | json | `doc_id`, `page_id`, `translation`, `flags` | `<kind>/<page_id>.json` |
@@ -168,23 +161,22 @@ flowchart TB
 
 | Station | Implementation | Grain | Consumes | Produces | Model |
 |---|---|---|---|---|---|
-| `acquire` | `dac5f497dbe216e1` | page | `page_list` | `page_image` | no |
-| `align` | `7f63c49b28cddd39` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
-| `assemble_page` | `181dd7db2f89b48d` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
-| `deframe` | `47c85b1409f59d5e` | page | `page_image` | `page_image_framed` | no |
-| `dewatermark` | `a2d53ec390f6da44` | page | `page_image_framed` | `page_image_unmarked` | no |
-| `emend` | `87d110033f4b1a54` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
-| `finalize_edition` | `66726e9a9efeedd7` | manuscript | `page_transcription`, `manuscript`, `reference`, `emendations` | `edition` | yes |
-| `flatten` | `2fd884dc94c7262e` | page | `page_image_unmarked` | `page_image_clean` | no |
-| `publish` | `f0333ceb9c1b3be7` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
-| `read` | `6554b6726b56e836` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
-| `reconstruct` | `129187c644e0f50b` | manuscript | `page_assembled` | `manuscript` | yes |
-| `reference` | `4457426cd6852227` | manuscript | `manuscript` | `reference` | yes |
-| `render_epub` | `23ab318bc4d5d482` | manuscript | `book` | `book_epub` | no |
-| `segment` | `dce59ffc4c484ed1` | page | `page_image_clean` | `page_regions` | no |
-| `survey` | `f5b33eff38bee21e` | manuscript | `page_transcription` | `translation_brief` | yes |
-| `transcribe` | `edc677a3e9324ddf` | page | `page_image` | `page_transcription_draft` | yes |
-| `translate` | `78afe6ca823e664d` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
+| `acquire` | `2d39338afc496ea3` | page | `page_list` | `page_image` | no |
+| `align` | `c81bce0d83869869` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
+| `assemble_page` | `243bcd6079181813` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
+| `deframe` | `8a743a09534c6462` | page | `page_image` | `page_image_framed` | no |
+| `dewatermark` | `013258b17ee8bc5f` | page | `page_image_framed` | `page_image_unmarked` | no |
+| `emend` | `58af5d4c9fcf8083` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
+| `finalize_edition` | `f4a44e031ffd80f6` | manuscript | `page_transcription`, `manuscript`, `reference`, `emendations` | `edition` | yes |
+| `flatten` | `c3b47c3f721c79eb` | page | `page_image_unmarked` | `page_image_clean` | no |
+| `publish` | `f2743dfafc9fb4b7` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
+| `read` | `b9361f73dd3d5f72` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
+| `reconstruct` | `02f5347b0bffcf00` | manuscript | `page_assembled` | `manuscript` | yes |
+| `reference` | `912a691a129185e4` | manuscript | `manuscript` | `reference` | yes |
+| `render_epub` | `9559156f460e1771` | manuscript | `book` | `book_epub` | no |
+| `segment` | `8540f8592e4134e5` | page | `page_image_clean` | `page_regions` | no |
+| `survey` | `45b7ece2136ed45f` | manuscript | `page_transcription` | `translation_brief` | yes |
+| `translate` | `3a08ac982ef22692` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
 
 Contracts are enforced twice at runtime: a station referencing an
 unknown kind fails at registration, and a JSON artifact missing its

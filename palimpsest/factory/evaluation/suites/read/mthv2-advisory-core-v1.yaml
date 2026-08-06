@@ -1,0 +1,42 @@
+schema_version: 1
+id: "read/mthv2-advisory-core/v1"
+station: read
+qualification_eligible: false
+mission: >-
+  Paired development comparison on eight MTHv2 pages with two sealed
+  AI visual-review passes and explicit advisory consensus per page.
+  Official text lines are positive partial references. Candidate text
+  absent from gold is not penalized by string alignment. Contamination,
+  repetition, and empty output remain hard failures. AI review does not
+  qualify human gold, so this suite cannot qualify Promotion.
+case_manifest: read/mthv2-advisory-core-v1.jsonl
+primary_metrics:
+  partial_gold_character_error_rate:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.8
+  page_completeness:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+hard_limits:
+  contamination_rate: {maximum: 0.0}
+  empty_output_rate: {maximum: 0.0}
+  invented_character_rate: {maximum: 1.0}
+  repetition_rate: {maximum: 0.1}
+protected_slices:
+  - mth1200
+  - tkh
+slice_policy:
+  minimum_cases: 1
+  maximum_regression: 0.1
+operational_limits: {}
+judges: []
+downstream_probes:
+  - id: read-to-align/v1
+promotion:
+  minimum_completed_cases: 8
+  paired_bootstrap_samples: 10000
+  seed: 417203
+  require_all_hard_limits: true
+  require_all_downstream_probes: true

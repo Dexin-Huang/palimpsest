@@ -841,17 +841,17 @@ Rules:
 
 ### 8.6 The instrumented rig lane
 
-The production rig (`read/omp_instrumented`) and its bench-side twins
-(`transcribe/omp_extension`, `transcribe/omp_instrumented`) share one
-orchestrator: base and shadow reads on a bound draft engine, content-addressed
-RF-DETR count and glyph-classifier witnesses, a quiet gate, and a foreman
-audit over magnified crops. The shared `_run_instrumented` machinery lives in
+The `read` socket carries the rig (`read/omp_instrumented`) and the bench-side
+extension variant (`read/omp_extension`); they share one orchestrator: base
+and shadow reads on a bound draft engine, content-addressed RF-DETR count and
+glyph-classifier witnesses, a quiet gate, and a foreman audit over magnified
+crops. The shared `_run_instrumented` and extension machinery live in
 `stations/read_omp.py`; sensor objects load through
 `stations/instrumented_sensors.py` and are pinned by SHA-256 in recipe and
-candidate options.
-
-The exodia harness (`exodia_evaluator.py` + `inline_extension.py`) renders
-candidates into OMP agent extensions and drives them through the same
+candidate options. Direct-transcription development suites run through the
+socket's `full_page` route, so every bench reading exercises the production
+socket. The exodia harness (`exodia_evaluator.py` + `read_extension.py`)
+renders candidates into OMP agent extensions and drives them through the same
 `run_evaluation` engine. `PALIMPSEST_RETAIN_OUTPUTS=1` keeps harness output
 directories for inspection.
 

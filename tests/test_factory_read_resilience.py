@@ -264,14 +264,14 @@ def test_challenger_rejects_both_reader_failures(tmp_path, monkeypatch):
 
 
 def test_challenger_registers_same_socket_with_distinct_fingerprints():
-    default = registry.get("transcribe", "default")
-    challenger_station = registry.get("transcribe", "omp_instrumented")
+    default = registry.get("read", "default")
+    challenger_station = registry.get("read", "omp_instrumented")
     challenger = load_candidate(
-        ROOT / "palimpsest/factory/candidates/transcribe/"
+        ROOT / "palimpsest/factory/candidates/read/"
         "zh-qwen-instrumented-foreman-v1.yaml"
     )
     baseline = load_candidate(
-        ROOT / "palimpsest/factory/candidates/transcribe/"
+        ROOT / "palimpsest/factory/candidates/read/"
         "zh-qwen-full-image-development-v1.yaml"
     )
 

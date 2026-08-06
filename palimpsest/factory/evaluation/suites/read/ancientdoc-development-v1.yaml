@@ -1,0 +1,41 @@
+schema_version: 1
+id: "read/ancientdoc-development/v1"
+station: read
+qualification_eligible: false
+mission: >-
+  Development-only comparison on 28 AncientDoc pages with dataset text.
+  Gold scope varies by volume and known omissions remain, so each record
+  is a positive partial reference. Candidate additions are not penalized.
+  The invention metric is diagnostic with a non-penalizing maximum.
+  This suite cannot qualify promotion.
+case_manifest: read/ancientdoc-development-v1.jsonl
+primary_metrics:
+  partial_gold_character_error_rate:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.8
+  page_completeness:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+hard_limits:
+  contamination_rate: {maximum: 0.0}
+  empty_output_rate: {maximum: 0.0}
+  invented_character_rate: {maximum: 1.0}
+  repetition_rate: {maximum: 0.1}
+protected_slices:
+  - scope_primary
+  - scope_full
+slice_policy:
+  minimum_cases: 1
+  maximum_regression: 0.1
+operational_limits: {}
+judges: []
+downstream_probes:
+  - id: read-to-align/v1
+promotion:
+  minimum_completed_cases: 28
+  paired_bootstrap_samples: 1000
+  seed: 361004
+  require_all_hard_limits: true
+  require_all_downstream_probes: true

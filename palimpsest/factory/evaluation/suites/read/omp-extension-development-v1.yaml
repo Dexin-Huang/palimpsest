@@ -1,0 +1,43 @@
+schema_version: 1
+id: read/omp-extension-development/v1
+station: read
+qualification_eligible: false
+mission: >-
+  Development-only comparison on one public, user-corrected Vatican spread.
+  The transcription omits visible marginalia and is a positive partial
+  reference. Candidate additions are not penalized. This suite cannot
+  qualify promotion.
+case_manifest: read/omp-extension-development-v1.jsonl
+primary_metrics:
+  partial_gold_character_error_rate:
+    direction: minimize
+    minimum_effect: 0.0
+    confidence: 0.8
+  page_completeness:
+    direction: maximize
+    minimum_effect: 0.0
+    confidence: 0.8
+hard_limits:
+  contamination_rate: {maximum: 0.0}
+  empty_output_rate: {maximum: 0.0}
+  invented_character_rate: {maximum: 1.0}
+  repetition_rate: {maximum: 0.1}
+protected_slices:
+  - classical_chinese
+  - vertical_script
+  - two_page_spread
+  - mixed_script_marginalia
+  - digitization_footer
+slice_policy:
+  minimum_cases: 1
+  maximum_regression: 0.1
+operational_limits: {}
+judges: []
+downstream_probes:
+  - id: read-to-align/v1
+promotion:
+  minimum_completed_cases: 1
+  paired_bootstrap_samples: 1000
+  seed: 361004
+  require_all_hard_limits: true
+  require_all_downstream_probes: true

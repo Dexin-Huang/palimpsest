@@ -191,7 +191,7 @@ def test_adjudicated_mthv2_gold_and_manifests_remain_bound() -> None:
     )
 
     for gold_directory, manifest_name in resources:
-        relative_gold_path = f"gold/transcribe/{gold_directory}/tkh-0001-001-26-26.json"
+        relative_gold_path = f"gold/read/{gold_directory}/tkh-0001-001-26-26.json"
         gold_path = EVALUATION_ROOT / relative_gold_path
         gold_bytes = gold_path.read_bytes()
         record = json.loads(gold_bytes)
@@ -213,7 +213,7 @@ def test_adjudicated_mthv2_gold_and_manifests_remain_bound() -> None:
             for change in provenance["transformations"]
         ] == [(4, 5, "巳", "已"), (8, 3, "巳", "已"), (10, 1, "巳", "已")]
 
-        manifest_path = EVALUATION_ROOT / "cases" / "transcribe" / manifest_name
+        manifest_path = EVALUATION_ROOT / "cases" / "read" / manifest_name
         manifest_bytes = manifest_path.read_bytes()
         assert manifest_bytes.endswith(b"\n")
         cases = [json.loads(line) for line in manifest_bytes.splitlines()]

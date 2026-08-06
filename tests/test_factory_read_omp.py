@@ -60,7 +60,7 @@ def _job(
         config=StationConfig(
             model=_MODEL,
             prompt=Prompt(
-                name="transcribe/zh/foreman_v12",
+                name="read/zh/foreman_v12",
                 text=prompt_text,
                 sha256=hashlib.sha256(prompt_text.encode("utf-8")).hexdigest(),
             ),

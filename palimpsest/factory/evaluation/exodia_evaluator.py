@@ -40,7 +40,7 @@ import yaml
 
 from palimpsest.factory.core.artifact import content_fingerprint
 from palimpsest.factory.evaluation.candidate import load_candidate
-from palimpsest.factory.evaluation.transcribe_extension import (
+from palimpsest.factory.evaluation.read_extension import (
     OMP_EXTENSION_MEDIA_TYPE,
     render_candidate,
 )

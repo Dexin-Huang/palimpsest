@@ -17,7 +17,7 @@ from palimpsest.factory.evaluation.candidate import (
 )
 
 _CANDIDATE = Path(
-    "palimpsest/factory/candidates/transcribe/"
+    "palimpsest/factory/candidates/read/"
     "zh-qwen-full-image-development-v1.yaml"
 )
 _READ_CANDIDATE = Path(
@@ -117,7 +117,7 @@ def test_rig_manifest_names_the_complete_agent_identity(
     assert manifest["rig_fingerprint"] == bundle.rig_fingerprint
     assert candidate["model"] == "token-plan/qwen3.8-max"
     assert candidate["model_identity"] == "fixed"
-    assert candidate["prompt_name"] == "transcribe/zh/full_image"
+    assert candidate["prompt_name"] == "read/zh/full_image"
     assert candidate["options"] == {}
     assert manifest["runtime"] == _RUNTIME
     assert "candidate.yaml" in names

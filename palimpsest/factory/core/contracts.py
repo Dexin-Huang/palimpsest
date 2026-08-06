@@ -100,22 +100,6 @@ _ALL = (
         required=("doc_id", "page_id", "route", "image", "regions"),
     ),
     ArtifactContract(
-        "page_transcription_draft",
-        "page",
-        "json",
-        "Unreviewed full-image transcription from one direct reader call.",
-        required=(
-            "doc_id",
-            "page_id",
-            "page_seq",
-            "canvas_id",
-            "text",
-            "requested_model",
-            "model",
-            "finish_reason",
-        ),
-    ),
-    ArtifactContract(
         "page_transcription",
         "page",
         "json",

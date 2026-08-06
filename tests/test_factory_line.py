@@ -383,7 +383,7 @@ def test_chinese_rig_recipe_loads_and_validates(dual_read_models):
     read = recipe.steps[5]
     assert read.station.variant == "omp_instrumented"
     assert read.model == "openai-codex/gpt-5.6-luna"
-    assert read.prompt_name == "transcribe/zh/foreman_v12"
+    assert read.prompt_name == "read/zh/foreman_v12"
     assert read.options["quiet_max_disagreements"] == 5
     assert read.options["tool_bindings"] == [
         {
