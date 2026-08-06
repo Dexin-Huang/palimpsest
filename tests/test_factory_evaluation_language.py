@@ -9,6 +9,7 @@ from pathlib import Path
 from palimpsest.factory.core.contracts import validate_payload
 from palimpsest.factory.evaluation.candidate import load_candidate
 from palimpsest.factory.evaluation.metrics import MetricDirection, MetricRegistry
+from palimpsest.factory.evaluation.probes import trusted_probes
 from palimpsest.factory.evaluation.station_metrics.language import (
     register_language_metrics,
 )
@@ -114,7 +115,7 @@ def test_language_resources_load_strictly_and_match_station_sockets() -> None:
         suite = load_suite(
             EVALUATION_ROOT / "suites" / station / "development.yaml",
             metric_resolver=registry,
-            probe_resolver={},
+            probe_resolver=trusted_probes(),
             judge_resolver={},
         )
         candidate = load_candidate(
@@ -127,7 +128,10 @@ def test_language_resources_load_strictly_and_match_station_sockets() -> None:
         assert candidate.can_auto_qualify
         assert not suite.qualification_eligible
         assert not suite.can_auto_qualify
-        assert not suite.judges and not suite.downstream_probes
+        assert not suite.judges
+        assert [probe.id for probe in suite.downstream_probes] == (
+            ["survey-to-translate/v1"] if station == "survey" else []
+        )
         assert suite.promotion.minimum_completed_cases == len(suite.cases) == 1
         assert suite.promotion.paired_bootstrap_samples == 1
         assert suite.promotion.require_all_hard_limits is False

@@ -33,10 +33,11 @@ slice_policy:
   maximum_regression: 0.1
 operational_limits: {}
 judges: []
-downstream_probes: []
+downstream_probes:
+  - id: read-to-align/v1
 promotion:
   minimum_completed_cases: 24
   paired_bootstrap_samples: 1000
   seed: 361004
   require_all_hard_limits: true
-  require_all_downstream_probes: false
+  require_all_downstream_probes: true

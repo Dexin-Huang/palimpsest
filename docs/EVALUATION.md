@@ -263,6 +263,15 @@ book -> EPUB and reader evidence links
 A downstream probe is an intervention, not an essay about expected benefit.
 The same fixed downstream candidate runs on baseline and challenger outputs.
 
+The implemented probe pair is deterministic and offline: `read-to-align/v1`
+validates that every transcription output is consumable by the align station
+(non-empty text; every region text present in the composed text), and
+`survey-to-translate/v1` validates that every survey brief carries the
+`translation_brief` contract fields. Probes resolve through
+`palimpsest/factory/evaluation/probes.py`; a suite declares them by ID and
+gates them with `require_all_downstream_probes`. A required probe with an
+unknown result blocks promotion.
+
 ### Level 4: end-to-end canary
 
 Runs a representative small manuscript through the proposed recipe and checks:
@@ -479,11 +488,11 @@ mission: maximize faithful recovery of visible manuscript marks
 case_manifest: read/latin-diplomatic-v1.jsonl
 
 primary_metrics:
-  character_error_rate:
+  partial_gold_character_error_rate:
     direction: minimize
     minimum_effect: 0.02
     confidence: 0.95
-  region_completeness:
+  page_completeness:
     direction: maximize
     minimum_effect: 0.01
     confidence: 0.95
@@ -829,6 +838,22 @@ Rules:
 - judge reasoning is retained as evidence, not treated as a metric by itself;
 - judge agreement is periodically calibrated against human-adjudicated cases;
 - deterministic and gold failures cannot be overruled by a judge preference.
+
+### 8.6 The instrumented rig lane
+
+The production rig (`read/omp_instrumented`) and its bench-side twins
+(`transcribe/omp_extension`, `transcribe/omp_instrumented`) share one
+orchestrator: base and shadow reads on a bound draft engine, content-addressed
+RF-DETR count and glyph-classifier witnesses, a quiet gate, and a foreman
+audit over magnified crops. The shared `_run_instrumented` machinery lives in
+`stations/read_omp.py`; sensor objects load through
+`stations/instrumented_sensors.py` and are pinned by SHA-256 in recipe and
+candidate options.
+
+The exodia harness (`exodia_evaluator.py` + `inline_extension.py`) renders
+candidates into OMP agent extensions and drives them through the same
+`run_evaluation` engine. `PALIMPSEST_RETAIN_OUTPUTS=1` keeps harness output
+directories for inspection.
 
 ## 9. Promotion protocol
 

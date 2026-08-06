@@ -10,8 +10,9 @@ import pytest
 
 from palimpsest.factory import agent_cell
 from palimpsest.factory.core.station import Job, StationConfig
+from palimpsest.factory.evaluation.probes import trusted_probes
 from palimpsest.factory.evaluation.candidate import load_candidate
-from palimpsest.factory.evaluation.inline_extension import (
+from palimpsest.factory.evaluation.transcribe_extension import (
     OMP_EXTENSION_MEDIA_TYPE,
     render_candidate,
 )
@@ -147,7 +148,7 @@ def test_renderer_preserves_source_bytes_and_changes_candidate_fingerprint(
     suite = load_suite(
         _SUITE_PATH,
         metric_resolver=metrics,
-        probe_resolver={},
+        probe_resolver=trusted_probes(),
         judge_resolver={},
         verify_local=True,
     )

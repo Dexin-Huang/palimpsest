@@ -37,10 +37,11 @@ slice_policy:
   maximum_regression: 0.0
 operational_limits: {}
 judges: []
-downstream_probes: []
+downstream_probes:
+  - id: survey-to-translate/v1
 promotion:
   minimum_completed_cases: 1
   paired_bootstrap_samples: 1
   seed: 1702
   require_all_hard_limits: false
-  require_all_downstream_probes: false
+  require_all_downstream_probes: true

@@ -36,10 +36,11 @@ operational_limits: {}
 judges:
   - metric: blind_image_pairwise
     judge: read-image-pairwise/qwen3.8-v1
-downstream_probes: []
+downstream_probes:
+  - id: read-to-align/v1
 promotion:
   minimum_completed_cases: 1
   paired_bootstrap_samples: 1000
   seed: 361004
   require_all_hard_limits: true
-  require_all_downstream_probes: false
+  require_all_downstream_probes: true
