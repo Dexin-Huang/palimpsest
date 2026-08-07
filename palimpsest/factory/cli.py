@@ -57,6 +57,10 @@ def add_commands(subparsers) -> None:
         "export-library",
         help="Export validated books and reader assets without a presentation layer",
     )
+    publish_library = subparsers.add_parser(
+        "publish",
+        help="Export and publish an immutable library release to object storage",
+    )
     rig = subparsers.add_parser(
         "rig", help="Export and import immutable agent harness bundles"
     )
@@ -147,10 +151,23 @@ def add_commands(subparsers) -> None:
 
     site.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     site.add_argument("--site-root", type=Path, default=None)
-    export_library_command.add_argument(
-        "--library-root", type=Path, default=LIBRARY_ROOT
-    )
+    for parser in (export_library_command, publish_library):
+        parser.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     export_library_command.add_argument("--output", type=Path, required=True)
+    publish_library.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Local bundle path (default: repository publication directory)",
+    )
+    publish_library.add_argument("--bucket", required=True)
+    publish_library.add_argument("--profile", required=True)
+    publish_library.add_argument("--endpoint-url", required=True)
+    publish_library.add_argument(
+        "--public-base-url",
+        default=None,
+        help="Public origin used to print the downstream import URL",
+    )
 
     for parser, handler in (
         (init_db, cmd_init_db),
@@ -163,6 +180,7 @@ def add_commands(subparsers) -> None:
         (tune, cmd_tune),
         (site, cmd_site),
         (export_library_command, cmd_export_library),
+        (publish_library, cmd_publish_library),
     ):
         parser.set_defaults(func=handler)
 
@@ -1083,6 +1101,28 @@ def cmd_export_library(args: argparse.Namespace) -> None:
         f"{', '.join(doc_ids) or '—'}"
     )
     print(f"{library.bundle_id}  {args.output / 'library.json'}")
+
+
+def cmd_publish_library(args: argparse.Namespace) -> None:
+    from palimpsest.factory.publication_bundle import (
+        DEFAULT_BUNDLE_ROOT,
+        export_library,
+    )
+    from palimpsest.factory.publication_store import publish_bundle
+
+    output = args.output or DEFAULT_BUNDLE_ROOT
+    library = export_library(args.library_root, output)
+    release = publish_bundle(
+        output,
+        bundle_id=library.bundle_id,
+        bucket=args.bucket,
+        profile=args.profile,
+        endpoint_url=args.endpoint_url,
+        public_base_url=args.public_base_url,
+    )
+    print(f"{release.bundle_id}  {release.object_uri}")
+    if release.public_url is not None:
+        print(release.public_url)
 
 
 def cmd_site(args: argparse.Namespace) -> None:

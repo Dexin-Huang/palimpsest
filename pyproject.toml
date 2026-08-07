@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "A provenance-first factory for recovering readable books from manuscripts"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
   { name = "Dexin Huang", email = "dh3172@columbia.edu" },
 ]
@@ -45,7 +45,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.15.10,<1", "setuptools>=68", "wheel"]
+dev = ["pytest>=8.0", "ruff>=0.15.10,<1", "setuptools>=77", "wheel"]
 
 [project.scripts]
 palimpsest = "palimpsest.cli:main"

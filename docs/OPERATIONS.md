@@ -755,6 +755,27 @@ commits recoverable.
 
 ## 12. Protocol: verify and release repository changes
 
+### Publish the reader-independent library release
+
+The local AWS profile carries object-store authority; credentials never enter
+the bundle or repository. Publish the current validated books to their
+content-addressed R2 prefix:
+
+```text
+python -m palimpsest publish \
+  --bucket alexandria \
+  --profile alexandria-r2 \
+  --endpoint-url https://13a51693c42fab5925c5ae7d506c06e1.r2.cloudflarestorage.com \
+  --public-base-url https://releases.slothful.ai
+```
+
+The command atomically rebuilds the local bundle, uploads it beneath
+`releases/<bundle_id>/`, and fails unless the remote object names and sizes
+exactly match the bundle. The downstream Alexandria importer verifies every
+declared SHA-256 digest from the printed public URL. Do not overwrite a release
+under another bundle ID or treat local `publication/` output as durable storage.
+
+
 Verification is proportional to the changed boundary.
 
 | Change | Minimum focused proof |

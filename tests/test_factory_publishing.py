@@ -7,7 +7,11 @@ import zipfile
 
 import pytest
 
-from palimpsest.factory import publication_bundle, site as site_builder
+from palimpsest.factory import (
+    publication_bundle,
+    publication_contract,
+    site as site_builder,
+)
 from palimpsest.factory.core import registry
 from palimpsest.factory.core.artifact import content_fingerprint, payload_fingerprint
 from palimpsest.factory.core.conductor import Conductor
@@ -355,6 +359,13 @@ def test_publication_bundle_exports_renderer_independent_books(
     assert all((bundle_root / item["path"]).is_file() for item in payload["files"])
     assert set(payload["schemas"]) == {"book", "library"}
     publication_bundle.validate_library_object(payload)
+
+
+def test_publication_contract_schema_bytes_are_platform_stable():
+    for path in publication_contract.schema_paths().values():
+        body = path.read_bytes()
+        assert b"\r\n" not in body
+        assert body.endswith(b"\n")
 
 
 def test_publication_bundle_preserves_previous_export_when_epub_is_stale(

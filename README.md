@@ -281,14 +281,13 @@ records absent from a completed refresh are tombstoned rather than deleted.
 
 ## Publication
 
-[`publication/`](publication/) is the tracked content release channel.
-[`publication/library.json`](publication/library.json) is a versioned bundle
-manifest (schema v2) that maps each published `doc_id` to its EPUB and
-structured book model; `publication/books/<doc_id>/` holds the EPUB, the book
-model, and the per-folio evidence images that anchor every published claim
-back to a source page. These are real factory output — produced by the
-production line, content-licensed, and committed so readers can inspect what
-the system produces without running it.
+`python -m palimpsest publish` rebuilds the renderer-independent publication
+bundle locally, uploads it under its content-derived bundle ID, and verifies
+the complete remote object inventory before reporting success. Production
+releases live at `https://releases.slothful.ai/releases/<bundle_id>/`.
+[Alexandria](https://github.com/Dexin-Huang/alexandria) imports that URL,
+verifies every declared SHA-256 digest, and builds the downstream reader.
+`publication/` is local build output, not source or a release authority.
 
 ## Commands
 
@@ -307,6 +306,7 @@ the system produces without running it.
 | `bench` | Verify, run, report, canary, promote, and roll back immutable evaluations |
 | `rig` | Export or import one fixed-model agent harness |
 | `export-library` | Export validated books and reader assets without a presentation layer |
+| `publish` | Export, upload, and verify an immutable publication release |
 
 Run `python -m palimpsest <command> --help` for command-specific options.
 

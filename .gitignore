@@ -41,6 +41,9 @@ library/**
 # Rendered static library
 site/
 
+# Local publication bundle; immutable releases live in R2
+publication/
+
 # Windows device file
 nul
 
