@@ -16,11 +16,9 @@ line:
   - station: read
     model: ${PALIMPSEST_MODEL_READING}
     prompt: read/la/diplomatic
-    # Temperature is advisory: OMP does not expose sampling temperature and
-    # the bare-Gemini direct override was retired 2026-08. Both readers
-    # receive the identical image.
+    # Sampling temperature was removed 2026-08: providers no longer expose it.
+    # Both readers receive the identical image.
     params:
-      temperature: 0.7
       media_resolution: low
       max_output_tokens: 32768
       thinking_level: low

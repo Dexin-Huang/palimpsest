@@ -39,6 +39,7 @@ from typing import Any
 import yaml
 
 from palimpsest.factory.core.artifact import content_fingerprint
+from palimpsest.factory.evaluation import _record
 from palimpsest.factory.evaluation.candidate import load_candidate
 from palimpsest.factory.evaluation.read_extension import (
     OMP_EXTENSION_MEDIA_TYPE,
@@ -78,26 +79,7 @@ class EvaluationIntegrityError(ValueError):
     """The request or visible benchmark evidence is internally inconsistent."""
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
-    pass
-
-
-def _construct_unique_mapping(
-    loader: yaml.SafeLoader, node: yaml.MappingNode
-) -> dict[object, object]:
-    loader.flatten_mapping(node)
-    result: dict[object, object] = {}
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=False)
-        if key in result:
-            raise EvaluationIntegrityError(f"Duplicate YAML key: {key!r}")
-        result[key] = loader.construct_object(value_node, deep=False)
-    return result
-
-
-_UniqueKeyLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping
-)
+_UNIQUE_KEY_LOADER = _record.make_unique_key_loader(EvaluationIntegrityError)
 
 
 def _object(
@@ -107,27 +89,24 @@ def _object(
     required: set[str],
     optional: set[str] | None = None,
 ) -> dict[str, Any]:
-    if type(value) is not dict:
-        raise EvaluationIntegrityError(f"{field} must be an object")
-    record = value
-    if any(type(key) is not str for key in record):
-        raise EvaluationIntegrityError(f"{field} keys must be strings")
-    allowed = required | (optional or set())
-    unknown = set(record) - allowed
-    missing = required - set(record)
-    if unknown:
-        raise EvaluationIntegrityError(
-            f"{field} contains unsupported fields: {sorted(unknown)}"
-        )
-    if missing:
-        raise EvaluationIntegrityError(f"{field} is missing fields: {sorted(missing)}")
-    return record
+    return _record.strict_mapping(
+        value,
+        field=field,
+        required=required,
+        optional=optional or frozenset(),
+        error_cls=EvaluationIntegrityError,
+        strict_type=True,
+    )
 
 
 def _string(value: object, *, field: str) -> str:
-    if type(value) is not str or not value.strip() or "\x00" in value:
-        raise EvaluationIntegrityError(f"{field} must be a non-empty string")
-    return value
+    return _record.string(
+        value,
+        field=field,
+        error_cls=EvaluationIntegrityError,
+        strict_type=True,
+        reject_nul=True,
+    )
 
 
 def _sha256(value: object, *, field: str) -> str:
@@ -198,13 +177,9 @@ def _load_embedded_json(value: object, *, field: str) -> dict[str, Any]:
     return record
 
 
-def _reject_duplicate_json_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise EvaluationIntegrityError(f"Duplicate JSON key: {key!r}")
-        result[key] = value
-    return result
+_reject_duplicate_json_keys = _record.make_duplicate_key_json_hook(
+    EvaluationIntegrityError
+)
 
 
 def _validate_candidate(
@@ -544,7 +519,7 @@ def _verified_artifact_bytes(artifact: Mapping[str, Any], *, role: str) -> bytes
 
 def _suite_manifest_id(source: bytes) -> str:
     try:
-        value = yaml.load(source.decode("utf-8"), Loader=_UniqueKeyLoader)
+        value = yaml.load(source.decode("utf-8"), Loader=_UNIQUE_KEY_LOADER)
     except (TypeError, UnicodeError, yaml.YAMLError) as error:
         raise EvaluationIntegrityError(
             "Palimpsest suite artifact is not valid UTF-8 YAML"
@@ -642,12 +617,9 @@ def _failure_evidence(kind: str, message: object) -> str:
 
 
 def _number(value: object, *, field: str, minimum: float | None = None) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise EvaluationIntegrityError(f"{field} must be a finite number")
-    result = float(value)
-    if not math.isfinite(result) or (minimum is not None and result < minimum):
-        raise EvaluationIntegrityError(f"{field} is outside its valid range")
-    return result
+    return _record.number(
+        value, field=field, error_cls=EvaluationIntegrityError, minimum=minimum
+    )
 
 
 def _hard_limit_constraints(

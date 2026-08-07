@@ -22,7 +22,6 @@ class ModelRequest:
     prompt: str
     system: str | None = None
     images: tuple[Path | ImageContent, ...] = ()
-    temperature: float = 0.1
     max_output_tokens: int = 32768
     media_resolution: str | None = None
     json_output: bool = False

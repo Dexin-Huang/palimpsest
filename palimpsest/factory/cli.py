@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from palimpsest.factory.config import (
+    EVALUATION_DB_PATH,
     FACTORY_DB_PATH,
     FACTORY_ROOT,
     LIBRARY_ROOT,
@@ -234,7 +235,7 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
         "list", help="Inventory tracked records and indexed evaluation history"
     )
     list_command.add_argument("--station", default=None)
-    list_command.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    list_command.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
     _add_record_roots(list_command)
     list_command.set_defaults(func=cmd_bench_list)
 
@@ -242,7 +243,7 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
         "verify", help="Resolve tracked records and indexed reports without execution"
     )
     verify.add_argument("--suite", type=Path, required=True)
-    verify.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    verify.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
     _add_record_roots(verify)
     verify.set_defaults(func=cmd_bench_verify)
 
@@ -262,7 +263,7 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
     run_identity = run.add_mutually_exclusive_group(required=True)
     run_identity.add_argument("--run-id")
     run_identity.add_argument("--resume", metavar="RUN")
-    run.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    run.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
     run.add_argument("--runs-root", type=Path, default=_RUNS_ROOT)
     run.add_argument("--asset-root", type=Path, default=_EVALUATION_ASSETS_ROOT)
     run.add_argument("--object-root", type=Path, default=_OBJECT_ROOT)
@@ -277,7 +278,7 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
     report = commands.add_parser("report", help="Read one canonical indexed report")
     report.add_argument("run")
     report.add_argument("--format", choices=["table", "json"], default="table")
-    report.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    report.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
     report.set_defaults(func=cmd_bench_report)
 
     propose = commands.add_parser(
@@ -290,7 +291,7 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
     propose.add_argument("--challenger", type=Path, required=True)
     propose.add_argument("--waiver", type=Path, default=None)
     propose.add_argument("--output", type=Path, required=True)
-    propose.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    propose.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
     propose.set_defaults(func=cmd_bench_propose)
 
     promote = commands.add_parser(
@@ -330,7 +331,7 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
     rollback.add_argument("--history-root", type=Path, required=True)
     rollback.add_argument("--proposal-output", type=Path, default=None)
     rollback.add_argument("--canary-evidence", type=Path, default=None)
-    rollback.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    rollback.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
     rollback.set_defaults(func=cmd_bench_rollback)
 
 

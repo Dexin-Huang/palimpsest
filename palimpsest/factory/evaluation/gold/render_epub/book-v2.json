@@ -131,9 +131,7 @@
             "model": "fixture-read-v1",
             "prompt_name": "read/fixture-v1",
             "prompt_sha256": "549387fcb0a6a2dae64546141d856ab5f3a6d6f9870b201007bf8a96804a529b",
-            "params": {
-              "temperature": 0
-            }
+            "params": {}
           }
         ]
       },
@@ -152,9 +150,7 @@
             "model": "fixture-translate-v1",
             "prompt_name": "translate/fixture-v1",
             "prompt_sha256": "015e693f3d52f365451cee6c3311ca1ebf7ddfeb2c26cb9b69f2cf06e4881970",
-            "params": {
-              "temperature": 0
-            }
+            "params": {}
           }
         ]
       },
@@ -173,9 +169,7 @@
             "model": "fixture-survey-v1",
             "prompt_name": "survey/fixture-v1",
             "prompt_sha256": "2af8079d4598491433c032e7c6ed71fb33c0184f5337ca036fbf1720d9bb9e23",
-            "params": {
-              "temperature": 0
-            }
+            "params": {}
           }
         ]
       },
@@ -194,9 +188,7 @@
             "model": "fixture-reconstruct-v1",
             "prompt_name": "reconstruct/fixture-v1",
             "prompt_sha256": "aaee6e952d1e59f3885524ba35e04648e101d04abcfa58aded881cc661bcf13a",
-            "params": {
-              "temperature": 0
-            }
+            "params": {}
           }
         ]
       },
@@ -215,9 +207,7 @@
             "model": "fixture-reference-v1",
             "prompt_name": "reference/fixture-v1",
             "prompt_sha256": "6c1222b5d2ae1d31752d5fc92205a1445aecc1ead70e26d08be0b763ebb23465",
-            "params": {
-              "temperature": 0
-            }
+            "params": {}
           }
         ]
       },
@@ -236,9 +226,7 @@
             "model": "fixture-emend-v1",
             "prompt_name": "emend/fixture-v1",
             "prompt_sha256": "441de77c11722156f3d21d6a3ace3e44b7fec53f83145b672ba720c6abde596f",
-            "params": {
-              "temperature": 0
-            }
+            "params": {}
           }
         ]
       },

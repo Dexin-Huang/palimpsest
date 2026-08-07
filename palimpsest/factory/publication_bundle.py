@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +58,12 @@ def export_library(
     staged_root = output_root.parent / f".{output_root.name}.staged"
     backup_root = output_root.parent / f".{output_root.name}.backup"
     shutil.rmtree(staged_root, ignore_errors=True)
+    # ``.backup`` is the authoritative recovery point: a hard kill between
+    # the two renames in the swap below leaves ``output_root`` absent with the
+    # last good bundle still under ``.backup``. Restore it before wiping
+    # anything so an export can never destroy the only copy of a bundle.
+    if not output_root.exists() and backup_root.exists():
+        backup_root.replace(output_root)
     shutil.rmtree(backup_root, ignore_errors=True)
     staged_root.mkdir(parents=True)
 
@@ -90,10 +98,12 @@ def export_library(
         atomic_write_json(staged_root / "library.json", payload)
 
         if output_root.exists():
-            output_root.replace(backup_root)
+            _replace_with_retry(output_root, backup_root)
         try:
-            staged_root.replace(output_root)
+            _replace_with_retry(staged_root, output_root)
         except BaseException:
+            # The old bundle is intact under .backup; put it back so the
+            # live path is never left absent after a failed export.
             if backup_root.exists():
                 backup_root.replace(output_root)
             raise
@@ -102,6 +112,22 @@ def export_library(
         shutil.rmtree(staged_root, ignore_errors=True)
 
     return library
+
+
+def _replace_with_retry(source: Path, target: Path) -> None:
+    """os.replace with a bounded retry for transient Windows sharing errors.
+
+    Mirrors the retry semantics of ``workspace.io._staged_path`` so the
+    bundle swap survives momentary file locks (antivirus scans, readers).
+    """
+    for attempt in range(8):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if attempt == 7:
+                raise
+            time.sleep(0.005 * (attempt + 1))
 
 
 def load_book(book_path: Path) -> dict:

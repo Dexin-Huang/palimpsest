@@ -41,7 +41,7 @@ class Translate(Station):
     consumes = ("page_transcription", "translation_brief")
     produces = "page_translation"
     uses_model = True
-    param_keys = frozenset({"temperature", "max_output_tokens"})
+    param_keys = frozenset({"max_output_tokens"})
     option_keys = frozenset({"overlap", "trim_seam_overlap"})
     production_dependencies = (
         "factory/gateway/__init__.py",
@@ -106,7 +106,6 @@ class Translate(Station):
             ModelRequest(
                 model=job.config.model,
                 prompt=prompt,
-                temperature=job.config.params.get("temperature", 0.1),
                 max_output_tokens=job.config.params.get("max_output_tokens", 32768),
             )
         )

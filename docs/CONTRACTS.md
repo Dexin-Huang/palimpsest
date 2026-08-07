@@ -161,22 +161,22 @@ flowchart TB
 
 | Station | Implementation | Grain | Consumes | Produces | Model |
 |---|---|---|---|---|---|
-| `acquire` | `4fb1d598076900dc` | page | `page_list` | `page_image` | no |
-| `align` | `fe3976f7a3759b5b` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
-| `assemble_page` | `fbc2af383d46912e` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
-| `deframe` | `74b73bc1171d02a8` | page | `page_image` | `page_image_framed` | no |
-| `dewatermark` | `2590214f4bcbe0b9` | page | `page_image_framed` | `page_image_unmarked` | no |
-| `emend` | `e171fd87b22cac98` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
-| `finalize_edition` | `88124064df539198` | manuscript | `page_transcription`, `manuscript`, `reference`, `emendations` | `edition` | yes |
-| `flatten` | `5f9bce7f8eae55d6` | page | `page_image_unmarked` | `page_image_clean` | no |
-| `publish` | `9e0a4a0a98bc1187` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
-| `read` | `22b7ec21d0f89457` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
-| `reconstruct` | `3b7b62293f587e26` | manuscript | `page_assembled` | `manuscript` | yes |
-| `reference` | `827d61cbae35bc17` | manuscript | `manuscript` | `reference` | yes |
-| `render_epub` | `831c000eac407375` | manuscript | `book` | `book_epub` | no |
-| `segment` | `8aa7ba25af9f58b2` | page | `page_image_clean` | `page_regions` | no |
-| `survey` | `bf8ec21263faa450` | manuscript | `page_transcription` | `translation_brief` | yes |
-| `translate` | `0785a110b9604c65` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
+| `acquire` | `786460382927752a` | page | `page_list` | `page_image` | no |
+| `align` | `83f004f9a0eee318` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
+| `assemble_page` | `0b38599f67a02caa` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
+| `deframe` | `e7ddcafade491076` | page | `page_image` | `page_image_framed` | no |
+| `dewatermark` | `95f90baad646ccc9` | page | `page_image_framed` | `page_image_unmarked` | no |
+| `emend` | `160640d475c425bd` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
+| `finalize_edition` | `700c9710e5d90dba` | manuscript | `page_transcription`, `manuscript`, `reference`, `emendations` | `edition` | yes |
+| `flatten` | `2b1e33b59d0ef38e` | page | `page_image_unmarked` | `page_image_clean` | no |
+| `publish` | `5dbefdbc8123dc81` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
+| `read` | `101c3cdcb5b15548` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
+| `reconstruct` | `808d9826ae5ffa47` | manuscript | `page_assembled` | `manuscript` | yes |
+| `reference` | `c4199cf484732438` | manuscript | `manuscript` | `reference` | yes |
+| `render_epub` | `2ebf2e91f230c987` | manuscript | `book` | `book_epub` | no |
+| `segment` | `f6c906784cc11bd7` | page | `page_image_clean` | `page_regions` | no |
+| `survey` | `cbdb24bfd129a61a` | manuscript | `page_transcription` | `translation_brief` | yes |
+| `translate` | `75135e84e2e9d2f2` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
 
 Contracts are enforced twice at runtime: a station referencing an
 unknown kind fails at registration, and a JSON artifact missing its

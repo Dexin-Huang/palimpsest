@@ -2,9 +2,9 @@
 
 The provider runs one ephemeral, tool-free OMP print session per request. That
 keeps factory cells stateless while letting OMP own provider authentication and
-routing. OMP's CLI does not expose sampling temperature or a hard per-turn
-output-token limit, so those request fields are advisory here; structured-output
-and length requirements are added to the system instruction.
+routing. OMP's CLI does not expose a hard per-turn output-token limit, so that
+request field is advisory here; structured-output and length requirements are
+added to the system instruction.
 """
 
 from __future__ import annotations
@@ -177,13 +177,6 @@ def _validate_request(request: ModelRequest) -> None:
         )
     if not request.prompt:
         raise GatewayError("OMP prompt must not be empty")
-    if (
-        isinstance(request.temperature, bool)
-        or not isinstance(request.temperature, (int, float))
-        or not math.isfinite(request.temperature)
-        or not 0 <= request.temperature <= 2
-    ):
-        raise GatewayError(f"Invalid temperature: {request.temperature}")
     if (
         isinstance(request.max_output_tokens, bool)
         or not isinstance(request.max_output_tokens, int)

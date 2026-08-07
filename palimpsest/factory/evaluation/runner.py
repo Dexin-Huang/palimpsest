@@ -1837,6 +1837,9 @@ def _build_terminal_report(
             for observation in judge["observations"]
             if observation["case_id"] == case_id
         ]
+    report = _json_value(report)
+    if not isinstance(report, Mapping):
+        raise AssertionError("Terminal report must be a JSON object")
     report["report_fingerprint"] = report_fingerprint(report)
     return report
 

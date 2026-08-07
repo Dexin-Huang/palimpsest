@@ -75,7 +75,7 @@ class RunReport:
     def cost_usd(self) -> float | None:
         total: float | None = 0.0
         for cell in self.cells:
-            if cell.action in {"ran", "failed"}:
+            if cell.action in {"ran", "failed", "recovered"}:
                 total = combine_cost(total, cell.cost_usd)
         return total
 
@@ -474,7 +474,7 @@ class Conductor:
                     tokens_out=stamp.get("tokens_out"),
                     cost_usd=stamp.get("cost_usd"),
                 )
-            return CellReport(station.name, page_id, "recovered", cost_usd=0.0)
+            return CellReport(station.name, page_id, "recovered", cost_usd=stamp.get("cost_usd"))
 
         cell = CellSpec(
             doc_id=doc_id,

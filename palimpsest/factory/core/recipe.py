@@ -102,6 +102,14 @@ def _spec(slot: dict) -> StationSpec:
             f"Station {station.name!r} received unknown recipe keys: "
             + ", ".join(details)
         )
+    validate_options = getattr(station, "validate_options", None)
+    if callable(validate_options):
+        try:
+            validate_options(options)
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Station {station.name!r} rejected recipe options: {error}"
+            ) from error
     return StationSpec(
         station=station,
         model=slot.get("model"),

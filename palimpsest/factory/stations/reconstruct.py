@@ -67,7 +67,7 @@ class Reconstruct(Station):
     consumes = ("page_assembled",)
     produces = "manuscript"
     uses_model = True
-    param_keys = frozenset({"temperature", "max_output_tokens"})
+    param_keys = frozenset({"max_output_tokens"})
     production_dependencies = (
         "factory/gateway/__init__.py",
         "factory/gateway/client.py",
@@ -88,7 +88,6 @@ class Reconstruct(Station):
             ModelRequest(
                 model=job.config.model,
                 prompt=job.config.prompt.text + "\n\n" + plan_text,
-                temperature=job.config.params.get("temperature", 0.1),
                 max_output_tokens=job.config.params.get("max_output_tokens", 32768),
                 json_output=True,
                 json_schema=PLAN_SCHEMA,

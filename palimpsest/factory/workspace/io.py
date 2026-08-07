@@ -26,6 +26,24 @@ def utc_now(*, timespec: str = "seconds") -> str:
     )
 
 
+def fsync_directory(path: Path) -> None:
+    """Flush a directory entry after ``os.replace`` so the rename is durable.
+
+    ``os.replace`` only persists the rename once the parent directory is
+    flushed; without this a power loss can resurrect the old name even though
+    the file's data was fsynced. Windows cannot open a directory for fsync
+    (``O_DIRECTORY`` does not exist there); NTFS journals the rename
+    transactionally, so we accept that boundary instead of faking a flush.
+    """
+    if os.name == "nt":
+        return
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
@@ -49,6 +67,7 @@ def _staged_path(path: Path) -> Iterator[Path]:
                 if attempt == 7:
                     raise
                 time.sleep(0.005 * (attempt + 1))
+        fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
 

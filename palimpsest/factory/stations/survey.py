@@ -59,7 +59,7 @@ class Survey(Station):
     consumes = ("page_transcription",)
     produces = "translation_brief"
     uses_model = True
-    param_keys = frozenset({"temperature", "max_output_tokens"})
+    param_keys = frozenset({"max_output_tokens"})
     option_keys = frozenset({"max_tokens_per_chunk"})
     production_dependencies = (
         "factory/gateway/__init__.py",
@@ -89,7 +89,6 @@ class Survey(Station):
                     ModelRequest(
                         model=job.config.model,
                         prompt=job.config.prompt.text + "\n\n" + chunk_text,
-                        temperature=job.config.params.get("temperature", 0.1),
                         max_output_tokens=job.config.params.get(
                             "max_output_tokens", 32768
                         ),

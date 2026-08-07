@@ -1,18 +1,41 @@
-"""SQLite source catalog: immutable revisions plus current-state pointers."""
+"""SQLite source catalog: immutable revisions plus current-state pointers.
+
+The catalog owns its database location and timestamps: ``PALIMPSEST_CATALOG_DB``
+overrides the default ``library/catalog.db`` (itself relative to
+``PALIMPSEST_LIBRARY_ROOT``), so this package has no dependency on factory
+configuration.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
 from palimpsest.catalog.records import RecordPage, SourceRecord
-from palimpsest.factory.config import CATALOG_DB_PATH
-from palimpsest.factory.workspace.io import utc_now
+
+
+def utc_now() -> str:
+    """Current UTC time as ISO-8601 with a Z suffix (catalog record form)."""
+    return (
+        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
+
+
+def _env_path(key: str, default: Path) -> Path:
+    raw = os.getenv(key)
+    return Path(raw) if raw and raw.strip() else default
+
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_LIBRARY_ROOT = _env_path("PALIMPSEST_LIBRARY_ROOT", _PROJECT_ROOT / "library")
+CATALOG_DB_PATH = _env_path("PALIMPSEST_CATALOG_DB", _LIBRARY_ROOT / "catalog.db")
 
 
 _END_CURSOR = "__palimpsest_end__"

@@ -39,6 +39,19 @@ CREATE TABLE IF NOT EXISTS work_runs (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_work_runs_active_doc
   ON work_runs (doc_id) WHERE status = 'running';
 
+CREATE TABLE IF NOT EXISTS items_events (
+  event_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  doc_id          TEXT NOT NULL REFERENCES items(doc_id),
+  event           TEXT NOT NULL
+    CHECK (event IN ('adopted', 'switched_recipe')),
+  recipe          TEXT NOT NULL,
+  previous_recipe TEXT,
+  created_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_items_events_doc
+  ON items_events (doc_id, event_id);
+
 CREATE TABLE IF NOT EXISTS stage_runs (
   run_id             INTEGER PRIMARY KEY AUTOINCREMENT,
   doc_id             TEXT NOT NULL REFERENCES items(doc_id),
@@ -106,13 +119,22 @@ class Ledger:
     # -- work orders ----------------------------------------------------------
 
     def adopt(self, doc_id: str, *, recipe: str) -> None:
+        now = utc_now()
         with self._conn:
             self._conn.execute(
                 """
                 INSERT INTO items (doc_id, recipe, created_at)
                 VALUES (?, ?, ?)
                 """,
-                (doc_id, recipe, utc_now()),
+                (doc_id, recipe, now),
+            )
+            self._conn.execute(
+                """
+                INSERT INTO items_events
+                  (doc_id, event, recipe, previous_recipe, created_at)
+                VALUES (?, 'adopted', ?, NULL, ?)
+                """,
+                (doc_id, recipe, now),
             )
 
     def item(self, doc_id: str) -> sqlite3.Row | None:
@@ -122,7 +144,8 @@ class Ledger:
         ).fetchone()
 
     def switch_recipe(self, doc_id: str, recipe: str) -> None:
-        if self.item(doc_id) is None:
+        item = self.item(doc_id)
+        if item is None:
             raise ValueError(f"No work order: {doc_id}; adopt it first")
         running = self._conn.execute(
             "SELECT 1 FROM work_runs WHERE doc_id = ? AND status = 'running'",
@@ -135,6 +158,28 @@ class Ledger:
                 "UPDATE items SET recipe = ? WHERE doc_id = ?",
                 (recipe, doc_id),
             )
+            # Append-only audit: every switch is recorded so the recipe
+            # timeline is reconstructible without trusting the current value.
+            self._conn.execute(
+                """
+                INSERT INTO items_events
+                  (doc_id, event, recipe, previous_recipe, created_at)
+                VALUES (?, 'switched_recipe', ?, ?, ?)
+                """,
+                (doc_id, recipe, item["recipe"], utc_now()),
+            )
+
+    def recipe_history(self, doc_id: str) -> list[sqlite3.Row]:
+        """Append-only recipe timeline: adoption, then every switch."""
+        return self._conn.execute(
+            """
+            SELECT event, recipe, previous_recipe, created_at
+            FROM items_events
+            WHERE doc_id = ?
+            ORDER BY event_id
+            """,
+            (doc_id,),
+        ).fetchall()
 
     def set_item_status(self, doc_id: str, status: str) -> None:
         if status not in {"active", "complete", "parked", "failed"}:

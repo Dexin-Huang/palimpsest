@@ -64,7 +64,6 @@ def _candidate(
         prompt_name="read/la/diplomatic",
         prompt_hash="a" * 64,
         params={
-            "temperature": 0.7,
             "media_resolution": "low",
             "max_output_tokens": 32768,
             "thinking_level": "low",

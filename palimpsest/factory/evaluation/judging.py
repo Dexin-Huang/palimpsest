@@ -134,7 +134,6 @@ def _model_request(
     schema: Mapping[str, object],
 ) -> ModelRequest:
     allowed = {
-        "temperature",
         "max_output_tokens",
         "media_resolution",
         "thinking_level",

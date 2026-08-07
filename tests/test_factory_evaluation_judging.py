@@ -190,7 +190,6 @@ def test_gateway_executor_sends_only_blinded_text_and_exact_resolved_protocol() 
     request, attempts = captured[0]
     assert attempts == 1
     assert request.model == judge.model
-    assert request.temperature == judge.params["temperature"]
     assert request.max_output_tokens == judge.params["max_output_tokens"]
     assert request.json_output is True
     assert request.json_schema is judge.response_schema_definition.json_schema

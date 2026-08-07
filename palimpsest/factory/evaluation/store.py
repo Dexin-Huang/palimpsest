@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from palimpsest.factory.config import FACTORY_DB_PATH
+from palimpsest.factory.config import EVALUATION_DB_PATH
+from palimpsest.factory.evaluation import _record
 from palimpsest.factory.evaluation.candidate import RecordError, canonical_json
 from palimpsest.factory.evaluation.report import (
     report_fingerprint as compute_report_fingerprint,
@@ -84,9 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_evaluation_promotions_run
 
 
 def _nonempty(value: object, *, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise RecordError(f"{field} must be a non-empty string")
-    return value
+    return _record.string(value, field=field, error_cls=RecordError)
 
 
 def _digest(value: object, *, field: str) -> str:
@@ -119,13 +118,7 @@ def _identity(value: object, *, field: str) -> tuple[str, str]:
     )
 
 
-def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise RecordError(f"Duplicate report JSON key: {key!r}")
-        result[key] = value
-    return result
+_unique_json_object = _record.make_duplicate_key_json_hook(RecordError)
 
 
 def _read_canonical_report(path: Path) -> dict[str, Any]:
@@ -144,8 +137,11 @@ def _read_canonical_report(path: Path) -> dict[str, Any]:
             f"Evaluation report has invalid keys; missing={sorted(_REPORT_KEYS - actual)}, "
             f"unknown={sorted(actual - _REPORT_KEYS)}"
         )
-    if type(report["schema_version"]) is not int or report["schema_version"] != 1:
-        raise RecordError("Evaluation report schema_version must be integer 1")
+    _record.schema_version(
+        report["schema_version"],
+        field="Evaluation report schema_version",
+        error_cls=RecordError,
+    )
     expected = compute_report_fingerprint(report)
     actual_fingerprint = _digest(
         report["report_fingerprint"], field="report.report_fingerprint"
@@ -256,7 +252,7 @@ def _report_index(report: dict[str, Any], path: Path) -> EvaluationRunIndex:
 class EvaluationStore:
     """Own only evaluation index tables; canonical reports remain authoritative."""
 
-    def __init__(self, db_path: str | Path = FACTORY_DB_PATH) -> None:
+    def __init__(self, db_path: str | Path = EVALUATION_DB_PATH) -> None:
         path = Path(db_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(path)

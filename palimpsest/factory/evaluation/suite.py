@@ -13,6 +13,7 @@ from typing import Literal
 from urllib.parse import urlsplit
 
 from palimpsest.factory.core.contracts import contract, validate_payload
+from palimpsest.factory.evaluation import _record
 from palimpsest.factory.evaluation.candidate import (
     RecordError,
     ResolvedCandidate,
@@ -31,14 +32,7 @@ _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def _number(value: object, *, field: str, minimum: float | None = None) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise RecordError(f"{field} must be a number")
-    result = float(value)
-    if not -float("inf") < result < float("inf"):
-        raise RecordError(f"{field} must be finite")
-    if minimum is not None and result < minimum:
-        raise RecordError(f"{field} must be at least {minimum}")
-    return result
+    return _record.number(value, field=field, error_cls=RecordError, minimum=minimum)
 
 
 def _positive_integer(value: object, *, field: str) -> int:

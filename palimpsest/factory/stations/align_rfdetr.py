@@ -22,7 +22,7 @@ from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, StationResult
 from palimpsest.factory.stations.align import Align
 from palimpsest.factory.stations.image_input import load_image
-from palimpsest.factory.workspace.io import read_json
+from palimpsest.factory.workspace.io import read_json, sha256_file
 
 _RUNTIME_PYTHON_ENV = "PALIMPSEST_RFDETR_PYTHON"
 _OBJECT_ROOT_ENV = "PALIMPSEST_RFDETR_OBJECT_ROOT"
@@ -619,6 +619,16 @@ class RfDetrAlign(Align):
         checkpoint = self._checkpoint_path(job, checkpoint_sha256)
         if not checkpoint.is_file():
             raise FileNotFoundError(f"Missing RF-DETR checkpoint: {checkpoint}")
+        # Fail closed on content drift before any worker spawn, mirroring
+        # instrumented_sensors.load_object: the digest in the pinned options
+        # names the exact bytes, not the path. The worker re-verifies the
+        # same digest from its argv at load time.
+        actual_sha256 = sha256_file(checkpoint)
+        if actual_sha256 != checkpoint_sha256:
+            raise ValueError(
+                f"Checkpoint hash mismatch for {checkpoint}: expected "
+                f"{checkpoint_sha256}, got {actual_sha256}"
+            )
         source = job.path_of("page_image_clean")
         state_path, launch_path, log_path = self._worker_paths(checkpoint, options)
 

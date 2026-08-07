@@ -15,7 +15,7 @@ from ebooklib import epub
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
-from palimpsest.factory.workspace.io import read_json
+from palimpsest.factory.workspace.io import fsync_directory, read_json
 
 _STYLE = """
 body { font-family: Georgia, serif; line-height: 1.55; margin: 5%; }
@@ -116,6 +116,7 @@ class RenderEpub(Station):
         tmp_path = out_path.with_suffix(".epub.tmp")
         epub.write_epub(str(tmp_path), book)
         os.replace(tmp_path, out_path)
+        fsync_directory(out_path.parent)
         return StationResult()
 
 

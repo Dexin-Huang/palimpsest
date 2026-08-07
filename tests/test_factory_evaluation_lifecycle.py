@@ -154,7 +154,6 @@ def _write_resources(root: Path) -> tuple[Path, Path, Path]:
         "variant": "default",
         "prompt": "read/la/diplomatic",
         "params": {
-            "temperature": 0.7,
             "media_resolution": "low",
             "max_output_tokens": 32768,
             "thinking_level": "low",

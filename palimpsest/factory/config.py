@@ -55,7 +55,14 @@ def _positive_int_env(key: str, default: int) -> int:
 
 LIBRARY_ROOT = Path(_env("PALIMPSEST_LIBRARY_ROOT", str(PROJECT_ROOT / "library")))
 FACTORY_DB_PATH = Path(_env("PALIMPSEST_FACTORY_DB", str(LIBRARY_ROOT / "factory.db")))
-CATALOG_DB_PATH = Path(_env("PALIMPSEST_CATALOG_DB", str(LIBRARY_ROOT / "catalog.db")))
+# Evaluation indexes live apart from the production ledger (E6): the
+# evaluation plane writes its own SQLite file next to its run reports.
+EVALUATION_DB_PATH = Path(
+    _env(
+        "PALIMPSEST_EVALUATION_DB",
+        str(LIBRARY_ROOT / "evaluations" / "evaluation.sqlite3"),
+    )
+)
 
 # Model defaults used by recipe interpolation.
 MODEL_READING = _env("PALIMPSEST_MODEL_READING", "token-plan/qwen3.8-max")

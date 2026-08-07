@@ -95,9 +95,9 @@ station
 = candidate fingerprint
 ```
 
-A model name alone is not a candidate. Changing the prompt, temperature,
-preprocessing option, implementation source, or any other behavior-bearing
-field creates a different candidate fingerprint.
+A model name alone is not a candidate. Changing the prompt, preprocessing
+option, implementation source, or any other behavior-bearing field creates a
+different candidate fingerprint.
 
 #### 2.3.1 Agent rig
 
@@ -310,7 +310,6 @@ variant: direct_multimodal/v1
 model: token-plan/qwen3.8-max
 prompt: read/la/diplomatic
 params:
-  temperature: 0.1
   media_resolution: high
   thinking_level: high
 options: {}
@@ -430,7 +429,7 @@ model: token-plan/qwen3.8-max
 prompt: evaluation/read/image-pairwise
 response_schema: pairwise_preference/v1
 params:
-  temperature: 0.1
+  max_output_tokens: 512
 ```
 
 The loader resolves the prompt content hash, registered response schema, model,
@@ -1311,8 +1310,6 @@ palimpsest/factory/
     exodia_evaluator.py   external-harness adapter driving run_evaluation
     read_extension.py     extension candidate rendering for the exodia harness
     probes.py             deterministic downstream probes
-    datasets/             alignment training-data curation and localization
-                          scoring (RF-DETR corpus, Kuzushiji, audits)
     suites/
       <station>/*.yaml
     cases/

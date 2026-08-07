@@ -7,10 +7,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from palimpsest.catalog.database import CatalogDB
+from palimpsest.catalog.database import CATALOG_DB_PATH, CatalogDB
 from palimpsest.catalog.heads import build_head
 from palimpsest.catalog.sync import sync_source
-from palimpsest.factory.config import CATALOG_DB_PATH
 
 
 def add_catalog_commands(subparsers: argparse._SubParsersAction) -> None:

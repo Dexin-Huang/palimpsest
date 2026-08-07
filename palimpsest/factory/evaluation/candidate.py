@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import inspect
-import json
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -15,6 +14,7 @@ from typing import Any, Literal
 import yaml
 
 from palimpsest.factory import prompt_store
+from palimpsest.factory.evaluation import _record
 
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 _RECORD_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*\Z")
@@ -26,48 +26,16 @@ class RecordError(ValueError):
     """A tracked evaluation record is malformed or cannot be resolved."""
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
-    pass
-
-
-def _construct_unique_mapping(
-    loader: yaml.SafeLoader, node: yaml.MappingNode
-) -> dict[object, object]:
-    loader.flatten_mapping(node)
-    result: dict[object, object] = {}
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=False)
-        try:
-            duplicate = key in result
-        except TypeError as error:
-            raise RecordError("YAML mapping keys must be scalar") from error
-        if duplicate:
-            raise RecordError(f"Duplicate YAML key: {key!r}")
-        result[key] = loader.construct_object(value_node, deep=False)
-    return result
-
-
-_UniqueKeyLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping
-)
+_UNIQUE_KEY_LOADER = _record.make_unique_key_loader(RecordError)
 
 
 def canonical_json(value: object) -> str:
     """Serialize a JSON value in the one representation used for identities."""
-    try:
-        return json.dumps(
-            _mutable_json(value),
-            ensure_ascii=True,
-            allow_nan=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-    except (TypeError, ValueError) as error:
-        raise RecordError(f"Record is not canonical JSON data: {error}") from error
+    return _record.canonical_json(value, error_cls=RecordError)
 
 
 def content_fingerprint(value: object) -> str:
-    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+    return _record.content_fingerprint(value, error_cls=RecordError)
 
 
 def immutable_json(value: object, *, field: str = "record") -> object:
@@ -93,14 +61,6 @@ def immutable_json(value: object, *, field: str = "record") -> object:
     )
 
 
-def _mutable_json(value: object) -> object:
-    if isinstance(value, Mapping):
-        return {key: _mutable_json(item) for key, item in value.items()}
-    if isinstance(value, tuple | list):
-        return [_mutable_json(item) for item in value]
-    return value
-
-
 def _strict_mapping(
     value: object,
     *,
@@ -108,24 +68,19 @@ def _strict_mapping(
     required: set[str],
     optional: set[str] = frozenset(),
 ) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise RecordError(f"{field} must be a mapping")
-    if not all(isinstance(key, str) for key in value):
-        raise RecordError(f"{field} keys must be strings")
-    keys = set(value)
-    unknown = keys - required - optional
-    missing = required - keys
-    if unknown:
-        raise RecordError(f"Unknown {field} keys: {sorted(unknown)}")
-    if missing:
-        raise RecordError(f"Missing {field} keys: {sorted(missing)}")
-    return value
+    return _record.strict_mapping(
+        value,
+        field=field,
+        required=required,
+        optional=optional,
+        error_cls=RecordError,
+    )
 
 
 def _string(value: object, *, field: str, allow_empty: bool = False) -> str:
-    if not isinstance(value, str) or (not allow_empty and not value.strip()):
-        raise RecordError(f"{field} must be a non-empty string")
-    return value
+    return _record.string(
+        value, field=field, error_cls=RecordError, allow_empty=allow_empty
+    )
 
 
 def _record_id(value: object, *, field: str) -> str:
@@ -141,16 +96,14 @@ def _record_id(value: object, *, field: str) -> str:
 
 
 def _schema_version(value: object) -> int:
-    if type(value) is not int or value != 1:
-        raise RecordError("schema_version must be integer 1")
-    return value
+    return _record.schema_version(value, field="schema_version", error_cls=RecordError)
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     if path.suffix.lower() not in {".yaml", ".yml"}:
         raise RecordError(f"Expected a YAML record: {path}")
     try:
-        value = yaml.load(path.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)
+        value = yaml.load(path.read_text(encoding="utf-8"), Loader=_UNIQUE_KEY_LOADER)
     except (OSError, UnicodeError, yaml.YAMLError) as error:
         raise RecordError(f"Cannot load {path}: {error}") from error
     return (

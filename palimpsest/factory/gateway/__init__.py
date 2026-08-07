@@ -1,6 +1,6 @@
 """Model gateway: the single seam between the factory and model providers."""
 
-from palimpsest.factory.gateway.client import generate, generate_json
+from palimpsest.factory.gateway.client import generate, generate_json, provider_lease
 from palimpsest.factory.gateway.protocol import (
     GatewayError,
     ImageContent,
@@ -15,4 +15,5 @@ __all__ = [
     "ModelResponse",
     "generate",
     "generate_json",
+    "provider_lease",
 ]

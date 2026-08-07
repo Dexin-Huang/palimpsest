@@ -14,6 +14,7 @@ import pytest
 
 from palimpsest.factory import prompt_store
 from palimpsest.factory.core import conductor as conductor_module
+from palimpsest.factory.core.artifact import content_fingerprint
 from palimpsest.factory.core.cell import CellOutcome
 from palimpsest.factory.core.conductor import CellReport, Conductor, RunReport
 from palimpsest.factory.core.ledger import Ledger, fingerprint
@@ -63,6 +64,23 @@ def test_switch_recipe_updates_existing_work_order(ledger):
     doc_id = _adopt_test_item(ledger)
     ledger.switch_recipe(doc_id, "chinese_scroll_rig")
     assert ledger.item(doc_id)["recipe"] == "chinese_scroll_rig"
+
+
+def test_switch_recipe_records_append_only_recipe_audit(ledger):
+    doc_id = _adopt_test_item(ledger)
+    ledger.switch_recipe(doc_id, "chinese_scroll_rig")
+    ledger.switch_recipe(doc_id, "latin_manuscript")
+
+    timeline = [
+        (event["event"], event["recipe"], event["previous_recipe"])
+        for event in ledger.recipe_history(doc_id)
+    ]
+    assert timeline == [
+        ("adopted", "latin_manuscript", None),
+        ("switched_recipe", "chinese_scroll_rig", "latin_manuscript"),
+        ("switched_recipe", "latin_manuscript", "chinese_scroll_rig"),
+    ]
+    assert ledger.item(doc_id)["recipe"] == "latin_manuscript"
 
 
 def test_switch_recipe_requires_existing_work_order(ledger):
@@ -216,6 +234,21 @@ def test_run_report_preserves_unknown_cost_without_counting_skips():
     assert report.cost_usd is None
     report.cells.pop()
     assert report.cost_usd == 0.25
+
+
+def test_run_report_counts_recovered_cell_cost():
+    report = RunReport(
+        doc_id="doc",
+        recipe="recipe",
+        cells=[
+            CellReport("read", "1", "fresh"),
+            CellReport("read", "2", "recovered", cost_usd=0.25),
+            CellReport("read", "3", "ran", cost_usd=0.1),
+        ],
+    )
+    assert report.cost_usd == 0.35
+    report.cells.append(CellReport("read", "4", "recovered", cost_usd=None))
+    assert report.cost_usd is None
 
 
 def test_page_batch_uses_station_barriers_and_model_worker_limit(
@@ -431,6 +464,107 @@ def test_conductor_verifies_output_and_refreshes_prompt_snapshot(
             """
         ).fetchone()
     assert (tokens_in, tokens_out, cost) == (120, 45, 0.12)
+
+
+def test_conductor_recovered_cell_reports_stamped_cost(ledger, tmp_path, monkeypatch):
+    class OutputStation(Station):
+        name = "test_output"
+        grain = "page"
+        consumes = ()
+        produces = "page_translation"
+
+    station = OutputStation()
+    monkeypatch.setattr(
+        conductor_module.prompt_store,
+        "load",
+        lambda name: prompt_store.Prompt(
+            name=name,
+            text="test prompt",
+            sha256="a" * 64,
+        ),
+    )
+    recipe = Recipe(
+        name="test_recipe",
+        language="",
+        steps=(
+            StationSpec(
+                station=station,
+                model=None,
+                prompt_name="test/prompt",
+                params={},
+                options={},
+            ),
+        ),
+    )
+
+    def injected_recipe_loader(name):
+        return recipe
+
+    doc_id = "recover_doc"
+    page_id = "f001r"
+    ledger.adopt(doc_id, recipe=recipe.name)
+    ws_io.atomic_write_json(
+        layout.page_list_path(doc_id, tmp_path),
+        {
+            "doc_id": doc_id,
+            "pages": [
+                {"page_id": page_id, "url": "https://example.test/page.jpg", "order": 1}
+            ],
+        },
+    )
+    output_path = layout.artifact_path(
+        doc_id, station.produces, page_id, library_root=tmp_path
+    )
+
+    class StampedExecutor:
+        def execute(self, cell):
+            payload = {
+                "doc_id": doc_id,
+                "page_id": page_id,
+                "translation": "generated",
+                "flags": {},
+            }
+            ws_io.atomic_write_json(output_path, payload)
+            payload["provenance"] = {
+                "station": cell.station,
+                "station_fingerprint": station.implementation_fingerprint,
+                "config_fingerprint": cell.config_fingerprint,
+                "input_fingerprint": cell.input_fingerprint,
+                "output_fingerprint": content_fingerprint(output_path),
+                "tokens_in": 100,
+                "tokens_out": 50,
+                "cost_usd": 0.25,
+            }
+            ws_io.atomic_write_json(output_path, payload)
+            return CellOutcome(
+                output_path=str(output_path),
+                tokens_in=100,
+                tokens_out=50,
+                cost_usd=0.25,
+            )
+
+    conductor = Conductor(
+        ledger,
+        library_root=tmp_path,
+        workers=1,
+        recipe_loader=injected_recipe_loader,
+    )
+    conductor._executor = StampedExecutor()
+
+    first = conductor.run(doc_id)
+    assert first.count("ran") == 1
+    assert first.cost_usd == 0.25
+
+    # The ledger rows are gone but the certified outputs remain: the next run
+    # must recover each cell from its provenance stamp instead of rerunning it.
+    with sqlite3.connect(tmp_path / "factory.db") as database:
+        database.execute("DELETE FROM stage_runs")
+
+    recovered = conductor.run(doc_id)
+    assert recovered.count("recovered") == 1
+    assert recovered.count("ran") == 0
+    assert recovered.cells[0].cost_usd == 0.25
+    assert recovered.cost_usd == 0.25
 
 
 def test_prompt_store_loads_and_hashes(tmp_path):

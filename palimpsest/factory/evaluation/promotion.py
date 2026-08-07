@@ -23,6 +23,7 @@ from yaml.nodes import MappingNode, ScalarNode, SequenceNode
 
 from palimpsest.factory.core import recipe as production_recipe
 
+from palimpsest.factory.evaluation import _record
 from palimpsest.factory.evaluation.candidate import (
     RecordError,
     ResolvedCandidate,
@@ -42,6 +43,9 @@ _PENDING_DIRECTORY = ".pending"
 
 class PromotionError(RecordError):
     """Promotion evidence or a recipe compare-and-swap is invalid."""
+
+
+_UNIQUE_JSON_OBJECT = _record.make_duplicate_key_json_hook(PromotionError)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1433,21 +1437,13 @@ def _load_canonical_record(
     except (OSError, UnicodeError) as error:
         raise PromotionError(f"Cannot read {field} {source}: {error}") from error
 
-    def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-        result: dict[str, object] = {}
-        for key, value in pairs:
-            if key in result:
-                raise PromotionError(f"Duplicate {field} JSON key: {key!r}")
-            result[key] = value
-        return result
-
     def reject_constant(value: str) -> object:
         raise PromotionError(f"{field} contains non-finite JSON number: {value}")
 
     try:
         value = json.loads(
             raw,
-            object_pairs_hook=unique_object,
+            object_pairs_hook=_UNIQUE_JSON_OBJECT,
             parse_constant=reject_constant,
         )
     except PromotionError:
@@ -1503,22 +1499,11 @@ def _atomic_create_json(path: str | Path, payload: Mapping[str, object]) -> Path
 
 
 def _strict_keys(value: Mapping[str, object], keys: set[str], *, field: str) -> None:
-    actual = set(value)
-    missing = sorted(keys - actual)
-    unknown = sorted(actual - keys)
-    if missing or unknown:
-        details = []
-        if missing:
-            details.append(f"missing={missing}")
-        if unknown:
-            details.append(f"unknown={unknown}")
-        raise PromotionError(f"{field} fields are invalid: {', '.join(details)}")
+    _record.strict_keys(value, keys, field=field, error_cls=PromotionError)
 
 
 def _schema(value: object, *, field: str) -> int:
-    if type(value) is not int or value != _SCHEMA_VERSION:
-        raise PromotionError(f"{field} must be integer 1")
-    return value
+    return _record.schema_version(value, field=field, error_cls=PromotionError)
 
 
 def _verify_proposal(proposal: RecipeProposal) -> None:
@@ -1756,9 +1741,7 @@ def _digest(value: object, *, field: str) -> str:
 
 
 def _nonempty(value: object, *, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise PromotionError(f"{field} must be a non-empty string")
-    return value
+    return _record.string(value, field=field, error_cls=PromotionError)
 
 
 def _timestamp(value: object, *, field: str) -> str:

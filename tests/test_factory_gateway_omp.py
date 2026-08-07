@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import textwrap
 import threading
 from concurrent.futures import ThreadPoolExecutor
 import subprocess
@@ -200,7 +202,7 @@ def test_gateway_caps_concurrent_calls_per_provider(monkeypatch):
 
     monkeypatch.setattr(client, "_resolve_provider", lambda _model: provider)
     monkeypatch.setattr(client, "MODEL_PROVIDER_WORKERS", 3)
-    client._provider_slots.clear()
+    client._lease_semaphores.clear()
     requests = [
         ModelRequest(model="openai-codex/gpt-test", prompt=f"call-{index}")
         for index in range(6)
@@ -214,6 +216,64 @@ def test_gateway_caps_concurrent_calls_per_provider(monkeypatch):
         assert [future.result(timeout=2).text for future in futures] == ["ok"] * 6
 
     assert maximum == 3
+
+
+def test_provider_lease_caps_gateway_calls_across_processes(monkeypatch):
+    """The per-provider worker cap is cross-process, not just per process.
+
+    A subprocess holds one ``client.generate`` call (a fake slow provider) in
+    flight, so a worker cap of 3 leaves exactly two permits for this process:
+    the first two leases succeed, a third concurrent lease must fail
+    transiently within the shortened lease window, and after the child exits
+    a lease is obtainable again.
+    """
+    monkeypatch.setattr(client, "MODEL_PROVIDER_WORKERS", 3)
+    client._lease_semaphores.clear()
+    script = textwrap.dedent(
+        """
+        import sys, time
+        from palimpsest.factory.gateway import client
+        from palimpsest.factory.gateway.protocol import ModelRequest, ModelResponse
+
+        def slow_provider(request):
+            print("CALL_STARTED", flush=True)
+            time.sleep(4)
+            return ModelResponse(text="ok", model=request.model)
+
+        client._resolve_provider = lambda _model: slow_provider
+        client.generate(ModelRequest(model="lease-test-provider/fake-model", prompt="x"))
+        """
+    )
+    child = subprocess.Popen(
+        [sys.executable, "-c", script],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert child.stdout.readline().strip() == "CALL_STARTED"
+        with client.provider_lease("lease-test-provider"):
+            with client.provider_lease("lease-test-provider"):
+                monkeypatch.setattr(client, "LEASE_WAIT_SECONDS", 0.3)
+                with pytest.raises(GatewayError) as raised:
+                    with client.provider_lease("lease-test-provider"):
+                        pass
+                assert raised.value.transient is True
+        child.wait(timeout=15)
+        assert child.returncode == 0
+        # The child's permit was released on exit; leases work again.
+        with client.provider_lease("lease-test-provider"):
+            pass
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.wait()
+
+
+def test_provider_lease_is_exported_from_the_gateway_package():
+    from palimpsest.factory.gateway import provider_lease as exported
+
+    assert exported is client.provider_lease
 
 
 def test_gateway_routes_token_plan_models_through_omp(monkeypatch):

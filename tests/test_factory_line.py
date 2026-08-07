@@ -312,7 +312,6 @@ def test_recipe_loads_and_validates(dual_read_models):
     read = recipe.steps[5]
     assert read.model == "openai-codex/gpt-5.6-sol"
     assert read.params == {
-        "temperature": 0.7,
         "media_resolution": "low",
         "max_output_tokens": 32768,
         "thinking_level": "low",
@@ -358,6 +357,29 @@ line:
 
     with pytest.raises(ValueError, match="before any earlier station produces"):
         load_recipe("out_of_order", recipes_dir=tmp_path)
+
+
+def test_recipe_load_runs_station_option_validation(tmp_path):
+    (tmp_path / "bad_overlap.yaml").write_text(
+        """
+name: bad_overlap
+line:
+  - station: align
+    variant: rfdetr-mth600/v1
+    checkpoint_sha256: cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d
+    nms_iou: 0.4
+    overlap: 512
+    rfdetr_version: 1.8.3
+    threshold: 0.31
+    tile_size: 512
+    torch_version: 2.7.0+cu118
+    torchvision_version: 0.22.0+cu118
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="overlap must be smaller"):
+        load_recipe("bad_overlap", recipes_dir=tmp_path)
 
 
 def test_chinese_rig_recipe_loads_and_validates(dual_read_models):

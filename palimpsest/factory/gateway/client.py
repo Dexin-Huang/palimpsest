@@ -4,20 +4,39 @@ Stations call ``generate(ModelRequest)`` and get a ``ModelResponse`` with
 text, token usage, and cost. Provider selection is by model id; retry with
 exponential backoff on transient failures happens here, once, for every
 provider. No station ever instantiates a provider client.
+
+Concurrency: the factory caps in-flight calls per provider prefix (the part
+before ``/``) at ``MODEL_PROVIDER_WORKERS``. The cap is enforced by
+:func:`provider_lease`, a cross-process file lease held for the duration of
+every provider call. Each provider owns a row of lock files under the library
+root (``<library>/.gateway-locks/<provider>.<i>.lock``), so every factory
+process — inline executor threads, subprocess executor cells, agent-cell
+sessions, and canary lanes — contends for the same permits. A per-process
+permit semaphore additionally guards threads inside this process, where the
+OS byte-range lock semantics may not distinguish two handles to the same
+file. Subprocess cells and agent-cell sessions that issue gateway calls from
+outside this module must wrap their calls in :func:`provider_lease` so the
+documented "no more than N calls per provider at once" guarantee holds
+factory-wide, not just within one process.
 """
 
 from __future__ import annotations
 
 import json
-import time
+import os
+import re
 import threading
-from collections.abc import Mapping
+import time
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from jsonschema import validators
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from palimpsest.factory.config import LIBRARY_ROOT
 from palimpsest.factory.config import MODEL_PROVIDER_WORKERS
 from palimpsest.factory.gateway.protocol import (
     GatewayError,
@@ -29,26 +48,133 @@ from palimpsest.factory.usage import combine_cost
 
 MAX_ATTEMPTS = 4
 BACKOFF_BASE_SECONDS = 2.0
-_provider_slots: dict[str, threading.BoundedSemaphore] = {}
-_provider_slots_lock = threading.Lock()
+
+# A caller that cannot obtain a provider permit within this window fails
+# transiently, so generate()'s backoff can absorb the busy period. The window
+# is generous because model calls themselves run for minutes.
+LEASE_WAIT_SECONDS = 120.0
+LEASE_RETRY_SECONDS = 0.05
+
+_lease_semaphores: dict[tuple[str, int], threading.BoundedSemaphore] = {}
+_lease_semaphores_lock = threading.Lock()
 
 
-def _provider_slot(model: str) -> threading.BoundedSemaphore:
-    provider = model.partition("/")[0]
-    with _provider_slots_lock:
-        slot = _provider_slots.get(provider)
-        if slot is None:
-            slot = threading.BoundedSemaphore(MODEL_PROVIDER_WORKERS)
-            _provider_slots[provider] = slot
-        return slot
+@contextmanager
+def provider_lease(provider: str) -> Iterator[None]:
+    """Hold one of ``MODEL_PROVIDER_WORKERS`` in-flight permits for ``provider``.
+
+    The lease spans processes: the permit set is a per-provider row of lock
+    files under the library root, so every factory process (inline executor
+    threads, subprocess executor cells, agent-cell sessions, canary lanes)
+    contends for the same cap. A per-process semaphore guards threads in this
+    process because OS byte-range lock semantics are not guaranteed to
+    distinguish two handles from the same process.
+
+    Raises :class:`GatewayError` (transient) when no permit frees up within
+    :data:`LEASE_WAIT_SECONDS`. Out-of-module gateway callers (subprocess
+    cells, agent-cell sessions) must acquire this lease around their provider
+    calls so the documented worker bound holds factory-wide.
+    """
+    key = _lease_key(provider)
+    semaphore = _lease_semaphore(key)
+    deadline = time.monotonic() + LEASE_WAIT_SECONDS
+    if not semaphore.acquire(timeout=max(0.0, deadline - time.monotonic())):
+        raise GatewayError(
+            f"No {MODEL_PROVIDER_WORKERS}-worker permit free for provider "
+            f"{provider!r} within the lease window",
+            transient=True,
+        )
+    try:
+        fd = _acquire_file_permit(key, deadline)
+    except BaseException:
+        semaphore.release()
+        raise
+    try:
+        yield
+    finally:
+        try:
+            os.close(fd)
+        finally:
+            semaphore.release()
+
+
+def _lease_key(provider: str) -> str:
+    """Normalize a provider name to a stable, filesystem-safe lease key."""
+    name = provider.strip().partition("/")[0]
+    if not name:
+        name = "unknown"
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", name)
+
+
+def _lease_semaphore(key: str) -> threading.BoundedSemaphore:
+    cache_key = (key, MODEL_PROVIDER_WORKERS)
+    with _lease_semaphores_lock:
+        semaphore = _lease_semaphores.get(cache_key)
+        if semaphore is None:
+            semaphore = threading.BoundedSemaphore(MODEL_PROVIDER_WORKERS)
+            _lease_semaphores[cache_key] = semaphore
+        return semaphore
+
+
+def _lease_directory() -> Path:
+    directory = LIBRARY_ROOT / ".gateway-locks"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _permit_paths(key: str) -> list[Path]:
+    directory = _lease_directory()
+    return [
+        directory / f"{key}.{index}.lock" for index in range(MODEL_PROVIDER_WORKERS)
+    ]
+
+
+def _acquire_file_permit(key: str, deadline: float) -> int:
+    paths = _permit_paths(key)
+    while True:
+        for path in paths:
+            fd = _try_lock(path)
+            if fd is not None:
+                return fd
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise GatewayError(
+                f"No {MODEL_PROVIDER_WORKERS}-worker permit free for provider "
+                f"{key!r} within the lease window",
+                transient=True,
+            )
+        time.sleep(min(LEASE_RETRY_SECONDS, remaining))
+
+
+def _try_lock(path: Path) -> int | None:
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        _lock_file_region(fd)
+        return fd
+    except OSError:
+        os.close(fd)
+        return None
+
+
+def _lock_file_region(fd: int) -> None:
+    if os.name == "nt":
+        import msvcrt
+
+        if os.fstat(fd).st_size == 0:
+            os.write(fd, b"\0")
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 def generate(request: ModelRequest) -> ModelResponse:
     provider = _resolve_provider(request.model)
-    slot = _provider_slot(request.model)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            with slot:
+            with provider_lease(request.model.partition("/")[0]):
                 return provider(request)
         except GatewayError as error:
             if not error.transient or attempt == MAX_ATTEMPTS:

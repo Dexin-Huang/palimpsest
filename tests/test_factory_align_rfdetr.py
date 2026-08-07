@@ -292,6 +292,21 @@ def test_rfdetr_station_fails_before_dispatch_when_runtime_is_missing(
         station._predict(job)
 
 
+def test_rfdetr_station_fails_closed_on_checkpoint_content_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    job = _job(tmp_path)
+    station = RfDetrAlign()
+    monkeypatch.delenv("PALIMPSEST_RFDETR_PYTHON", raising=False)
+    checkpoint = station._checkpoint_path(job, _options()["checkpoint_sha256"])
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint.write_bytes(b"stale checkpoint bytes")
+
+    with pytest.raises(ValueError, match="Checkpoint hash mismatch"):
+        station._predict(job)
+
+
 def test_rfdetr_runtime_worker_reuses_one_model_across_requests(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

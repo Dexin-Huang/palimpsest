@@ -10,6 +10,7 @@ import requests
 
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
+from palimpsest.factory.workspace.io import fsync_directory
 
 REQUEST_HEADERS = {"User-Agent": "palimpsest manuscript recovery factory"}
 TIMEOUT_SECONDS = 60.0
@@ -47,6 +48,7 @@ class Acquire(Station):
                 handle.flush()
                 os.fsync(handle.fileno())
         os.replace(tmp_path, out_path)
+        fsync_directory(out_path.parent)
         return StationResult()
 
 

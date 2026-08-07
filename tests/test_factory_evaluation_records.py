@@ -47,7 +47,7 @@ def _station(
         optional_consumes=(),
         produces="page_transcription" if name == "read" else "document_analysis",
         uses_model=uses_model,
-        param_keys=frozenset({"temperature"}),
+        param_keys=frozenset({"max_output_tokens"}),
         option_keys=frozenset({"language"}),
         implementation_fingerprint="implementation-v1",
     )
@@ -69,7 +69,7 @@ def _candidate_record(**changes: object) -> dict[str, object]:
         "variant": "direct/v1",
         "model": "qwen3.8-max-001",
         "prompt": "read/la/diplomatic",
-        "params": {"temperature": 0.1},
+        "params": {"max_output_tokens": 32768},
         "options": {"language": "la"},
         "notes": "tracked candidate",
     }
@@ -103,13 +103,13 @@ def test_candidate_resolves_strict_immutable_identity_and_all_behavior_fields(
     assert candidate.prompt_hash == _prompt("read/la/diplomatic").sha256
     assert candidate.can_auto_qualify is True
     with pytest.raises(TypeError):
-        candidate.params["temperature"] = 0.2  # type: ignore[index]
+        candidate.params["max_output_tokens"] = 4096  # type: ignore[index]
 
     fingerprints = {candidate.fingerprint}
     mutations = (
         {"model": "qwen3.8-max-002"},
         {"prompt": "read/la/other"},
-        {"params": {"temperature": 0.2}},
+        {"params": {"max_output_tokens": 4096}},
         {"options": {"language": "grc"}},
         {"variant": "direct/v2"},
     )
@@ -184,7 +184,7 @@ def test_moving_candidate_and_judge_are_explicitly_non_qualifying(
             "model": "qwen3.8-max-latest",
             "prompt": "evaluation/read/pairwise",
             "response_schema": "pairwise_preference/v1",
-            "params": {"temperature": 0.1},
+            "params": {"max_output_tokens": 512},
         },
     )
     judge = load_judge(
@@ -318,7 +318,7 @@ def _fixed_judge(tmp_path: Path):
             "model": "qwen3.8-max-001",
             "prompt": "evaluation/read/pairwise",
             "response_schema": "pairwise_preference/v1",
-            "params": {"temperature": 0.1},
+            "params": {"max_output_tokens": 512},
         },
     )
     return load_judge(

@@ -12,6 +12,7 @@ import pytest
 from palimpsest.factory.evaluation.candidate import RecordError, ResolvedCandidate
 from palimpsest.factory.evaluation.judge import ResolvedJudge
 from palimpsest.factory.evaluation.metrics import Metric, MetricDirection
+from palimpsest.factory.evaluation.report import report_fingerprint
 from palimpsest.factory.evaluation.runner import (
     _json_value,
     _side_order,
@@ -675,6 +676,43 @@ def test_invalid_output_is_not_scored_and_failure_usage_and_unknowns_are_retaine
         for reason in report["qualification"]["reasons"]
     )
     store.close()
+
+
+def test_terminal_report_sanitizes_nonfinite_case_cost(tmp_path, monkeypatch):
+    case = _case(tmp_path, 1)
+    metric = Metric("quality", MetricDirection.MAXIMIZE, lambda output, gold: output["score"])
+    suite = _suite((case,), metric)
+    baseline = _candidate("read/baseline", "a" * 64)
+    challenger = _candidate("read/challenger", "b" * 64)
+    plans = {
+        (baseline.fingerprint, "p1"): {"score": 0.5, "cost": float("nan")},
+        (challenger.fingerprint, "p1"): {"score": 0.8, "cost": float("nan")},
+    }
+    calls, candidate_views = [], []
+    _install_execution(monkeypatch, plans, calls, candidate_views)
+
+    report_path = tmp_path / "runs" / "run-1" / "report.json"
+    with EvaluationStore(tmp_path / "factory.db") as store:
+        with pytest.raises(ValueError, match="must be a finite non-negative number"):
+            run_evaluation(
+                run_id="run-1",
+                suite=suite,
+                baseline=baseline,
+                challenger=challenger,
+                store=store,
+                run_root=tmp_path / "runs",
+                asset_resolver=filesystem_asset_resolver(tmp_path, tmp_path / "objects"),
+                executor="inline",
+            )
+        indexed_fingerprint = store.run("run-1").report_fingerprint
+
+    report = read_json(report_path)
+    assert report["cases"][0]["baseline"]["cost_usd"] is None
+    assert report["cases"][0]["challenger"]["cost_usd"] is None
+    assert report["report_fingerprint"] == report_fingerprint(report)
+    assert indexed_fingerprint == report["report_fingerprint"]
+    text = report_path.read_text(encoding="utf-8")
+    assert "NaN" not in text and "Infinity" not in text
 
 
 def test_hard_limit_protected_slice_and_moving_identity_each_block_qualification(
