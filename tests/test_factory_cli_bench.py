@@ -532,6 +532,47 @@ def test_report_json_and_table_preserve_unknown_values(
     assert "unknown" in capsys.readouterr().out
 
 
+def test_bench_rebuild_reindexes_runs_from_canonical_reports(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    side = CaseSideOutcome(
+        candidate_id="read/base",
+        candidate_fingerprint="1" * 64,
+        succeeded=True,
+        output_path="output.json",
+        output_fingerprint="2" * 64,
+        latency_seconds=1.25,
+        tokens_in=None,
+        tokens_out=None,
+        cost_usd=None,
+    )
+    runs_root = tmp_path / "runs"
+    db = tmp_path / "index.db"
+    for run_id in ("run-1", "run-2"):
+        report = build_report(
+            run_id=run_id,
+            status="completed",
+            decision="pass",
+            started_at=f"2026-07-21T10:0{run_id[-1]}:00Z",
+            finished_at=f"2026-07-21T10:0{run_id[-1]}:01Z",
+            suite=ReportIdentity("read/suite/v1", "5" * 64),
+            baseline=ReportIdentity("read/base", "1" * 64),
+            challenger=ReportIdentity("read/next", "3" * 64),
+            cases=(PairedCaseOutcome("case-1", side, side),),
+            aggregates={"cost_usd": None},
+        )
+        write_report(runs_root / run_id / "report.json", report)
+
+    args = build_parser().parse_args(
+        ["bench", "rebuild", "--db", str(db), "--runs-root", str(runs_root)]
+    )
+    args.func(args)
+
+    assert "Rebuilt 2 run indexes" in capsys.readouterr().out
+    with EvaluationStore(db) as store:
+        assert [run.run_id for run in store.runs()] == ["run-1", "run-2"]
+
+
 def test_propose_calls_immutable_api(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -815,7 +856,8 @@ def test_live_canary_is_isolated_saved_then_promoted(
         "palimpsest.factory.evaluation.promotion.commit_recipe_decision",
         Mock(return_value=artifact),
     )
-    monkeypatch.setattr(cli, "_index_promotion", Mock())
+    index_promotion = Mock()
+    monkeypatch.setattr(cli, "_index_promotion", index_promotion)
     args = build_parser().parse_args(
         [
             "bench",
@@ -836,7 +878,9 @@ def test_live_canary_is_isolated_saved_then_promoted(
             "--history-root",
             str(tmp_path / "history"),
             "--db",
-            str(tmp_path / "factory.db"),
+            str(tmp_path / "index.db"),
+            "--ledger-db",
+            str(tmp_path / "ledger.db"),
             "--executor",
             "inline",
             "--workers",
@@ -851,9 +895,12 @@ def test_live_canary_is_isolated_saved_then_promoted(
         doc_id="doc-1",
         library_root=tmp_path / "library",
         canary_root=tmp_path / "isolated-canary",
-        db_path=tmp_path / "factory.db",
+        db_path=tmp_path / "ledger.db",
         recipe_root=tmp_path / "recipes",
         executor="inline",
         workers=2,
+    )
+    index_promotion.assert_called_once_with(
+        tmp_path / "index.db", record, artifact
     )
     save_canary.assert_called_once_with(tmp_path / "canary.json", canary)

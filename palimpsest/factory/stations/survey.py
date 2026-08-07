@@ -4,17 +4,15 @@ translation brief — the jig the page line's translate station clamps into
 
 from __future__ import annotations
 
-import json
 import math
 from collections.abc import Iterator
 
-from palimpsest.factory.usage import combine_cost, combine_count
+from palimpsest.factory.usage import combine_cost
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.gateway import (
     GatewayError,
     ModelRequest,
-    ModelResponse,
     generate_json,
 )
 from palimpsest.factory.workspace.io import read_json

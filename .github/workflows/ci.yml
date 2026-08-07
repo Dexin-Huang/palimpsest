@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and dev tools
+        run: python -m pip install --upgrade --editable ".[dev]"
+      - name: Lint
+        run: ruff check .
+      # The suite is hermetic by design: 569 tests with no network and no
+      # model calls. Network access is mocked or loopback-fixture based, and
+      # the RF-DETR runtime is monkeypatched, so there is deliberately no
+      # `bench fetch` step and no skip guard here. The gitignored evaluation
+      # asset cache and the isolated RF-DETR runtime are needed only by live
+      # `palimpsest bench run` executions, never by the test suite.
+      - name: Test
+        run: pytest -q

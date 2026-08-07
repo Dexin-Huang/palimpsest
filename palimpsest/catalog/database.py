@@ -3,7 +3,8 @@
 The catalog owns its database location and timestamps: ``PALIMPSEST_CATALOG_DB``
 overrides the default ``library/catalog.db`` (itself relative to
 ``PALIMPSEST_LIBRARY_ROOT``), so this package has no dependency on factory
-configuration.
+configuration. The project-root ``.env`` is loaded directly so both variables
+resolve from it exactly as the factory's config does.
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
+
+from dotenv import load_dotenv
 
 from palimpsest.catalog.records import RecordPage, SourceRecord
 
@@ -34,6 +37,7 @@ def _env_path(key: str, default: Path) -> Path:
 
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(_PROJECT_ROOT / ".env")
 _LIBRARY_ROOT = _env_path("PALIMPSEST_LIBRARY_ROOT", _PROJECT_ROOT / "library")
 CATALOG_DB_PATH = _env_path("PALIMPSEST_CATALOG_DB", _LIBRARY_ROOT / "catalog.db")
 

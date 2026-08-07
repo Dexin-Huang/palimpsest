@@ -13,18 +13,27 @@ import os
 
 from ebooklib import epub
 
+from palimpsest.factory import brand
 from palimpsest.factory.core.registry import register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.workspace.io import fsync_directory, read_json
 
+# Brand palette hexes (branding/brand.json) applied at presentation level:
+# ink_vault text on mineral_paper surfaces, parchment rules, seal_vermilion
+# accent for the mark, oxidized_slate for secondary text.
 _STYLE = """
-body { font-family: Georgia, serif; line-height: 1.55; margin: 5%; }
-h1, h2 { font-weight: normal; }
-.folios { color: #666; font-style: italic; font-size: .9em; }
-.original { margin-top: 2em; padding-top: 1em; border-top: 1px solid #ccc; }
-.original h3 { font-size: 1em; color: #666; }
-.colophon { font-size: .9em; color: #444; }
-.sources { margin-top: 2em; padding-top: 1em; border-top: 1px dotted #ccc; }
+body { font-family: 'Libre Caslon Text', 'Libre Caslon Display', Georgia, serif; color: #17252C; background: #F2F0E9; line-height: 1.55; margin: 5%; }
+h1, h2 { font-weight: normal; color: #17252C; }
+h1 { font-family: 'Libre Caslon Display', 'Libre Caslon Text', Georgia, serif; }
+.brand { text-align: center; margin: 2.5em 0 3em; }
+.brand .mark { width: 3.2em; height: 3.2em; }
+.brand .wordmark { font-family: 'Libre Caslon Display', 'Libre Caslon Text', Georgia, serif; text-transform: uppercase; letter-spacing: .16em; font-size: 1.5em; margin-top: .7em; }
+.brand .promise { font-style: italic; color: #405054; margin: .5em 0 0; }
+.folios { color: #405054; font-style: italic; font-size: .9em; }
+.original { margin-top: 2em; padding-top: 1em; border-top: 1px solid #C9B99A; }
+.original h3 { font-size: 1em; color: #405054; }
+.colophon { font-size: .9em; color: #405054; }
+.sources { margin-top: 2em; padding-top: 1em; border-top: 1px dotted #C9B99A; }
 """
 
 
@@ -34,6 +43,7 @@ class RenderEpub(Station):
     grain = "manuscript"
     consumes = ("book",)
     produces = "book_epub"
+    production_dependencies = ("factory/brand.py",)
 
     def run(self, job: Job) -> StationResult:
         book_model = read_json(job.path_of("book"))
@@ -135,7 +145,12 @@ def _chapter_page(uid: str, heading: str, body_html: str) -> epub.EpubHtml:
 
 def _title_page(model: dict) -> epub.EpubHtml:
     identity = model["identity"]
-    lines = [f"<h1>{html.escape(identity['title'])}</h1>"]
+    mark = brand.mark_svg(fill=brand.SEAL_VERMILION, width=64, height=64)
+    lines = [
+        f'<div class="brand">{mark}<div class="wordmark">Palimpsest</div>'
+        f'<p class="promise">{html.escape(brand.PROMISE)}</p></div>',
+        f"<h1>{html.escape(identity['title'])}</h1>",
+    ]
     if identity["author"]:
         lines.append(f"<p>{html.escape(identity['author'])}</p>")
     detail = " · ".join(

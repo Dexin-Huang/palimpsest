@@ -10,14 +10,17 @@ before ``/``) at ``MODEL_PROVIDER_WORKERS``. The cap is enforced by
 :func:`provider_lease`, a cross-process file lease held for the duration of
 every provider call. Each provider owns a row of lock files under the library
 root (``<library>/.gateway-locks/<provider>.<i>.lock``), so every factory
-process — inline executor threads, subprocess executor cells, agent-cell
-sessions, and canary lanes — contends for the same permits. A per-process
-permit semaphore additionally guards threads inside this process, where the
-OS byte-range lock semantics may not distinguish two handles to the same
-file. Subprocess cells and agent-cell sessions that issue gateway calls from
-outside this module must wrap their calls in :func:`provider_lease` so the
-documented "no more than N calls per provider at once" guarantee holds
-factory-wide, not just within one process.
+process that issues provider calls contends for the same permits: inline
+executor threads, subprocess executor cells, and canary lanes. Contention for
+subprocess cells and canary lanes is transitive — their station code calls
+``generate()``, which acquires the lease inside this module. Agent-cell
+sessions are outside the gateway cap: they spawn external codex/omp CLIs and
+never call the gateway. A per-process permit semaphore additionally guards
+threads inside this process, where the OS byte-range lock semantics may not
+distinguish two handles to the same file. Callers that invoke a provider
+client directly from outside this module must wrap their calls in
+:func:`provider_lease` so the documented "no more than N calls per provider
+at once" guarantee holds factory-wide, not just within one process.
 """
 
 from __future__ import annotations
@@ -64,15 +67,19 @@ def provider_lease(provider: str) -> Iterator[None]:
     """Hold one of ``MODEL_PROVIDER_WORKERS`` in-flight permits for ``provider``.
 
     The lease spans processes: the permit set is a per-provider row of lock
-    files under the library root, so every factory process (inline executor
-    threads, subprocess executor cells, agent-cell sessions, canary lanes)
-    contends for the same cap. A per-process semaphore guards threads in this
-    process because OS byte-range lock semantics are not guaranteed to
-    distinguish two handles from the same process.
+    files under the library root, so every factory process that issues
+    provider calls (inline executor threads, subprocess executor cells,
+    canary lanes) contends for the same cap. Contention for subprocess cells
+    and canary lanes is transitive: their station code calls ``generate()``,
+    which acquires this lease here. Agent-cell sessions spawn external
+    codex/omp CLIs and never call the gateway, so they are outside this cap.
+    A per-process semaphore guards threads in this process because OS
+    byte-range lock semantics are not guaranteed to distinguish two handles
+    from the same process.
 
     Raises :class:`GatewayError` (transient) when no permit frees up within
-    :data:`LEASE_WAIT_SECONDS`. Out-of-module gateway callers (subprocess
-    cells, agent-cell sessions) must acquire this lease around their provider
+    :data:`LEASE_WAIT_SECONDS`. Callers that invoke a provider client
+    directly from outside this module must acquire this lease around their
     calls so the documented worker bound holds factory-wide.
     """
     key = _lease_key(provider)

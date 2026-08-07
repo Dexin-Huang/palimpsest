@@ -47,7 +47,7 @@ _STATIONS = {
     ),
     Reconstruct: _GATEWAY,
     Reference: ("factory/agent_cell.py",),
-    RenderEpub: (),
+    RenderEpub: ("factory/brand.py",),
     Survey: _GATEWAY,
     Translate: (
         *_GATEWAY[:-1],

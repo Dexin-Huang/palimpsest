@@ -295,7 +295,9 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
     propose.set_defaults(func=cmd_bench_propose)
 
     promote = commands.add_parser(
-        "promote", help="Apply and record one explicitly approved proposal"
+        "promote",
+        help="Apply and record one approved proposal (promotion indexes into "
+        "the evaluation DB; the canary reads the production ledger)",
     )
     promote.add_argument("proposal", type=Path)
     promote.add_argument("--recipe-root", type=Path, required=True)
@@ -317,11 +319,26 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
     promote.add_argument("--workers", type=_positive_int, default=1)
     promote.add_argument("--approved-by", required=True)
     promote.add_argument("--history-root", type=Path, required=True)
-    promote.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
+    promote.add_argument(
+        "--db",
+        type=Path,
+        default=EVALUATION_DB_PATH,
+        help="Evaluation index receiving the promotion record "
+        "(default: the evaluation DB, where `bench list` reads it)",
+    )
+    promote.add_argument(
+        "--ledger-db",
+        type=Path,
+        default=FACTORY_DB_PATH,
+        help="Production ledger read for the canary's work-order check "
+        "(default: the production ledger)",
+    )
     promote.set_defaults(func=cmd_bench_promote)
 
     rollback = commands.add_parser(
-        "rollback", help="Restore the exact candidate named by a promotion"
+        "rollback",
+        help="Restore the exact candidate named by a promotion (the inverse "
+        "decision indexes into the evaluation DB)",
     )
     rollback.add_argument("promotion", type=Path)
     rollback.add_argument("--recipe-root", type=Path, required=True)
@@ -331,8 +348,22 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
     rollback.add_argument("--history-root", type=Path, required=True)
     rollback.add_argument("--proposal-output", type=Path, default=None)
     rollback.add_argument("--canary-evidence", type=Path, default=None)
-    rollback.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
+    rollback.add_argument(
+        "--db",
+        type=Path,
+        default=EVALUATION_DB_PATH,
+        help="Evaluation index receiving the rollback record "
+        "(default: the evaluation DB, where `bench list` reads it)",
+    )
     rollback.set_defaults(func=cmd_bench_rollback)
+
+    rebuild = commands.add_parser(
+        "rebuild",
+        help="Rebuild the run index atomically from canonical report files",
+    )
+    rebuild.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
+    rebuild.add_argument("--runs-root", type=Path, default=_RUNS_ROOT)
+    rebuild.set_defaults(func=cmd_bench_rebuild)
 
 
 def _page_ids(value: str) -> list[str]:
@@ -833,7 +864,7 @@ def cmd_bench_promote(args: argparse.Namespace) -> None:
             doc_id=args.canary,
             library_root=args.library_root,
             canary_root=args.canary_root,
-            db_path=args.db,
+            db_path=args.ledger_db,
             recipe_root=args.recipe_root,
             executor=args.executor,
             workers=args.workers,
@@ -908,6 +939,14 @@ def cmd_bench_rollback(args: argparse.Namespace) -> None:
     )
     _index_promotion(args.db, record, artifact)
     print(artifact)
+
+
+def cmd_bench_rebuild(args: argparse.Namespace) -> None:
+    from palimpsest.factory.evaluation.store import EvaluationStore
+
+    with EvaluationStore(args.db) as store:
+        count = store.rebuild_from_reports(args.runs_root)
+    print(f"Rebuilt {count} run indexes from {args.runs_root}")
 
 
 def cmd_intake(args: argparse.Namespace) -> None:

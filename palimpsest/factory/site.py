@@ -11,6 +11,7 @@ import html
 import shutil
 from pathlib import Path
 
+from palimpsest.factory import brand
 from palimpsest.factory.config import LIBRARY_ROOT, PROJECT_ROOT
 from palimpsest.factory.publication_bundle import epub_is_current, load_book
 from palimpsest.factory.workspace.io import atomic_write_json, atomic_write_text
@@ -18,24 +19,40 @@ from palimpsest.factory.workspace.layout import artifact_path
 
 DEFAULT_SITE_ROOT = PROJECT_ROOT / "site"
 
+# Brand palette (branding/brand.json) mapped onto the existing token names so
+# page markup keeps working: ink_vault text on mineral_paper, parchment rules,
+# seal_vermilion accents, oxidized_slate for secondary text. Type stacks lead
+# with the brand faces and fall back to system serifs.
 _CSS = """
-:root { --ink:#1a1712; --muted:#6b6357; --paper:#faf7f2; --card:#fff; --rule:#e4ddd2; --accent:#8a4b2d; }
+:root { --ink:#17252C; --muted:#405054; --paper:#F2F0E9; --card:rgba(201,185,154,.22); --rule:#C9B99A; --accent:#9C3F35; --parchment:#C9B99A; --slate:#405054; --seal:#9C3F35; }
 * { box-sizing:border-box; }
-body { margin:0; font-family:Georgia,serif; background:var(--paper); color:var(--ink); line-height:1.6; }
+body { margin:0; font-family:'Libre Caslon Text','Libre Caslon Display',Georgia,serif; background:var(--paper); color:var(--ink); line-height:1.6; }
 main { max-width:46rem; margin:0 auto; padding:3rem 1.25rem 5rem; }
-h1 { font-size:1.9rem; margin:0 0 .25rem; }
-h2 { font-size:1.3rem; margin:2.5rem 0 .5rem; }
+h1 { font-size:1.9rem; margin:0 0 .25rem; font-family:'Libre Caslon Display','Libre Caslon Text',Georgia,serif; font-weight:400; }
+h2 { font-size:1.3rem; margin:2.5rem 0 .5rem; font-family:'Libre Caslon Display','Libre Caslon Text',Georgia,serif; font-weight:400; }
+h3 { font-family:'Libre Caslon Display','Libre Caslon Text',Georgia,serif; font-weight:400; }
 a { color:var(--accent); }
 .muted { color:var(--muted); font-style:italic; }
-.book { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:1rem 1.25rem; margin:1rem 0; }
+.brand { margin-bottom:2rem; }
+.brand .mark { display:block; width:3.4rem; height:3.4rem; }
+.brand .wordmark { font-family:'Libre Caslon Display','Libre Caslon Text',Georgia,serif; text-transform:uppercase; letter-spacing:.16em; font-size:1.15rem; margin-top:.6rem; }
+.brand .promise { color:var(--muted); font-style:italic; font-size:.95rem; margin:.35rem 0 0; }
+.brand.compact { display:flex; align-items:center; gap:.8rem; margin:.75rem 0 1.5rem; }
+.brand.compact .mark { width:2rem; height:2rem; }
+.brand.compact .wordmark { margin:0; font-size:.9rem; }
+.brand.compact .promise { margin:0 0 0 auto; font-size:.85rem; }
+.book { background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:1rem 1.25rem; margin:1rem 0; box-shadow:0 1px 2px rgba(23,37,44,.08); }
 .book h2 { margin:.1rem 0 .2rem; font-size:1.15rem; }
 .folios { color:var(--muted); font-size:.9rem; font-style:italic; }
 .original { display:none; margin-top:1.2rem; padding-top:.8rem; border-top:1px dashed var(--rule); }
 body.show-original .original { display:block; }
-.toggle { font:inherit; font-size:.85rem; padding:.3rem .8rem; border:1px solid var(--rule); border-radius:99px; background:var(--card); cursor:pointer; }
+.toggle { font-family:'Inter',system-ui,sans-serif; font-size:.85rem; padding:.3rem .8rem; border:1px solid var(--rule); border-radius:99px; background:var(--card); cursor:pointer; }
 .colophon { font-size:.88rem; color:var(--muted); border-top:2px solid var(--rule); margin-top:3rem; padding-top:1rem; }
 .sources { margin-top:1rem; padding:.8rem 1rem; border-left:3px solid var(--rule); background:var(--card); }
 .source-image { display:block; width:100%; height:auto; margin:1rem 0; }
+.footer { max-width:46rem; margin:0 auto; padding:0 1.25rem 2.5rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.85rem; font-family:'Inter',system-ui,sans-serif; }
+.footer p { margin:.5rem 0 0; }
+.footer .promise { font-style:italic; }
 """
 
 _TOGGLE_JS = (
@@ -56,6 +73,7 @@ def build(
 
     site_root.mkdir(parents=True, exist_ok=True)
     atomic_write_text(site_root / "style.css", _CSS)
+    atomic_write_text(site_root / "favicon.svg", brand.favicon_svg())
     atomic_write_text(site_root / "index.html", _shelf_html(models))
 
     for model, book_path in books:
@@ -78,13 +96,36 @@ def build(
     return [model["doc_id"] for model in models]
 
 
+def _brand_lockup(*, compact: bool = False) -> str:
+    size = 32 if compact else 54
+    mark = brand.mark_svg(fill=brand.INK_VAULT, width=size, height=size)
+    klass = "brand compact" if compact else "brand"
+    return (
+        f"<div class='{klass}'>{mark}"
+        "<div class='wordmark'>Palimpsest</div>"
+        f"<p class='promise'>{html.escape(brand.PROMISE)}</p></div>"
+    )
+
+
+def _footer() -> str:
+    return (
+        "<footer class='footer'>"
+        f"<p class='promise'>{html.escape(brand.PROMISE)}</p>"
+        "<p><a href='https://github.com/Dexin-Huang/palimpsest'>"
+        "GitHub repository</a> · "
+        "<a href='https://github.com/Dexin-Huang/palimpsest/tree/master/docs'>"
+        "Documentation</a></p></footer>"
+    )
+
+
 def _page(title: str, body: str, *, css_prefix: str = "") -> str:
     return (
         "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>{html.escape(title)}</title>"
+        f"<link rel='icon' type='image/svg+xml' href='{css_prefix}favicon.svg'>"
         f"<link rel='stylesheet' href='{css_prefix}style.css'></head>"
-        f"<body><main>{body}</main>{_TOGGLE_JS}</body></html>"
+        f"<body><main>{body}</main>{_footer()}{_TOGGLE_JS}</body></html>"
     )
 
 
@@ -114,8 +155,9 @@ def _shelf_html(models: list[dict]) -> str:
             f"<p class='muted'>{html.escape(excerpt)}</p></div>"
         )
     body = (
-        "<h1>The Palimpsest Library</h1>"
-        "<p class='muted'>Manuscripts recovered, transcribed, and translated "
+        _brand_lockup()
+        + "<h1>The Palimpsest Library</h1>"
+        + "<p class='muted'>Manuscripts recovered, transcribed, and translated "
         "by the factory — with full provenance.</p>"
         + ("".join(cards) or "<p>No books published yet.</p>")
     )
@@ -127,6 +169,7 @@ def _reader_html(model: dict, *, epub_available: bool = True) -> str:
     colophon = model["colophon"]
     parts = [
         "<p><a href='../'>← library</a></p>",
+        _brand_lockup(compact=True),
         f"<h1>{html.escape(identity['title'])}</h1>",
     ]
     if identity["author"]:

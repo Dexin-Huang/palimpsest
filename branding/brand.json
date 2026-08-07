@@ -5,10 +5,24 @@
   "purpose": "Turn image-bound manuscripts into trustworthy, readable books while preserving the evidence behind every reading.",
   "mark": {
     "concept": "Offset folio layers form a P around an open-book seam.",
-    "status": "candidate",
+    "status": "approved",
     "primary_asset": "assets/palimpsest-mark.svg",
     "preview_asset": "assets/palimpsest-mark.png",
-    "default_color": "ink_vault"
+    "default_color": "ink_vault",
+    "usage": {
+      "clear_space": "~25% of mark height on all sides; no other element may enter it",
+      "minimum_size": "24px",
+      "color_variants": {
+        "primary": "ink_vault mark on mineral_paper surface",
+        "inverse": "mineral_paper mark on ink_vault surface",
+        "accent": "seal_vermilion mark on mineral_paper surface (editorial accent)"
+      },
+      "favicon": {
+        "format": "svg",
+        "minimum_size": "32px",
+        "notes": "Recolored mark (ink_vault on transparent); serve the SVG directly, no raster fallback below 32px"
+      }
+    }
   },
   "palette": {
     "ink_vault": "#17252C",

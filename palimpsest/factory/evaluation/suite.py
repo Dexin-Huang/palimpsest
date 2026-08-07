@@ -50,13 +50,7 @@ def _unique_strings(value: object, *, field: str) -> tuple[str, ...]:
     return result
 
 
-def _duplicate_rejecting_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise RecordError(f"Duplicate JSON key: {key!r}")
-        result[key] = value
-    return result
+_unique_json_object = _record.make_duplicate_key_json_hook(RecordError)
 
 
 def _local_path(value: object, *, root: Path, field: str) -> tuple[str, Path]:
@@ -338,7 +332,7 @@ def load_case_manifest(
         try:
             value = json.loads(
                 line,
-                object_pairs_hook=_duplicate_rejecting_object,
+                object_pairs_hook=_unique_json_object,
                 parse_constant=lambda token: (_ for _ in ()).throw(
                     RecordError(f"Invalid JSON number {token}")
                 ),

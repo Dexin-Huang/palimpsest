@@ -8,6 +8,29 @@ version = "0.2.0"
 description = "A provenance-first factory for recovering readable books from manuscripts"
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Dexin Huang", email = "dh3172@columbia.edu" },
+]
+keywords = [
+  "manuscript",
+  "transcription",
+  "IIIF",
+  "digital-humanities",
+  "epub",
+  "provenance",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Topic :: Text Processing :: Linguistic",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+urls = { "Homepage" = "https://github.com/Dexin-Huang/palimpsest", "Repository" = "https://github.com/Dexin-Huang/palimpsest", "Documentation" = "https://github.com/Dexin-Huang/palimpsest#readme" }
 dependencies = [
   "google-genai>=2.12.1,<3",
   "httpx>=0.28.1,<1",

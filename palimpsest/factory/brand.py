@@ -1,0 +1,82 @@
+"""Approved Palimpsest brand assets for presentation layers.
+
+Single source for the mark path, palette, and promise used by the static
+site and the EPUB renderer, so the two presentations cannot drift apart.
+Presentation only: nothing here participates in the book-model contract.
+
+The palette hexes and promise mirror ``branding/brand.json`` (the source of
+truth — derived, not invented). The mark path is embedded below and verified
+against ``branding/assets/palimpsest-mark.svg`` in the checkout, so the
+inline lockup, the favicon, and the EPUB title page always render the same
+approved shape — and the module still imports from an installed wheel,
+where the branding/ tree is not shipped.
+"""
+
+from __future__ import annotations
+
+import re
+
+from palimpsest.factory.config import PROJECT_ROOT
+
+BRAND_ROOT = PROJECT_ROOT / "branding"
+
+# Approved palette (branding/brand.json); no new hues.
+INK_VAULT = "#17252C"
+MINERAL_PAPER = "#F2F0E9"
+PARCHMENT = "#C9B99A"
+SEAL_VERMILION = "#9C3F35"
+OXIDIZED_SLATE = "#405054"
+
+PALETTE = {
+    "ink_vault": INK_VAULT,
+    "mineral_paper": MINERAL_PAPER,
+    "parchment": PARCHMENT,
+    "seal_vermilion": SEAL_VERMILION,
+    "oxidized_slate": OXIDIZED_SLATE,
+}
+
+PROMISE = "Recovery without erasure."
+
+_MARK_ASSET = BRAND_ROOT / "assets" / "palimpsest-mark.svg"
+
+# The approved mark path (branding/assets/palimpsest-mark.svg), embedded so
+# the module works from a wheel where branding/ is not packaged.
+MARK_PATH = "M298.32,784.30 C297.41,783.66 297.14,729.79 297.15,554.98 C297.15,429.32 297.40,325.26 297.70,323.75 L298.25,321.00 L322.12,321.00 L346.00,321.00 L346.00,288.50 L346.00,256.00 L370.00,256.00 L394.00,256.00 L394.00,219.50 L394.00,183.00 L522.28,183.00 C603.40,183.00 653.67,183.38 659.03,184.02 C670.54,185.41 690.58,190.45 701.50,194.71 C754.97,215.57 795.12,261.87 806.68,316.00 C808.10,322.64 808.49,328.87 808.47,344.50 C808.44,362.82 808.21,365.40 805.74,375.22 C799.64,399.54 785.19,428.57 766.34,454.36 C761.74,460.66 758.98,465.72 756.82,471.86 C748.97,494.12 735.47,514.62 716.88,532.53 C701.47,547.37 686.48,556.26 667.50,561.78 L658.50,564.39 L574.50,564.95 C494.42,565.47 490.29,565.59 486.00,567.43 C472.28,573.31 463.44,582.17 458.65,594.83 C456.57,600.32 456.48,602.29 456.00,657.00 L455.50,713.50 L453.12,718.00 C449.31,725.18 445.58,729.34 435.73,737.33 C404.52,762.67 373.08,777.25 338.22,782.53 C326.57,784.30 299.98,785.48 298.32,784.30 Z M359.50,757.31 C368.35,755.61 378.24,752.28 387.75,747.80 L394.00,744.86 L394.00,532.93 L394.00,321.00 L520.25,321.00 C657.42,321.01 655.09,320.92 673.17,326.60 C702.71,335.86 727.62,355.71 743.26,382.43 C748.08,390.67 754.19,405.92 756.09,414.48 L757.42,420.46 L758.63,416.29 C764.07,397.52 761.52,370.21 752.00,345.31 C733.71,297.45 696.68,264.81 652.43,257.56 C643.57,256.10 629.20,255.96 518.50,256.21 L394.50,256.50 L394.24,288.75 L393.97,321.00 L369.99,321.00 L346.00,321.00 L346.00,540.36 L346.00,759.72 L348.75,759.29 C350.26,759.05 355.10,758.16 359.50,757.31 Z M415.14,721.93 C421.06,718.91 427.79,712.31 430.84,706.54 L433.50,701.50 L434.06,625.50 C434.69,539.87 434.27,544.67 442.69,527.09 C449.01,513.91 458.67,504.21 472.04,497.65 C489.56,489.06 481.69,489.65 587.50,488.96 C656.16,488.52 682.71,488.03 686.00,487.14 C700.36,483.28 711.10,478.36 719.79,471.64 C725.34,467.35 732.79,458.29 736.09,451.82 L737.99,448.09 L735.34,440.93 C725.05,413.18 698.05,393.07 663.56,387.48 C656.01,386.25 637.22,386.01 550.80,386.00 C477.81,386.00 445.53,386.33 441.80,387.12 C430.69,389.48 419.84,397.36 414.70,406.80 C408.72,417.80 409.00,409.54 409.00,573.71 C409.00,677.08 409.32,724.00 410.04,724.00 C410.61,724.00 412.91,723.07 415.14,721.93 Z"
+
+
+def _verify_embedded_mark() -> None:
+    """Checkout guard: the embedded path must match the approved asset."""
+    if not _MARK_ASSET.is_file():
+        return  # wheel-installed: the embedded path is canonical
+    text = _MARK_ASSET.read_text(encoding="utf-8")
+    match = re.search(r'<path[^>]*\bd="([^"]+)"', text)
+    if match is None or match.group(1) != MARK_PATH:
+        raise ValueError(
+            "embedded mark path drifted from branding/assets/palimpsest-mark.svg"
+        )
+
+
+_verify_embedded_mark()
+
+
+def mark_svg(*, fill: str, width: int = 48, height: int = 48) -> str:
+    """Inline, recolorable mark: one monochrome path with a palette hex fill.
+
+    Inline SVG (not <img>) so the site's conformance collector never hashes
+    it, and so the EPUB title page embeds the same shape everywhere.
+    """
+    return (
+        "<svg class='mark' viewBox='0 0 1024 1024' "
+        f"width='{width}' height='{height}' role='img' "
+        "aria-label='Palimpsest mark'>"
+        f"<path fill='{fill}' fill-rule='evenodd' d='{MARK_PATH}'/></svg>"
+    )
+
+
+def favicon_svg() -> str:
+    """Standalone favicon document: the mark in ink_vault on transparent."""
+    return (
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024' "
+        "width='1024' height='1024'>"
+        f"<path fill='{INK_VAULT}' fill-rule='evenodd' d='{MARK_PATH}'/></svg>"
+    )

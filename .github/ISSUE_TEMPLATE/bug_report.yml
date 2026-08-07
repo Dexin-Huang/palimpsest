@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a defect in Palimpsest
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report. Please include
+        enough context that the failure can be reproduced without paid model
+        calls.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you observe, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands, doc-id, recipe, station, and page if relevant.
+      placeholder: |
+        python -m palimpsest run --doc-id <doc_id> --page <page> --through <station>
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Log output, artifact paths, ledger state, or the failing test.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version, OS, and `pip check` result if available.
+      placeholder: "Python 3.12, Windows 11, pip check passes"
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundary check
+      description: |
+        Did the failure corrupt prior artifacts, repeat paid work, or touch
+        the diplomatic layer? Note anything relevant to provenance here.

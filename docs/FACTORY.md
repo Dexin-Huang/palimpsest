@@ -217,12 +217,16 @@ when applicable, parameters, token use, and cost.
 
 ## Ledger
 
-`library/factory.db` contains two durable tables:
+`library/factory.db` contains four durable tables:
 
 - `items`: one work order per document, with recipe, creation time, and
   operational status;
+- `work_runs`: one run of the line per work order, with owner, status, and
+  timestamps, at most one active run per document;
 - `stage_runs`: append-only cell executions, fingerprints, output location,
-  model usage, cost, timestamps, and failures.
+  model usage, cost, timestamps, and failures;
+- `items_events`: the append-only recipe timeline — every adopt and recipe
+  switch, with the recipe, previous recipe, and timestamp, in event order.
 
 `stage_state` is a view of the latest successful run for each document,
 station, and page. Refreshing work appends history; it never overwrites an old

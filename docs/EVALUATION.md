@@ -688,6 +688,7 @@ but never the production workspace or production stage history.
 library/
   factory.db
   evaluations/
+    evaluation.sqlite3
     objects/
     runs/
       <run_id>/
@@ -698,8 +699,9 @@ library/
             challenger/<artifact layout>
 ```
 
-The existing SQLite file receives evaluation index tables owned by a separate
-`EvaluationStore`; the production `Ledger` does not read or write them:
+Evaluation indexes live in `library/evaluations/evaluation.sqlite3`
+(`EVALUATION_DB_PATH`), next to the run reports they index. The production
+`Ledger` (`library/factory.db`) does not read or write them:
 
 ```text
 evaluation_runs
@@ -727,6 +729,13 @@ evaluation_promotions
   approved_by
   created_at
 ```
+
+`bench promote` and `bench rollback` index their decision records into
+`evaluation.sqlite3`, so `bench list` shows them in its default view. The
+protected canary still reads the production ledger explicitly (its work-order
+check needs `items` and `work_runs`); on the CLI that read is `--ledger-db`,
+which defaults to `library/factory.db` and is independent of the promotion
+index.
 
 Detailed case observations remain in immutable report files; SQLite is an index
 that can be rebuilt from disk, matching the production ledger's archive rule.
@@ -1348,7 +1357,7 @@ Deliver:
 - metric, probe, response-schema, and judge registries without dynamic YAML
   imports;
 - evaluation object cache and hash verification;
-- `EvaluationStore` tables in `factory.db`;
+- `EvaluationStore` tables in `library/evaluations/evaluation.sqlite3`;
 - `bench list`, `bench verify`, and `bench fetch`;
 - canonical empty-run and verification-failure records;
 - package-data configuration for candidates, judges, suites, manifests, and

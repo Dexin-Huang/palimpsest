@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a change or new capability for Palimpsest
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        New work belongs when it improves source intake, page understanding,
+        editorial reconstruction, provenance, publication, or the reliable
+        operation of the line. See docs/PRODUCT_FOCUS.md for the scope
+        discipline.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is the problem to solve?
+      description: The concrete pain or missing capability, not the proposed solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Sketch the shape of the change and which layer it touches (intake, station, recipe, conductor, gateway, evaluation, publication).
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact on existing behavior
+      description: Contracts, recipe keys, fingerprints, freshness, or evidence that would change.
+  - type: textarea
+    id: verification
+    attributes:
+      label: How should it be verified?
+      description: The hermetic tests, suite, or zero-cost bench path that would cover it.

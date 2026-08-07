@@ -13,7 +13,6 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, is_dataclass
-from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType

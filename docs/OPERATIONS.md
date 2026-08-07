@@ -94,6 +94,7 @@ The default separation is already correct:
 
 ```text
 production ledger       library/factory.db
+evaluation index        library/evaluations/evaluation.sqlite3
 evaluation run evidence library/evaluations/runs/
 evaluation objects      library/evaluations/objects/
 production workspaces   library/<doc_id>/
@@ -597,6 +598,12 @@ required production outcomes. Promotion occurs only after the canary passes and
 an explicit human identity approves it. The recipe commit uses compare-and-swap
 against the source hash captured by the proposal, so a stale proposal cannot
 overwrite an intervening recipe change.
+
+Promotion and rollback records index into the evaluation index
+(`library/evaluations/evaluation.sqlite3`, the same DB `bench list` reads);
+they are evaluation evidence and travel with the run reports. The protected
+canary reads the production ledger separately for its work-order check, via
+`--ledger-db` (default `library/factory.db`) — the two databases stay split.
 
 If an independently retained canary record already exists, `--canary-evidence`
 may replace `--canary` only when the command verifies that evidence against the

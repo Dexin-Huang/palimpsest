@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from palimpsest.factory import imaging
-from palimpsest.factory.core.station import Job, StationConfig, StationResult
+from palimpsest.factory.core.station import Job, StationConfig
 from palimpsest.factory.gateway import GatewayError, ImageContent, ModelResponse
 from palimpsest.factory.prompt_store import Prompt
 from palimpsest.factory.stations.deframe import Deframe, SpreadSafeDeframe

@@ -18,7 +18,6 @@ import yaml
 
 from palimpsest.factory import config
 from palimpsest.factory.core import registry
-from palimpsest.factory.core.contracts import SOURCE_KINDS, contract
 from palimpsest.factory.core.contracts import SOURCE_KINDS
 from palimpsest.factory.core.station import Station
 
