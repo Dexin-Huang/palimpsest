@@ -38,7 +38,8 @@ from palimpsest.factory.core.artifact import (
 from palimpsest.factory.core.cell import CellSpec
 from palimpsest.factory.core.contracts import validate_payload
 from palimpsest.factory.core.executors import make as make_executor
-from palimpsest.factory.core.ledger import Ledger, fingerprint
+from palimpsest.factory.core.ledger import Ledger
+from palimpsest.factory.core.artifact import fingerprint
 from palimpsest.factory.core.recipe import Recipe, StationSpec, load as load_recipe
 from palimpsest.factory.core.station import Job, StationConfig
 from palimpsest.factory.usage import combine_cost

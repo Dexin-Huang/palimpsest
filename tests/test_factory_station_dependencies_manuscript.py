@@ -43,7 +43,6 @@ _STATIONS = {
         "factory/apparatus.py",
     ),
     Publish: (
-        "factory/core/ledger.py",
         "factory/usage.py",
     ),
     Reconstruct: _GATEWAY,

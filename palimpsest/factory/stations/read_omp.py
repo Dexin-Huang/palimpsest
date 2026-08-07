@@ -8,8 +8,8 @@ contract directly: draft reads become ``candidate_readings`` and the foreman
 verdict becomes the ``adjudication_*`` fields.
 
 The rig orchestration (``_run_instrumented``) and the extension staging
-(``_run_extension``) live here; each variant maps the outcome onto its own
-payload contract.
+(``OmpExtensionRead.run``) live here; each variant maps the outcome onto
+its own payload contract.
 
 Sensor artifacts must be computed on the same ``page_image_clean`` geometry
 this variant reads; pins are recipe options. Blank pages are gated before any
@@ -357,8 +357,6 @@ register(OmpInstrumentedRead())
 
 # ---- shared extension and rig machinery (moved from the retired transcribe socket) ----
 
-"""Agent-cell transcription through a candidate-owned OMP extension."""
-
 
 
 
@@ -691,7 +689,7 @@ def _candidate_options(
             raise ValueError("tool_bindings must be sorted and unique by id")
         if binding["kind"] != "draft_model":
             raise ValueError(
-                f"tool kind {binding['kind']!r} is not stageable by the transcribe station"
+                f"tool kind {binding['kind']!r} is not stageable by the read extension station"
             )
         if binding["kind"] in kinds:
             raise ValueError(

@@ -18,6 +18,8 @@ from palimpsest.factory.evaluation.read_extension import (
 )
 from palimpsest.factory.evaluation.metrics import MetricRegistry
 from palimpsest.factory.evaluation.station_metrics.read import register_read_metrics
+from palimpsest.factory.evaluation.judge import load_judge
+from palimpsest.factory.evaluation.response_schemas import trusted_response_schemas
 from palimpsest.factory.evaluation.suite import load_suite, validate_candidate_suite
 from palimpsest.factory.prompt_store import Prompt
 from palimpsest.factory.stations.read_omp import (
@@ -49,7 +51,7 @@ _PAGE = {
 }
 _SUITE_PATH = (
     Path(__file__).resolve().parents[1]
-    / "palimpsest/factory/evaluation/suites/read/omp-extension-development-v1.yaml"
+    / "palimpsest/factory/evaluation/suites/read/zh-vatican-borg-cin-361-f004r-development-v1.yaml"
 )
 
 
@@ -145,11 +147,15 @@ def test_renderer_preserves_source_bytes_and_changes_candidate_fingerprint(
     assert candidate.options["extension_source"].encode("utf-8") == _SOURCE
     metrics = MetricRegistry()
     register_read_metrics(metrics)
+    judge = load_judge(
+        _SUITE_PATH.parents[3] / "judges" / "read-image-pairwise-qwen3.8-v1.yaml",
+        response_schema_resolver=trusted_response_schemas(),
+    )
     suite = load_suite(
         _SUITE_PATH,
         metric_resolver=metrics,
         probe_resolver=trusted_probes(),
-        judge_resolver={},
+        judge_resolver={judge.id: judge},
         verify_local=True,
     )
     validate_candidate_suite(candidate, suite)

@@ -1,8 +1,9 @@
 """Deterministic read candidates carrying exact inline OMP extension bytes.
 
-The exodia harness renders ``read`` candidates (omp_extension and
-omp_instrumented) into OMP agent extensions; the production rig is driven by
-its recipe-bound extension.
+The exodia harness renders ``read`` ``omp_extension`` candidates into
+OMP agent extensions (the instrumented rig is driven by tracked candidate
+YAMLs through ``bench run``); the production rig uses its recipe-bound
+extension.
 """
 
 from __future__ import annotations

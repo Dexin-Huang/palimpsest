@@ -22,7 +22,7 @@ from palimpsest.factory.core.contracts import (
     BOOK_SCHEMA_VERSION,
     transcription_audit,
 )
-from palimpsest.factory.core.ledger import fingerprint
+from palimpsest.factory.core.artifact import fingerprint
 from palimpsest.factory.core.registry import get, register
 from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.usage import combine_count
@@ -62,8 +62,7 @@ class Publish(Station):
     produces = "book"
     option_keys = frozenset({"original_language"})
     production_dependencies = (
-        "factory/core/ledger.py",
-        "factory/usage.py",
+                "factory/usage.py",
     )
 
     def signature_extras(self, job: Job) -> tuple[str, ...]:

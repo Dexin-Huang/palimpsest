@@ -370,10 +370,10 @@ def test_split_deframe_development_records_resolve_exactly() -> None:
     )
 
     assert baseline.fingerprint == (
-        "a435e11d7b3baff04e74384c609a8c1556ea858b155a73306abdb3b970fc89d8"
+        "a948da6c1d815ce84b7d3a647d972874e482ff349728910a633857cb0ae763f8"
     )
     assert challenger.fingerprint == (
-        "214f371cdf77ba9c66d74204a0bbe66578128017b5855edeba20601bab1799c3"
+        "1a148f1f48262822599daebcd295ca4a9b7f9cb027323fb2fcabb9090e7f3318"
     )
     assert spread_suite.fingerprint == (
         "6a9c2a189cefec26b1533a96a326e24e521cc96e519e557893b569a0a468979a"

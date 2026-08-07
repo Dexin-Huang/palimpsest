@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Mapping
 
 
+def fingerprint(*parts: str | None) -> str:
+    """Stable hash over an ordered set of provenance parts."""
+    joined = "\x1f".join("" if part is None else part for part in parts)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+
+
 def payload_fingerprint(payload: Mapping[str, object]) -> str:
     content = {key: value for key, value in payload.items() if key != "provenance"}
     canonical = json.dumps(content, sort_keys=True, ensure_ascii=True)

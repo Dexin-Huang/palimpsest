@@ -852,8 +852,8 @@ candidate options. Direct-transcription development suites run through the
 socket's `full_page` route, so every bench reading exercises the production
 socket. The exodia harness (`exodia_evaluator.py` + `read_extension.py`)
 renders candidates into OMP agent extensions and drives them through the same
-`run_evaluation` engine. `PALIMPSEST_RETAIN_OUTPUTS=1` keeps harness output
-directories for inspection.
+`run_evaluation` engine. `PALIMPSEST_RETAIN_OUTPUTS=<dir>` keeps harness output under `<dir>/<case-slug>/`
+for inspection.
 
 ## 9. Promotion protocol
 
@@ -1308,6 +1308,9 @@ palimpsest/factory/
     promotion.py          proposal, promotion, and rollback records
     canary.py             isolated protected production canaries
     assets.py             content-addressed external asset fetch
+    exodia_evaluator.py   external-harness adapter driving run_evaluation
+    read_extension.py     extension candidate rendering for the exodia harness
+    probes.py             deterministic downstream probes
     datasets/             alignment training-data curation and localization
                           scoring (RF-DETR corpus, Kuzushiji, audits)
     suites/

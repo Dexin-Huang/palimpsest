@@ -176,6 +176,8 @@ palimpsest/
       candidate.py / suite.py / judge.py
       runner.py / metrics.py / statistics.py / judging.py
       report.py / store.py / promotion.py / canary.py
+      exodia_evaluator.py / read_extension.py / probes.py
+      assets.py / datasets/
       station_metrics/
     config.py
     core/

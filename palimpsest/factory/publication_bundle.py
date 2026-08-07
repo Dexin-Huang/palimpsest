@@ -10,7 +10,7 @@ from pathlib import Path
 from palimpsest.factory.config import LIBRARY_ROOT, PROJECT_ROOT
 from palimpsest.factory.core.artifact import content_fingerprint, read_provenance
 from palimpsest.factory.core.contracts import validate_payload
-from palimpsest.factory.core.ledger import fingerprint
+from palimpsest.factory.core.artifact import fingerprint
 from palimpsest.factory.publication_contract import (
     Book,
     Library,
