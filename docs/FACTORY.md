@@ -35,6 +35,7 @@ All production commands are top-level Palimpsest commands:
 palimpsest init-db
 palimpsest intake --doc-id DOC --recipe RECIPE --manifest URL
 palimpsest adopt --doc-id DOC --recipe RECIPE
+palimpsest park --doc-id DOC
 palimpsest run --doc-id DOC
 palimpsest status [--doc-id DOC]
 palimpsest graph [--format json|mermaid] [--write-docs]
@@ -51,8 +52,9 @@ the same command. `adopt` only registers an already-valid canonical workspace.
 
 `run` executes the work order's recipe. A successful full run marks the work
 order `complete`; a run containing any failed cell marks it `failed`. Starting
-or resuming a run marks it `active`. Operators can park a work order explicitly
-through the ledger API without changing its production history.
+or resuming a run marks it `active`. `park` retires a work order from active
+operation without deleting source records, artifacts, or production history;
+it refuses to race a running work claim. A later explicit `run` resumes it.
 
 ## Architecture
 

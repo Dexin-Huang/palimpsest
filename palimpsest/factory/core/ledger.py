@@ -184,6 +184,38 @@ class Ledger:
     def set_item_status(self, doc_id: str, status: str) -> None:
         if status not in {"active", "complete", "parked", "failed"}:
             raise ValueError(f"Unknown item status: {status!r}")
+        if status == "parked":
+            with self._conn:
+                updated = self._conn.execute(
+                    """
+                    UPDATE items SET status = 'parked'
+                    WHERE doc_id = ?
+                      AND NOT EXISTS (
+                        SELECT 1 FROM work_runs
+                        WHERE doc_id = ? AND status = 'running'
+                      )
+                    """,
+                    (doc_id, doc_id),
+                ).rowcount
+            if updated:
+                return
+            item = self.item(doc_id)
+            if item is None:
+                raise KeyError(f"No work order for {doc_id!r}")
+            active = self._conn.execute(
+                """
+                SELECT owner, heartbeat_at FROM work_runs
+                WHERE doc_id = ? AND status = 'running'
+                """,
+                (doc_id,),
+            ).fetchone()
+            if active is not None:
+                raise RuntimeError(
+                    f"Work order {doc_id!r} is running under "
+                    f"{active['owner']} (heartbeat {active['heartbeat_at']}); "
+                    "stop or finish it before parking"
+                )
+            raise RuntimeError(f"Work order {doc_id!r} could not be parked")
         with self._conn:
             updated = self._conn.execute(
                 "UPDATE items SET status = ? WHERE doc_id = ?",

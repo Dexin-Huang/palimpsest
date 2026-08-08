@@ -128,6 +128,16 @@ def test_work_claim_excludes_other_processes(tmp_path):
         second.finish_work(second_claim, status="done")
 
 
+def test_parking_refuses_a_running_work_order(ledger):
+    doc_id = _adopt_test_item(ledger)
+    ledger.claim_work(doc_id, owner="active-worker")
+
+    with pytest.raises(RuntimeError, match="active-worker.*before parking"):
+        ledger.set_item_status(doc_id, "parked")
+
+    assert ledger.item(doc_id)["status"] == "active"
+
+
 def test_stale_claim_reconciles_unfinished_cells(ledger, tmp_path):
     doc_id = _adopt_test_item(ledger)
     claim = ledger.claim_work(doc_id, owner="crashed")

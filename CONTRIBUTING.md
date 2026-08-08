@@ -32,8 +32,8 @@ Verify the environment with `python -m pip check`. The `dev` extra installs
 
 ## Test conventions
 
-The suite is deliberately hermetic: **569 tests, zero network, zero model
-calls**. Every external dependency is mocked, monkeypatched, or served from a
+The suite is deliberately hermetic: **zero network and zero model calls**.
+Every external dependency is mocked, monkeypatched, or served from a
 loopback fixture server:
 
 - Network access is replaced with recorded/fake sessions or a

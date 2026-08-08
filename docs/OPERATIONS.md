@@ -197,6 +197,21 @@ site/index.html
 A production operation is complete only when the status is understood and the
 book, EPUB, and reader output required for that operation have been checked.
 
+### 4.5 Park a superseded work order
+
+Archive any derived evidence that must leave the active workspace, verify the
+archive, then park the work order without changing its history:
+
+```text
+python -m palimpsest park --doc-id DOC_ID
+```
+
+Parking refuses a running work claim. It preserves canonical source records,
+stage history, and cost evidence. A later explicit `run` reactivates the work
+order. `status` reports terminal product readiness separately; a `complete`
+item with `product=missing-book`, `invalid-book`, or
+`missing-or-stale-epub` is an incident, not a publishable book.
+
 ## 5. Protocol: start a new experiment
 
 An experiment begins with an explicit replacement question, not with an

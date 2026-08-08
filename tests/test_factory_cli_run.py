@@ -9,6 +9,7 @@ import pytest
 from palimpsest.cli import build_parser
 from palimpsest.factory import cli as factory_cli
 from palimpsest.factory.core import conductor as conductor_module
+from palimpsest.factory.core.ledger import Ledger
 
 
 @pytest.fixture
@@ -113,3 +114,55 @@ def test_model_worker_help_describes_derived_default(capsys):
     assert raised.value.code == 0
     output = capsys.readouterr().out
     assert "min(--workers, PALIMPSEST_MODEL_PROVIDER_WORKERS)" in output
+
+
+
+def test_park_command_preserves_stage_history(tmp_path, capsys):
+    db_path = tmp_path / "factory.db"
+    with Ledger(db_path) as ledger:
+        ledger.adopt("legacy_document", recipe="chinese_scroll_rig")
+        run_id = ledger.begin_run(
+            "legacy_document",
+            "read",
+            page_id="page_0001",
+            station_fingerprint="old-read",
+            config_fingerprint="old-config",
+            input_fingerprint="old-input",
+        )
+        ledger.complete_run(run_id, output_fingerprint="old-output")
+
+    args = build_parser().parse_args(
+        ["park", "--db", str(db_path), "--doc-id", "legacy_document"]
+    )
+    args.func(args)
+
+    with Ledger(db_path) as ledger:
+        assert ledger.item("legacy_document")["status"] == "parked"
+        assert len(ledger.state("legacy_document")) == 1
+    assert "production history preserved" in capsys.readouterr().out
+
+
+def test_status_distinguishes_complete_ledger_from_missing_product(
+    tmp_path, capsys
+):
+    db_path = tmp_path / "factory.db"
+    with Ledger(db_path) as ledger:
+        ledger.adopt("missing_product", recipe="chinese_scroll_rig")
+        ledger.set_item_status("missing_product", "complete")
+
+    args = build_parser().parse_args(
+        [
+            "status",
+            "--db",
+            str(db_path),
+            "--library-root",
+            str(tmp_path),
+            "--doc-id",
+            "missing_product",
+        ]
+    )
+    args.func(args)
+
+    output = capsys.readouterr().out
+    assert "[complete]" in output
+    assert "product=missing-book" in output

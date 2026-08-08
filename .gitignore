@@ -12,6 +12,8 @@ __pycache__/
 .venv/
 build/
 dist/
+# Runtime packages are fingerprinted per station/rig; pyproject ranges are canonical.
+uv.lock
 
 # Local tooling
 .claude/*

@@ -32,6 +32,9 @@ def add_commands(subparsers) -> None:
     status = subparsers.add_parser(
         "status", help="Show items on the line, or one item's stage state"
     )
+    park = subparsers.add_parser(
+        "park", help="Park a work order without deleting its production history"
+    )
     intake = subparsers.add_parser(
         "intake", help="Create a work order from an IIIF manifest"
     )
@@ -70,12 +73,13 @@ def add_commands(subparsers) -> None:
     )
     _add_bench_commands(bench)
 
-    for parser in (init_db, status, intake, adopt, run):
+    for parser in (init_db, status, park, intake, adopt, run):
         parser.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
-    for parser in (intake, adopt, run, preview, tune):
+    for parser in (park, intake, adopt, run, preview, tune):
         parser.add_argument("--doc-id", required=True)
 
     status.add_argument("--doc-id", default=None)
+    status.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
 
     intake.add_argument("--manifest", required=True)
     intake.add_argument("--recipe", required=True)
@@ -172,6 +176,7 @@ def add_commands(subparsers) -> None:
     for parser, handler in (
         (init_db, cmd_init_db),
         (status, cmd_status),
+        (park, cmd_park),
         (intake, cmd_intake),
         (adopt, cmd_adopt),
         (run, cmd_run),
@@ -1133,6 +1138,33 @@ def cmd_site(args: argparse.Namespace) -> None:
     print(f"site/ rebuilt with {len(shelved)} book(s): {', '.join(shelved) or '—'}")
     print(f"open {site_root / 'index.html'}")
 
+def _terminal_product_status(
+    doc_id: str, item_status: str, library_root: Path
+) -> str:
+    if item_status != "complete":
+        return "n/a"
+
+    from palimpsest.factory.publication_bundle import epub_is_current, load_book
+    from palimpsest.factory.workspace.layout import artifact_path
+
+    book_path = artifact_path(doc_id, "book", None, library_root)
+    if not book_path.is_file():
+        return "missing-book"
+    try:
+        load_book(book_path)
+    except (OSError, TypeError, ValueError):
+        return "invalid-book"
+
+    epub_path = artifact_path(doc_id, "book_epub", None, library_root)
+    return "ready" if epub_is_current(book_path, epub_path) else "missing-or-stale-epub"
+
+
+def cmd_park(args: argparse.Namespace) -> None:
+    with Ledger(args.db) as ledger:
+        ledger.set_item_status(args.doc_id, "parked")
+    print(f"{args.doc_id} [parked] — production history preserved")
+
+
 
 def cmd_status(args: argparse.Namespace) -> None:
     with Ledger(args.db) as ledger:
@@ -1142,8 +1174,26 @@ def cmd_status(args: argparse.Namespace) -> None:
                 print("No items on the line.")
                 return
             for item in items:
-                print(f"{item['doc_id']}  [{item['status']}]  recipe={item['recipe']}")
+                product = _terminal_product_status(
+                    item["doc_id"], item["status"], args.library_root
+                )
+                print(
+                    f"{item['doc_id']}  [{item['status']}]  "
+                    f"recipe={item['recipe']}  product={product}"
+                )
             return
+
+        item = ledger.item(args.doc_id)
+        if item is None:
+            print(f"No work order for {args.doc_id}.")
+            return
+        product = _terminal_product_status(
+            item["doc_id"], item["status"], args.library_root
+        )
+        print(
+            f"{item['doc_id']}  [{item['status']}]  "
+            f"recipe={item['recipe']}  product={product}"
+        )
 
         rows = ledger.state(args.doc_id)
         if not rows:
