@@ -1,0 +1,25 @@
+schema_version: 1
+id: read/zh-instrumented-production-v2
+station: read
+variant: omp_instrumented
+model: openai-codex/gpt-5.6-luna
+prompt: read/zh/foreman_v12
+params: {}
+options:
+  extension_source: |-
+    import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+
+    // The instrumented rig's policy lives in the foreman seed and the staged
+    // sensor dossier. The line contributes no extra tools.
+    export default function instrumentedForemanPolicy(_pi: ExtensionAPI) {}
+  tool_bindings:
+    - id: qwen3_8_max_draft_v1
+      kind: draft_model
+      model: token-plan/qwen3.8-max
+  sensors:
+    detections_sha256: e2c46a12ac2b12128544bf6128af81ce7f2798a0bab07db3f93afab13ea5868b
+    classifier_verdicts_sha256: 50d8ac2e077f3056047d603551ef9fca4d1783e821a356b51e5b5523ac07c701
+  quiet_max_disagreements: 5
+notes: >-
+  Exact tracked identity of the Chinese production rig after the certified
+  sensor corpus grew to 55 Pelliot 4837 pages.

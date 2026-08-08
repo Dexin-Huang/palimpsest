@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -41,28 +42,34 @@ def publish_bundle(
 
     prefix = f"releases/{bundle_id}/"
     object_uri = f"s3://{bucket}/{prefix}"
-    _run_aws(
-        aws,
-        [
-            "s3",
-            "cp",
-            str(bundle_root),
-            object_uri,
-            "--recursive",
-            "--only-show-errors",
-            "--profile",
-            profile,
-            "--endpoint-url",
-            endpoint_url,
-        ],
-        label="upload",
-    )
-
+    files = sorted(path for path in bundle_root.rglob("*") if path.is_file())
     expected = {
         prefix + path.relative_to(bundle_root).as_posix(): path.stat().st_size
-        for path in bundle_root.rglob("*")
-        if path.is_file()
+        for path in files
     }
+    for path in files:
+        key = prefix + path.relative_to(bundle_root).as_posix()
+        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        _run_aws(
+            aws,
+            [
+                "s3api",
+                "put-object",
+                "--bucket",
+                bucket,
+                "--key",
+                key,
+                "--body",
+                str(path.resolve()),
+                "--content-type",
+                content_type,
+                "--profile",
+                profile,
+                "--endpoint-url",
+                endpoint_url,
+            ],
+            label=f"upload {key}",
+        )
     listing = _run_aws(
         aws,
         [
@@ -83,9 +90,7 @@ def publish_bundle(
     )
     try:
         payload = json.loads(listing)
-        actual = {
-            item["Key"]: item["Size"] for item in payload.get("Contents", [])
-        }
+        actual = {item["Key"]: item["Size"] for item in payload.get("Contents", [])}
     except (json.JSONDecodeError, KeyError, TypeError) as error:
         raise PublicationStoreError(
             "R2 verification returned an invalid object listing"
@@ -94,7 +99,9 @@ def publish_bundle(
         missing = sorted(expected.keys() - actual.keys())
         extra = sorted(actual.keys() - expected.keys())
         changed = sorted(
-            key for key in expected.keys() & actual.keys() if expected[key] != actual[key]
+            key
+            for key in expected.keys() & actual.keys()
+            if expected[key] != actual[key]
         )
         raise PublicationStoreError(
             "R2 release inventory mismatch: "

@@ -1,0 +1,9 @@
+schema_version: 1
+id: reconstruct/sol-production-v1
+station: reconstruct
+variant: default
+model: openai-codex/gpt-5.6-sol
+prompt: reconstruct/generic/structure
+params: {}
+options: {}
+notes: Exact tracked identity of the production reconstruction slot.

@@ -1,0 +1,9 @@
+schema_version: 1
+id: finalize_edition/sol-production-v1
+station: finalize_edition
+variant: default
+model: gpt-5.6-sol
+prompt: finalize/generic/edition
+params: {}
+options: {}
+notes: Exact tracked identity of the production final-edition slot.

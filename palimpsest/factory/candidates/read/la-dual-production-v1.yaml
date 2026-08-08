@@ -1,0 +1,16 @@
+schema_version: 1
+id: read/la-dual-production-v1
+station: read
+variant: default
+model: token-plan/qwen3.8-max
+prompt: read/la/diplomatic
+params:
+  media_resolution: low
+  max_output_tokens: 32768
+  thinking_level: low
+  secondary_model: openai-codex/gpt-5.6-sol
+  secondary_thinking_level: null
+  adjudicator_model: openai-codex/gpt-5.6-sol
+  adjudicator_thinking_level: high
+options: {}
+notes: Exact tracked identity of the Latin production recipe's dual-reader slot.

@@ -413,50 +413,82 @@ class EvaluationStore:
         return tuple(_run_from_row(row) for row in rows)
 
     def record_promotion(self, promotion: EvaluationPromotionIndex) -> None:
-        values = EvaluationPromotionIndex(
-            promotion_id=_nonempty(promotion.promotion_id, field="promotion_id"),
-            action=_nonempty(promotion.action, field="action"),
-            recipe=_nonempty(promotion.recipe, field="recipe"),
-            station=_nonempty(promotion.station, field="station"),
-            previous_candidate_fingerprint=_digest(
-                promotion.previous_candidate_fingerprint,
-                field="previous_candidate_fingerprint",
-            ),
-            next_candidate_fingerprint=_digest(
-                promotion.next_candidate_fingerprint,
-                field="next_candidate_fingerprint",
-            ),
-            evaluation_run=_nonempty(promotion.evaluation_run, field="evaluation_run"),
-            canary_run=(
-                None
-                if promotion.canary_run is None
-                else _nonempty(promotion.canary_run, field="canary_run")
-            ),
-            approved_by=_nonempty(promotion.approved_by, field="approved_by"),
-            created_at=_timestamp(promotion.created_at, field="created_at"),
-        )
+        values = _validated_promotion(promotion)
         try:
             with self._conn:
-                self._conn.execute(
-                    """
-                    INSERT INTO evaluation_promotions
-                      (promotion_id, action, recipe, station,
-                       previous_candidate_fingerprint, next_candidate_fingerprint,
-                       evaluation_run, canary_run, approved_by, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    tuple(
-                        getattr(values, name)
-                        for name in EvaluationPromotionIndex.__slots__
-                    ),
-                )
+                self._insert_promotion(values)
         except sqlite3.IntegrityError as error:
             raise RecordError(
                 f"Evaluation promotion already exists: {values.promotion_id!r}"
             ) from error
+
+    def rebuild_promotions(self, history_root: str | Path) -> int:
+        """Atomically rebuild promotion indexes from canonical decision records."""
+        from palimpsest.factory.evaluation.promotion import (
+            load_promotion_record,
+            to_evaluation_promotion_index,
+        )
+
+        root = Path(history_root).resolve()
+        if not root.is_dir():
+            raise RecordError(f"Promotion history root does not exist: {root}")
+        indexed: list[EvaluationPromotionIndex] = []
+        seen: set[str] = set()
+        for path in sorted(root.glob("*.json")):
+            values = _validated_promotion(
+                to_evaluation_promotion_index(load_promotion_record(path))
+            )
+            if values.promotion_id in seen:
+                raise RecordError(f"Duplicate promotion id: {values.promotion_id!r}")
+            seen.add(values.promotion_id)
+            indexed.append(values)
+        with self._conn:
+            self._conn.execute("DELETE FROM evaluation_promotions")
+            for values in indexed:
+                self._insert_promotion(values)
+        return len(indexed)
+
+    def _insert_promotion(self, values: EvaluationPromotionIndex) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO evaluation_promotions
+              (promotion_id, action, recipe, station,
+               previous_candidate_fingerprint, next_candidate_fingerprint,
+               evaluation_run, canary_run, approved_by, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            tuple(getattr(values, name) for name in EvaluationPromotionIndex.__slots__),
+        )
 
     def promotions(self) -> tuple[EvaluationPromotionIndex, ...]:
         rows = self._conn.execute(
             "SELECT * FROM evaluation_promotions ORDER BY created_at, promotion_id"
         ).fetchall()
         return tuple(_promotion_from_row(row) for row in rows)
+
+
+def _validated_promotion(
+    promotion: EvaluationPromotionIndex,
+) -> EvaluationPromotionIndex:
+    return EvaluationPromotionIndex(
+        promotion_id=_nonempty(promotion.promotion_id, field="promotion_id"),
+        action=_nonempty(promotion.action, field="action"),
+        recipe=_nonempty(promotion.recipe, field="recipe"),
+        station=_nonempty(promotion.station, field="station"),
+        previous_candidate_fingerprint=_digest(
+            promotion.previous_candidate_fingerprint,
+            field="previous_candidate_fingerprint",
+        ),
+        next_candidate_fingerprint=_digest(
+            promotion.next_candidate_fingerprint,
+            field="next_candidate_fingerprint",
+        ),
+        evaluation_run=_nonempty(promotion.evaluation_run, field="evaluation_run"),
+        canary_run=(
+            None
+            if promotion.canary_run is None
+            else _nonempty(promotion.canary_run, field="canary_run")
+        ),
+        approved_by=_nonempty(promotion.approved_by, field="approved_by"),
+        created_at=_timestamp(promotion.created_at, field="created_at"),
+    )

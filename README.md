@@ -293,11 +293,14 @@ verifies every declared SHA-256 digest, and builds the downstream reader.
 |---|---|
 | `init-db` | Initialize the SQLite inventory and production ledger |
 | `catalog` | Register source heads, normalize records, and refresh the pointer catalog |
+| `select` | Sample IIIF pages with Qwen and write a bounded catalog triage record |
 | `intake` | Turn an IIIF manifest into source contracts and a work order |
 | `adopt` | Put an existing library workspace on the line |
 | `park` | Retire a work order from active operation without deleting history |
-| `run` | Execute or resume a recipe |
+| `run` | Execute one work order or a bounded active queue |
 | `status` | Show work-order lifecycle, terminal product readiness, or station history |
+| `doctor` | Check databases, work orders, products, recipes, exact candidates, and qualification coverage |
+| `snapshot` | Create, verify, or restore a content-verified library snapshot |
 | `graph` | Render the live artifact/station contract graph |
 | `preview` | Render preprocessing stages and segmentation lassos |
 | `tune` | Tune segmentation offline without network or ledger writes |
@@ -306,6 +309,7 @@ verifies every declared SHA-256 digest, and builds the downstream reader.
 | `rig` | Export or import one fixed-model agent harness |
 | `export-library` | Export validated books and reader assets without a presentation layer |
 | `publish` | Export, upload, and verify an immutable publication release |
+| `consumer-canary` | Import a bundle through Alexandria and complete its production build |
 
 Run `python -m palimpsest <command> --help` for command-specific options.
 

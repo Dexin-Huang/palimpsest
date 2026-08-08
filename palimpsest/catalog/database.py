@@ -384,6 +384,45 @@ class CatalogDB:
             for row in rows
         )
 
+    def selection_records(
+        self, source_id: str, *, after: str | None = None
+    ) -> tuple[dict[str, Any], ...]:
+        """Return active, image-bearing records in stable source order."""
+        if after is not None and not after.strip():
+            raise ValueError("selection cursor must be a non-empty source key")
+        self.source(source_id)
+        rows = self._connection.execute(
+            """
+            SELECT r.record_id, r.source_key, r.current_revision,
+                   v.source_url, v.normalized_json
+            FROM catalog_records r
+            JOIN catalog_record_revisions v
+              ON v.record_id = r.record_id AND v.revision = r.current_revision
+            WHERE r.source_id = ? AND r.tombstoned = 0
+              AND (? IS NULL OR r.source_key > ?)
+            ORDER BY r.source_key
+            """,
+            (source_id, after, after),
+        ).fetchall()
+        records: list[dict[str, Any]] = []
+        for row in rows:
+            normalized = json.loads(row["normalized_json"])
+            if (
+                not normalized.get("manifest_url")
+                or normalized.get("access") == "restricted"
+            ):
+                continue
+            records.append(
+                {
+                    "record_id": row["record_id"],
+                    "source_key": row["source_key"],
+                    "revision": row["current_revision"],
+                    "source_url": row["source_url"],
+                    "record": normalized,
+                }
+            )
+        return tuple(records)
+
     def sync_run(self, sync_id: int) -> dict[str, Any]:
         row = self._connection.execute(
             "SELECT * FROM catalog_sync_runs WHERE sync_id = ?", (sync_id,)

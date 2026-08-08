@@ -77,6 +77,7 @@ README, then establish a clean baseline:
 python -m pip check
 python -m palimpsest graph
 python -m palimpsest bench list
+python -m palimpsest doctor
 ```
 
 Before a network or model-backed command:
@@ -100,14 +101,32 @@ evaluation objects      library/evaluations/objects/
 production workspaces   library/<doc_id>/
 ```
 
-The ledger and derived evidence are ignored by Git. Back up
-`library/factory.db` and `library/evaluations/` together when their history must
-survive the workstation. Never hand-edit either the SQLite index or a
-fingerprinted report.
+Use `snapshot` for a cold backup of the complete local authority:
+
+```text
+python -m palimpsest snapshot create --output OFF_HOST_PATH/palimpsest.zip
+python -m palimpsest snapshot verify OFF_HOST_PATH/palimpsest.zip
+python -m palimpsest snapshot restore OFF_HOST_PATH/palimpsest.zip --output EMPTY_RESTORE_PATH
+```
+
+The command refuses active work, model, catalog, and evaluation claims. It uses
+the SQLite backup API and verifies every payload digest. It excludes caches,
+lock files, and evaluation run directories. Keep the ZIP on a different host
+or storage service. A backup without a successful restore is not recovery
+evidence.
 
 ## 4. Protocol: run a manuscript
 
 ### 4.1 Create or adopt the work order
+Use bounded Qwen triage before intake when the source has many records:
+
+```text
+python -m palimpsest select SOURCE_ID --limit 12 --pages 3 --keep 5 --max-cost 1
+```
+
+The command samples IIIF pages and writes a decision record under
+`library/selections/`. It does not create a work order. An operator still
+selects a record and supplies its manifest to `intake`.
 
 For a new IIIF source:
 
@@ -139,6 +158,15 @@ while `PALIMPSEST_MODEL_PROVIDER_WORKERS` limits simultaneous calls to each
 provider independently (default `3`). Increasing page workers beyond a
 provider's useful concurrency usually increases latency and timeout risk rather
 than throughput.
+Use queue mode only with a finite count and cost ceiling:
+
+```text
+python -m palimpsest run --active --limit 3 --max-total-cost 5 --workers 6 --model-workers 3
+```
+
+The queue uses work-order creation order. It refuses refresh and partial-run
+options. It stops after a failed work order, an unknown cost, or the observed
+cost ceiling.
 
 The conductor decides by fingerprint:
 
@@ -183,6 +211,7 @@ control.
 
 ```text
 python -m palimpsest status --doc-id DOC_ID
+python -m palimpsest doctor
 python -m palimpsest site
 ```
 
@@ -196,6 +225,11 @@ site/index.html
 
 A production operation is complete only when the status is understood and the
 book, EPUB, and reader output required for that operation have been checked.
+
+`doctor` fails for corrupt databases, failed work orders, invalid products,
+invalid recipes, or missing exact candidate records. It warns about completed
+products that do not match the selected recipe configuration. It also lists
+each model-backed station without an authorized qualification suite.
 
 ### 4.5 Park a superseded work order
 
@@ -562,6 +596,15 @@ Choose the recovery action by condition:
 Failed attempts remain part of reliability and cost evidence. Recovery must not
 turn a real failed call into an apparently clean sample.
 
+After index loss, rebuild both indexes from the canonical records:
+
+```text
+python -m palimpsest bench rebuild
+```
+
+The command reads terminal reports under `library/evaluations/runs/`. It also
+reads decision records under `library/evaluations/promotion-history/`.
+
 ## 7. Protocol: propose and promote
 
 Qualification and production activation are separate human decisions.
@@ -781,14 +824,16 @@ python -m palimpsest publish \
   --bucket alexandria \
   --profile alexandria-r2 \
   --endpoint-url https://13a51693c42fab5925c5ae7d506c06e1.r2.cloudflarestorage.com \
-  --public-base-url https://releases.slothful.ai
+  --public-base-url https://releases.slothful.ai \
+  --consumer-root ../alexandria
 ```
 
-The command atomically rebuilds the local bundle, uploads it beneath
-`releases/<bundle_id>/`, and fails unless the remote object names and sizes
-exactly match the bundle. The downstream Alexandria importer verifies every
-declared SHA-256 digest from the printed public URL. Do not overwrite a release
-under another bundle ID or treat local `publication/` output as durable storage.
+The command rebuilds the local bundle and uploads it beneath
+`releases/<bundle_id>/`. It fails unless the remote object inventory matches
+the bundle. With `--consumer-root`, it then gives the printed public URL to the
+real Alexandria importer and runs the production build. Do not overwrite a
+release under another bundle ID. Do not use local `publication/` output as
+durable storage.
 
 
 Verification is proportional to the changed boundary.

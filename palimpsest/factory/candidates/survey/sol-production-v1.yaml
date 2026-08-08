@@ -1,0 +1,9 @@
+schema_version: 1
+id: survey/sol-production-v1
+station: survey
+variant: default
+model: openai-codex/gpt-5.6-sol
+prompt: survey/generic/brief
+params: {}
+options: {}
+notes: Exact tracked identity of the production survey slot.

@@ -52,6 +52,26 @@ WORK_HEARTBEAT_SECONDS = 15
 WORK_LEASE_SECONDS = 600
 
 
+def station_config_fingerprints(
+    spec: StationSpec, prompt: prompt_store.Prompt | None
+) -> tuple[str, str]:
+    """Return the expected config and parameter fingerprints for one recipe slot."""
+    params_hash = fingerprint(
+        json.dumps(
+            {"params": dict(spec.params), "options": dict(spec.options)},
+            sort_keys=True,
+            ensure_ascii=True,
+        )
+    )
+    config_fingerprint = fingerprint(
+        spec.station.implementation_fingerprint,
+        spec.model or "",
+        prompt.sha256 if prompt else "",
+        params_hash,
+    )
+    return config_fingerprint, params_hash
+
+
 @dataclass
 class CellReport:
     station: str
@@ -398,19 +418,7 @@ class Conductor:
                 cost_usd=0.0,
             )
 
-        params_hash = fingerprint(
-            json.dumps(
-                {"params": dict(spec.params), "options": dict(spec.options)},
-                sort_keys=True,
-                ensure_ascii=True,
-            )
-        )
-        config_fp = fingerprint(
-            station.implementation_fingerprint,
-            spec.model or "",
-            prompt.sha256 if prompt else "",
-            params_hash,
-        )
+        config_fp, params_hash = station_config_fingerprints(spec, prompt)
         input_fp = fingerprint(
             *(content_fingerprint(path) for path in input_paths),
             *station.signature_extras(job),
@@ -474,7 +482,9 @@ class Conductor:
                     tokens_out=stamp.get("tokens_out"),
                     cost_usd=stamp.get("cost_usd"),
                 )
-            return CellReport(station.name, page_id, "recovered", cost_usd=stamp.get("cost_usd"))
+            return CellReport(
+                station.name, page_id, "recovered", cost_usd=stamp.get("cost_usd")
+            )
 
         cell = CellSpec(
             doc_id=doc_id,

@@ -14,6 +14,7 @@ import math
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from palimpsest.catalog.database import CATALOG_DB_PATH
 from palimpsest.factory.config import (
     EVALUATION_DB_PATH,
     FACTORY_DB_PATH,
@@ -42,6 +43,18 @@ def add_commands(subparsers) -> None:
         "adopt", help="Put an existing library document on the line"
     )
     run = subparsers.add_parser("run", help="Drive a work order through its recipe")
+    doctor = subparsers.add_parser(
+        "doctor", help="Check authoritative state, products, recipes, and candidates"
+    )
+    snapshot = subparsers.add_parser(
+        "snapshot",
+        help="Create, verify, or restore a content-verified library snapshot",
+    )
+    _add_snapshot_commands(snapshot)
+    consumer_canary = subparsers.add_parser(
+        "consumer-canary",
+        help="Import a publication through Alexandria and complete its production build",
+    )
     graph = subparsers.add_parser(
         "graph", help="The contract graph (input → transformation → output)"
     )
@@ -73,13 +86,23 @@ def add_commands(subparsers) -> None:
     )
     _add_bench_commands(bench)
 
-    for parser in (init_db, status, park, intake, adopt, run):
+    for parser in (init_db, status, park, intake, adopt, run, doctor):
         parser.add_argument("--db", type=Path, default=FACTORY_DB_PATH)
-    for parser in (park, intake, adopt, run, preview, tune):
+    for parser in (park, intake, adopt, preview, tune):
         parser.add_argument("--doc-id", required=True)
 
     status.add_argument("--doc-id", default=None)
     status.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    doctor.add_argument("--catalog-db", type=Path, default=CATALOG_DB_PATH)
+    doctor.add_argument("--evaluation-db", type=Path, default=EVALUATION_DB_PATH)
+    doctor.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    doctor.add_argument("--recipes-root", type=Path, default=FACTORY_ROOT / "recipes")
+    doctor.add_argument("--candidates-root", type=Path, default=_CANDIDATES_ROOT)
+    doctor.add_argument("--suites-root", type=Path, default=_SUITES_ROOT)
+    doctor.add_argument("--json", action="store_true")
+
+    consumer_canary.add_argument("bundle")
+    consumer_canary.add_argument("--consumer-root", type=Path, required=True)
 
     intake.add_argument("--manifest", required=True)
     intake.add_argument("--recipe", required=True)
@@ -95,6 +118,26 @@ def add_commands(subparsers) -> None:
     )
 
     run.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    run_target = run.add_mutually_exclusive_group(required=True)
+    run_target.add_argument("--doc-id")
+    run_target.add_argument(
+        "--active",
+        action="store_true",
+        help="Run a bounded queue of active work orders in creation order",
+    )
+    run.add_argument(
+        "--limit",
+        type=_positive_int,
+        default=1,
+        help="Maximum active work orders to run in queue mode (default: 1)",
+    )
+    run.add_argument(
+        "--max-total-cost",
+        type=_nonnegative_float,
+        default=None,
+        metavar="USD",
+        help="Queue dispatch ceiling checked between work orders",
+    )
     run.add_argument(
         "--workers",
         type=_positive_int,
@@ -172,14 +215,22 @@ def add_commands(subparsers) -> None:
         default=None,
         help="Public origin used to print the downstream import URL",
     )
+    publish_library.add_argument(
+        "--consumer-root",
+        type=Path,
+        default=None,
+        help="Run the Alexandria import and build against the published URL",
+    )
 
     for parser, handler in (
         (init_db, cmd_init_db),
         (status, cmd_status),
         (park, cmd_park),
+        (doctor, cmd_doctor),
         (intake, cmd_intake),
         (adopt, cmd_adopt),
         (run, cmd_run),
+        (consumer_canary, cmd_consumer_canary),
         (graph, cmd_graph),
         (preview, cmd_preview),
         (tune, cmd_tune),
@@ -196,6 +247,7 @@ _SUITES_ROOT = FACTORY_ROOT / "evaluation" / "suites"
 _EVALUATION_ASSETS_ROOT = FACTORY_ROOT / "evaluation"
 _RUNS_ROOT = LIBRARY_ROOT / "evaluations" / "runs"
 _OBJECT_ROOT = LIBRARY_ROOT / "evaluations" / "objects"
+_PROMOTION_HISTORY_ROOT = LIBRARY_ROOT / "evaluations" / "promotion-history"
 _RIGS_ROOT = LIBRARY_ROOT / "rigs"
 
 
@@ -217,6 +269,32 @@ def _nonnegative_float(value: str) -> float:
     if not math.isfinite(parsed) or parsed < 0:
         raise argparse.ArgumentTypeError("must be finite and non-negative")
     return parsed
+
+
+def _add_snapshot_commands(snapshot: argparse.ArgumentParser) -> None:
+    commands = snapshot.add_subparsers(dest="snapshot_command", required=True)
+    create = commands.add_parser(
+        "create", help="Write one atomic snapshot from quiescent library state"
+    )
+    create.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
+    create.add_argument("--factory-db", type=Path, default=FACTORY_DB_PATH)
+    create.add_argument("--catalog-db", type=Path, default=CATALOG_DB_PATH)
+    create.add_argument("--evaluation-db", type=Path, default=EVALUATION_DB_PATH)
+    create.add_argument("--output", type=Path, required=True)
+    create.set_defaults(func=cmd_snapshot_create)
+
+    verify = commands.add_parser(
+        "verify", help="Verify every snapshot payload and SQLite backup"
+    )
+    verify.add_argument("archive", type=Path)
+    verify.set_defaults(func=cmd_snapshot_verify)
+
+    restore = commands.add_parser(
+        "restore", help="Restore a verified snapshot into a new library root"
+    )
+    restore.add_argument("archive", type=Path)
+    restore.add_argument("--output", type=Path, required=True)
+    restore.set_defaults(func=cmd_snapshot_restore)
 
 
 def _add_record_roots(parser: argparse.ArgumentParser) -> None:
@@ -382,10 +460,11 @@ def _add_bench_commands(bench: argparse.ArgumentParser) -> None:
 
     rebuild = commands.add_parser(
         "rebuild",
-        help="Rebuild the run index atomically from canonical report files",
+        help="Rebuild run and promotion indexes from canonical records",
     )
     rebuild.add_argument("--db", type=Path, default=EVALUATION_DB_PATH)
     rebuild.add_argument("--runs-root", type=Path, default=_RUNS_ROOT)
+    rebuild.add_argument("--history-root", type=Path, default=_PROMOTION_HISTORY_ROOT)
     rebuild.set_defaults(func=cmd_bench_rebuild)
 
 
@@ -400,6 +479,60 @@ def cmd_init_db(args: argparse.Namespace) -> None:
     with Ledger(args.db):
         pass
     print(f"Factory ledger ready: {args.db}")
+
+
+def cmd_doctor(args: argparse.Namespace) -> None:
+    from palimpsest.factory.health import inspect_factory
+
+    report = inspect_factory(
+        factory_db=args.db,
+        catalog_db=args.catalog_db,
+        evaluation_db=args.evaluation_db,
+        library_root=args.library_root,
+        recipes_root=args.recipes_root,
+        candidates_root=args.candidates_root,
+        suites_root=args.suites_root,
+    )
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+    else:
+        for check in report["checks"]:
+            print(
+                f"{check['status'].upper():<4}  {check['name']:<24}  {check['detail']}"
+            )
+        print(f"doctor: {report['status']}")
+    if report["status"] == "fail":
+        raise SystemExit(1)
+
+
+def cmd_snapshot_create(args: argparse.Namespace) -> None:
+    from palimpsest.factory.snapshot import create_snapshot
+
+    result = create_snapshot(
+        args.library_root,
+        args.output,
+        database_paths=(args.factory_db, args.catalog_db, args.evaluation_db),
+    )
+    print(json.dumps(result, sort_keys=True))
+
+
+def cmd_snapshot_verify(args: argparse.Namespace) -> None:
+    from palimpsest.factory.snapshot import verify_snapshot
+
+    print(json.dumps(verify_snapshot(args.archive), sort_keys=True))
+
+
+def cmd_snapshot_restore(args: argparse.Namespace) -> None:
+    from palimpsest.factory.snapshot import restore_snapshot
+
+    print(json.dumps(restore_snapshot(args.archive, args.output), sort_keys=True))
+
+
+def cmd_consumer_canary(args: argparse.Namespace) -> None:
+    from palimpsest.factory.consumer import verify_alexandria
+
+    verify_alexandria(args.bundle, args.consumer_root)
+    print(f"Alexandria accepted and built {args.bundle}")
 
 
 def _tracked_yaml(root: Path) -> tuple[Path, ...]:
@@ -502,9 +635,15 @@ def _resolve_suites(
     *,
     judges_root: Path,
     asset_root: Path,
+    verify_local: bool = True,
 ) -> tuple[object, ...]:
     return tuple(
-        _resolve_suite(path, judges_root=judges_root, asset_root=asset_root)
+        _resolve_suite(
+            path,
+            judges_root=judges_root,
+            asset_root=asset_root,
+            verify_local=verify_local,
+        )
         for path in _tracked_yaml(root)
     )
 
@@ -646,6 +785,7 @@ def cmd_bench_list(args: argparse.Namespace) -> None:
         args.suites_root,
         judges_root=args.judges_root,
         asset_root=args.asset_root,
+        verify_local=False,
     )
     _, _, judges = _trusted_resolvers(args.judges_root)
     station = args.station
@@ -968,8 +1108,12 @@ def cmd_bench_rebuild(args: argparse.Namespace) -> None:
     from palimpsest.factory.evaluation.store import EvaluationStore
 
     with EvaluationStore(args.db) as store:
-        count = store.rebuild_from_reports(args.runs_root)
-    print(f"Rebuilt {count} run indexes from {args.runs_root}")
+        run_count = store.rebuild_from_reports(args.runs_root)
+        promotion_count = store.rebuild_promotions(args.history_root)
+    print(
+        f"Rebuilt {run_count} run indexes from {args.runs_root} and "
+        f"{promotion_count} promotion indexes from {args.history_root}"
+    )
 
 
 def cmd_intake(args: argparse.Namespace) -> None:
@@ -1018,6 +1162,52 @@ def cmd_adopt(args: argparse.Namespace) -> None:
 
 
 def cmd_run(args: argparse.Namespace) -> None:
+    if args.doc_id is not None:
+        if args.max_total_cost is not None or args.limit != 1:
+            raise ValueError("--limit and --max-total-cost apply only with --active")
+        _print_run_report(_drive_work_order(args, args.doc_id))
+        return
+
+    if args.refresh or args.page or args.through:
+        raise ValueError("queue mode rejects --refresh, --page, and --through")
+    if args.max_total_cost is None:
+        raise ValueError("--active requires --max-total-cost")
+    if args.max_total_cost == 0:
+        print("queue: cost ceiling is zero; no work dispatched")
+        return
+
+    with Ledger(args.db) as ledger:
+        doc_ids = [
+            item["doc_id"] for item in ledger.list_items() if item["status"] == "active"
+        ][: args.limit]
+    if not doc_ids:
+        print("queue: no active work orders")
+        return
+
+    total_cost = 0.0
+    completed = 0
+    for doc_id in doc_ids:
+        if total_cost >= args.max_total_cost:
+            print(
+                f"queue stopped at observed cost ${total_cost:.4f}; "
+                f"ceiling=${args.max_total_cost:.4f}"
+            )
+            break
+        report = _drive_work_order(args, doc_id)
+        _print_run_report(report)
+        if report.count("failed"):
+            raise RuntimeError(f"queue stopped after failed work order {doc_id}")
+        if report.cost_usd is None:
+            raise RuntimeError(f"queue stopped after {doc_id} returned unknown cost")
+        total_cost += report.cost_usd
+        completed += 1
+    print(
+        f"queue: completed={completed}/{len(doc_ids)} "
+        f"known_cost=${total_cost:.4f} ceiling=${args.max_total_cost:.4f}"
+    )
+
+
+def _drive_work_order(args: argparse.Namespace, doc_id: str):
     from palimpsest.factory.core.conductor import DEFAULT_WORKERS, Conductor
 
     workers = args.workers or DEFAULT_WORKERS
@@ -1037,8 +1227,10 @@ def cmd_run(args: argparse.Namespace) -> None:
             page_ids=tuple(args.page),
             through=args.through,
         )
-        report = conductor.run(args.doc_id)
+        return conductor.run(doc_id)
 
+
+def _print_run_report(report) -> None:
     cost = "unknown" if report.cost_usd is None else f"${report.cost_usd:.4f}"
     scope = "partial" if report.partial else "complete"
     print(
@@ -1115,6 +1307,9 @@ def cmd_publish_library(args: argparse.Namespace) -> None:
     )
     from palimpsest.factory.publication_store import publish_bundle
 
+    if args.consumer_root is not None and args.public_base_url is None:
+        raise ValueError("--consumer-root requires --public-base-url")
+
     output = args.output or DEFAULT_BUNDLE_ROOT
     library = export_library(args.library_root, output)
     release = publish_bundle(
@@ -1125,6 +1320,11 @@ def cmd_publish_library(args: argparse.Namespace) -> None:
         endpoint_url=args.endpoint_url,
         public_base_url=args.public_base_url,
     )
+    if args.consumer_root is not None:
+        from palimpsest.factory.consumer import verify_alexandria
+
+        assert release.public_url is not None
+        verify_alexandria(release.public_url, args.consumer_root)
     print(f"{release.bundle_id}  {release.object_uri}")
     if release.public_url is not None:
         print(release.public_url)
@@ -1138,26 +1338,6 @@ def cmd_site(args: argparse.Namespace) -> None:
     print(f"site/ rebuilt with {len(shelved)} book(s): {', '.join(shelved) or '—'}")
     print(f"open {site_root / 'index.html'}")
 
-def _terminal_product_status(
-    doc_id: str, item_status: str, library_root: Path
-) -> str:
-    if item_status != "complete":
-        return "n/a"
-
-    from palimpsest.factory.publication_bundle import epub_is_current, load_book
-    from palimpsest.factory.workspace.layout import artifact_path
-
-    book_path = artifact_path(doc_id, "book", None, library_root)
-    if not book_path.is_file():
-        return "missing-book"
-    try:
-        load_book(book_path)
-    except (OSError, TypeError, ValueError):
-        return "invalid-book"
-
-    epub_path = artifact_path(doc_id, "book_epub", None, library_root)
-    return "ready" if epub_is_current(book_path, epub_path) else "missing-or-stale-epub"
-
 
 def cmd_park(args: argparse.Namespace) -> None:
     with Ledger(args.db) as ledger:
@@ -1165,8 +1345,9 @@ def cmd_park(args: argparse.Namespace) -> None:
     print(f"{args.doc_id} [parked] — production history preserved")
 
 
-
 def cmd_status(args: argparse.Namespace) -> None:
+    from palimpsest.factory.health import terminal_product_status
+
     with Ledger(args.db) as ledger:
         if args.doc_id is None:
             items = ledger.list_items()
@@ -1174,7 +1355,7 @@ def cmd_status(args: argparse.Namespace) -> None:
                 print("No items on the line.")
                 return
             for item in items:
-                product = _terminal_product_status(
+                product = terminal_product_status(
                     item["doc_id"], item["status"], args.library_root
                 )
                 print(
@@ -1187,7 +1368,7 @@ def cmd_status(args: argparse.Namespace) -> None:
         if item is None:
             print(f"No work order for {args.doc_id}.")
             return
-        product = _terminal_product_status(
+        product = terminal_product_status(
             item["doc_id"], item["status"], args.library_root
         )
         print(
