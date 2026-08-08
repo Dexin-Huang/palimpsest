@@ -42,7 +42,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.15.10,<1", "setuptools>=77", "wheel"]
+dev = ["build>=1.2,<2", "pytest>=8.0", "ruff>=0.15.10,<1", "setuptools>=77", "wheel"]
 
 [project.scripts]
 palimpsest = "palimpsest.cli:main"
@@ -59,16 +59,6 @@ include = ["palimpsest*"]
 "palimpsest.factory" = [
   "recipes/*.yaml",
   "prompts/**/*.txt",
-  "candidates/**/*.yaml",
-  "judges/**/*.yaml",
-  "evaluation/suites/**/*.yaml",
-  "evaluation/cases/**/*.json",
-  "evaluation/cases/**/*.jsonl",
-  "evaluation/cases/**/*.jpg",
-  "evaluation/cases/**/*.pgm",
-  "evaluation/gold/**/*.json",
-  "evaluation/gold/**/*.jpg",
-  "evaluation/gold/**/*.epub",
   "publication_contract/*.json",
 ]
 

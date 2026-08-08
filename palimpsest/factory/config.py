@@ -2,10 +2,9 @@
 
 Env-backed via ``.env`` at the project root. Recipes reference these values
 with ``${VAR}`` interpolation. The factory reads ``os.environ`` directly only
-for the four operator knobs in ``.env.example`` that live outside recipe
-interpolation (PALIMPSEST_OMP_COMMAND, PALIMPSEST_RETAIN_OUTPUTS,
-PALIMPSEST_RFDETR_PYTHON, PALIMPSEST_RFDETR_OBJECT_ROOT); everything else
-resolves through this module.
+for the three operator knobs in ``.env.example`` that live outside recipe
+interpolation (PALIMPSEST_OMP_COMMAND, PALIMPSEST_RFDETR_PYTHON,
+PALIMPSEST_RFDETR_OBJECT_ROOT); everything else resolves through this module.
 """
 
 from __future__ import annotations
@@ -55,14 +54,6 @@ def _positive_int_env(key: str, default: int) -> int:
 
 LIBRARY_ROOT = Path(_env("PALIMPSEST_LIBRARY_ROOT", str(PROJECT_ROOT / "library")))
 FACTORY_DB_PATH = Path(_env("PALIMPSEST_FACTORY_DB", str(LIBRARY_ROOT / "factory.db")))
-# Evaluation indexes live apart from the production ledger (E6): the
-# evaluation plane writes its own SQLite file next to its run reports.
-EVALUATION_DB_PATH = Path(
-    _env(
-        "PALIMPSEST_EVALUATION_DB",
-        str(LIBRARY_ROOT / "evaluations" / "evaluation.sqlite3"),
-    )
-)
 
 # Model defaults used by recipe interpolation.
 MODEL_READING = _env("PALIMPSEST_MODEL_READING", "token-plan/qwen3.8-max")

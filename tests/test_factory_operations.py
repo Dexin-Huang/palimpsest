@@ -1,4 +1,4 @@
-"""Operational contracts for health, snapshots, selection, queues, and consumers."""
+"""Operational contracts for health, snapshots, selection, queues, and publication."""
 
 from __future__ import annotations
 
@@ -16,9 +16,7 @@ from palimpsest.catalog.database import CatalogDB
 from palimpsest.catalog.sync import sync_source
 from palimpsest.cli import build_parser
 from palimpsest.factory import cli as factory_cli
-from palimpsest.factory import consumer as consumer_module
 from palimpsest.factory.core.ledger import Ledger
-from palimpsest.factory.evaluation.store import EvaluationStore
 from palimpsest.factory.gateway.protocol import ModelResponse
 from palimpsest.factory import publication_store as publication_store_module
 from palimpsest.factory.health import inspect_factory
@@ -34,63 +32,46 @@ from palimpsest import selection as selection_module
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _initialize_authoritative_databases(root: Path) -> tuple[Path, Path, Path]:
+def _initialize_authoritative_databases(root: Path) -> tuple[Path, Path]:
     factory_db = root / "factory.db"
     catalog_db = root / "catalog.db"
-    evaluation_db = root / "evaluations" / "evaluation.sqlite3"
     with Ledger(factory_db):
         pass
     with CatalogDB(catalog_db):
         pass
-    with EvaluationStore(evaluation_db):
-        pass
-    return factory_db, catalog_db, evaluation_db
+    return factory_db, catalog_db
 
 
-def test_doctor_resolves_every_model_backed_production_slot_exactly(tmp_path):
-    factory_db, catalog_db, evaluation_db = _initialize_authoritative_databases(
-        tmp_path
-    )
+def test_doctor_validates_recipe_owned_production_configuration(tmp_path):
+    factory_db, catalog_db = _initialize_authoritative_databases(tmp_path)
 
     report = inspect_factory(
         factory_db=factory_db,
         catalog_db=catalog_db,
-        evaluation_db=evaluation_db,
         library_root=tmp_path,
         recipes_root=PROJECT_ROOT / "palimpsest" / "factory" / "recipes",
-        candidates_root=PROJECT_ROOT / "palimpsest" / "factory" / "candidates",
-        suites_root=PROJECT_ROOT / "palimpsest" / "factory" / "evaluation" / "suites",
     )
 
     checks = {check["name"]: check for check in report["checks"]}
-    assert checks["recipes"]["status"] == "pass"
-    assert checks["production.candidates"] == {
-        "name": "production.candidates",
+    assert checks["factory.database"]["status"] == "pass"
+    assert checks["catalog.database"]["status"] == "pass"
+    assert checks["recipes"] == {
+        "name": "recipes",
         "status": "pass",
-        "detail": "every model-backed recipe slot resolves to one of 9 tracked candidates",
+        "detail": "validated 2 recipe(s): chinese_scroll_rig, latin_manuscript",
     }
     assert checks["production.configuration"]["status"] == "pass"
-    assert checks["qualification"]["status"] == "warn"
-    assert (
-        "missing=emend,finalize_edition,read,reconstruct,reference,survey,translate"
-        in (checks["qualification"]["detail"])
-    )
 
 
 def test_doctor_fails_closed_when_authoritative_database_is_missing(tmp_path):
-    _factory_db, catalog_db, evaluation_db = _initialize_authoritative_databases(
-        tmp_path
-    )
+    _factory_db, catalog_db = _initialize_authoritative_databases(tmp_path)
     missing = tmp_path / "missing-factory.db"
 
     report = inspect_factory(
         factory_db=missing,
         catalog_db=catalog_db,
-        evaluation_db=evaluation_db,
         library_root=tmp_path,
         recipes_root=PROJECT_ROOT / "palimpsest" / "factory" / "recipes",
-        candidates_root=PROJECT_ROOT / "palimpsest" / "factory" / "candidates",
-        suites_root=PROJECT_ROOT / "palimpsest" / "factory" / "evaluation" / "suites",
     )
 
     assert report["status"] == "fail"
@@ -99,21 +80,17 @@ def test_doctor_fails_closed_when_authoritative_database_is_missing(tmp_path):
 
 def test_snapshot_round_trip_preserves_payloads_and_excludes_transient_state(tmp_path):
     library_root = tmp_path / "library"
-    factory_db, catalog_db, evaluation_db = _initialize_authoritative_databases(
-        library_root
-    )
+    factory_db, catalog_db = _initialize_authoritative_databases(library_root)
     (library_root / "document").mkdir()
     (library_root / "document" / "book.epub").write_bytes(b"epub")
     (library_root / ".gateway-locks").mkdir()
     (library_root / ".gateway-locks" / "provider.0.lock").write_text("locked")
-    (library_root / "evaluations" / "runs").mkdir()
-    (library_root / "evaluations" / "runs" / "old.json").write_text("{}")
     archive = tmp_path / "snapshot.zip"
 
     created = create_snapshot(
         library_root,
         archive,
-        database_paths=(factory_db, catalog_db, evaluation_db),
+        database_paths=(factory_db, catalog_db),
     )
     verified = verify_snapshot(archive)
     restored = tmp_path / "restored"
@@ -122,22 +99,19 @@ def test_snapshot_round_trip_preserves_payloads_and_excludes_transient_state(tmp
     assert created["files"] == verified["files"]
     assert (restored / "document" / "book.epub").read_bytes() == b"epub"
     assert not (restored / ".gateway-locks").exists()
-    assert not (restored / "evaluations" / "runs").exists()
     with sqlite3.connect(restored / "factory.db") as connection:
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
 
 
 def test_snapshot_verification_rejects_a_replaced_payload(tmp_path):
     library_root = tmp_path / "library"
-    factory_db, catalog_db, evaluation_db = _initialize_authoritative_databases(
-        library_root
-    )
+    factory_db, catalog_db = _initialize_authoritative_databases(library_root)
     (library_root / "evidence.txt").write_text("original", encoding="utf-8")
     archive = tmp_path / "snapshot.zip"
     create_snapshot(
         library_root,
         archive,
-        database_paths=(factory_db, catalog_db, evaluation_db),
+        database_paths=(factory_db, catalog_db),
     )
 
     with warnings.catch_warnings():
@@ -292,28 +266,6 @@ def test_active_queue_is_bounded_by_count_and_observed_cost(
 
     assert driven == ["first"]
     assert "queue stopped at observed cost $0.6000" in capsys.readouterr().out
-
-
-def test_alexandria_consumer_canary_runs_import_before_build(tmp_path, monkeypatch):
-    consumer_root = tmp_path / "alexandria"
-    consumer_root.mkdir()
-    (consumer_root / "package.json").write_text("{}", encoding="utf-8")
-    calls = []
-    monkeypatch.setattr(consumer_module.shutil, "which", lambda _name: "bun")
-
-    def run(command, **options):
-        calls.append((command, options))
-        return subprocess.CompletedProcess(command, 0, stdout="accepted\n", stderr="")
-
-    monkeypatch.setattr(consumer_module.subprocess, "run", run)
-
-    consumer_module.verify_alexandria(
-        "https://releases.test/library.json", consumer_root
-    )
-
-    assert [call[0][2] for call in calls] == ["import-library", "build"]
-    assert calls[0][0][-1] == "https://releases.test/library.json"
-    assert all(call[1]["cwd"] == consumer_root for call in calls)
 
 
 def test_publication_upload_uses_low_level_s3_api_and_verifies_inventory(

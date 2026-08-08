@@ -42,7 +42,6 @@ palimpsest graph [--format json|mermaid] [--write-docs]
 palimpsest preview --doc-id DOC --pages PAGE...
 palimpsest tune --doc-id DOC --pages PAGE...
 palimpsest site
-palimpsest bench ...
 ```
 
 `intake` is the normal entry point. It fetches one IIIF manifest, validates the
@@ -270,15 +269,13 @@ The publication colophon reports the model and prompt identity for model-backed
 stations, implementation fingerprints for every contributing station, total
 recorded production cost, source catalog identity, and page count.
 
-## Improvement plane
+## Research boundary
 
-This document describes the production line. The implemented evaluation and
-promotion plane is specified separately in
-[`EVALUATION.md`](EVALUATION.md). It adds versioned station candidates,
-evidence-anchored benchmark suites, paired scorecards, explicit promotion
-gates, end-to-end canaries, and exact rollback while keeping evaluation out of
-the production conductor. Its records and SQLite indexes are separate from
-production work orders and stage runs.
+Research, evaluation, and candidate selection run in the separate
+`palimpsest-research` repository. Installing a result here is an explicit
+production change to a station implementation, prompt, or recipe slot. The
+factory validates identity and compatibility, records what ran, and reports
+configuration drift; it does not score or promote its own components.
 
 ## Invariants
 

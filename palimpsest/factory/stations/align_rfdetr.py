@@ -509,11 +509,7 @@ class RfDetrAlign(Align):
 
     def _checkpoint_path(self, job: Job, digest: str) -> Path:
         configured = os.getenv(_OBJECT_ROOT_ENV)
-        root = (
-            Path(configured)
-            if configured
-            else job.library_root / "evaluations" / "objects"
-        )
+        root = Path(configured) if configured else job.library_root / "objects"
         return root / digest
 
     def _worker_paths(

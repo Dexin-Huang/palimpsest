@@ -2,8 +2,8 @@
 
 Pure geometry, no model call. Binds each transcribed character to a blob
 bounding box via column projection + DTW, yielding coordinates for the
-reader, deterministic count-mismatch stats for evaluation, and the
-substrate for the exemplar library. Characters it cannot bind are marked,
+reader, deterministic count-mismatch stats for inspection, and the substrate
+for the exemplar library. Characters it cannot bind are marked,
 never forced — interlinear glosses and damaged spans stay auditable holes.
 """
 

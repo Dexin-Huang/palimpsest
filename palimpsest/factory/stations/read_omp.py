@@ -1,21 +1,16 @@
-"""read/omp_instrumented: the instrumented rig behind the book line's read socket.
+"""Sensor-assisted OMP implementation of the production read station.
 
-The variant reads the line's clean study image with the certified rig
-mechanism - base and shadow reads on the bound draft engine, content-addressed
-RF-DETR count and glyph-classifier witnesses, a quiet gate, and a foreman
-audit on magnified crops - and emits the reviewed ``page_transcription``
-contract directly: draft reads become ``candidate_readings`` and the foreman
-verdict becomes the ``adjudication_*`` fields.
+The reader uses the clean page image, base and shadow reads from the configured
+draft model, content-addressed RF-DETR counts, glyph-classifier witnesses, a
+quiet gate, and a foreman audit on magnified crops. It emits the canonical
+``page_transcription`` contract directly: draft reads become
+``candidate_readings`` and the foreman verdict becomes the
+``adjudication_*`` fields.
 
-The rig orchestration (``_run_instrumented``) and the extension staging
-(``OmpExtensionRead.run``) live here; each variant maps the outcome onto
-its own payload contract.
-
-Sensor artifacts must be computed on the same ``page_image_clean`` geometry
-this variant reads; pins are recipe options. Blank pages are gated before any
-model work by segment routing or by empty pinned detections (the page listed
-in the pinned RF-DETR file with zero boxes). Measured lineage: exodia
-the instrumented-rig campaign and the factory bench lane; see palimpsest-research.
+Sensor artifacts must use the same ``page_image_clean`` geometry as the reader.
+Their digests are recipe options. Segment routing or empty pinned detections
+gate blank pages before model work. Measurement evidence and comparison history
+live in ``palimpsest-research``.
 """
 
 from __future__ import annotations
@@ -139,11 +134,7 @@ def _run_instrumented(
             alternates.append(shadow_text)
         tokens += shadow_run.tokens
         if cost is not None:
-            cost = (
-                None
-                if shadow_run.cost_usd is None
-                else cost + shadow_run.cost_usd
-            )
+            cost = None if shadow_run.cost_usd is None else cost + shadow_run.cost_usd
 
     sensors, flags = instrumented_sensors.compute_sensors(
         base_text, characters, alternates, verdict_columns
@@ -197,9 +188,7 @@ def _run_instrumented(
     )
     return _InstrumentedOutcome(
         tokens=tokens + run.tokens,
-        cost=None
-        if cost is None or run.cost_usd is None
-        else cost + run.cost_usd,
+        cost=None if cost is None or run.cost_usd is None else cost + run.cost_usd,
         process_stats=run.process_stats,
         base_text=base_text,
         shadow_text=shadow_text,
@@ -358,19 +347,6 @@ register(OmpInstrumentedRead())
 # ---- shared extension and rig machinery (moved from the retired transcribe socket) ----
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 MAX_EXTENSION_BYTES = 128 * 1024
 
 MAX_TRANSCRIPTION_BYTES = 256 * 1024
@@ -438,6 +414,7 @@ _DRAFT_TASK_SUFFIX = (
     "Where drafts disagree, inspect the page image and retain the majority reading "
     "unless the image decisively contradicts it."
 )
+
 
 def _submission_extension(*, accept_layers: bool) -> str:
     accept_layers_literal = "true" if accept_layers else "false"
@@ -549,17 +526,20 @@ export default function submitTranscriptionExtension(pi: ExtensionAPI) {{
 }}
 '''
 
+
 _SUBMISSION_EXTENSION = _submission_extension(accept_layers=True)
 
 _SUBMISSION_EXTENSION_BYTES = _SUBMISSION_EXTENSION.encode("utf-8")
 
-_DRAFT_SUBMISSION_EXTENSION_BYTES = _submission_extension(
-    accept_layers=False
-).encode("utf-8")
+_DRAFT_SUBMISSION_EXTENSION_BYTES = _submission_extension(accept_layers=False).encode(
+    "utf-8"
+)
+
 
 def _run_identity(job: Job, run_name: str) -> tuple[str, Path]:
     page_key = hashlib.sha256(str(job.page_id).encode("utf-8")).hexdigest()[:16]
     return page_key, doc_dir(job.doc_id, job.library_root) / "runs" / run_name
+
 
 def _stage_detail_tiles(workspace: Path, *, image: Path) -> tuple[Path, ...]:
     """Stage overlapping detail tiles for high-resolution visual verification."""
@@ -579,9 +559,7 @@ def _stage_detail_tiles(workspace: Path, *, image: Path) -> tuple[Path, ...]:
         base_y0 = row * height // _DETAIL_ROWS
         base_y1 = (row + 1) * height // _DETAIL_ROWS
         y0 = max(0, base_y0 - (overlap_y if row > 0 else 0))
-        y1 = min(
-            height, base_y1 + (overlap_y if row + 1 < _DETAIL_ROWS else 0)
-        )
+        y1 = min(height, base_y1 + (overlap_y if row + 1 < _DETAIL_ROWS else 0))
         for column in range(_DETAIL_COLUMNS):
             base_x0 = column * width // _DETAIL_COLUMNS
             base_x1 = (column + 1) * width // _DETAIL_COLUMNS
@@ -603,6 +581,7 @@ def _stage_detail_tiles(workspace: Path, *, image: Path) -> tuple[Path, ...]:
             tile.write_bytes(encoded.tobytes())
             staged.append(tile)
     return tuple(staged)
+
 
 def _stage_draft(
     root: Path,
@@ -634,6 +613,7 @@ def _stage_draft(
     draft_text, _ = _read_submission(draft_workspace)
     return draft_text, draft_run
 
+
 def _encoded_extension_source(source: Any) -> bytes:
     if not isinstance(source, str) or not source.strip():
         raise TypeError("extension_source must be a non-empty string")
@@ -647,58 +627,6 @@ def _encoded_extension_source(source: Any) -> bytes:
         )
     return encoded
 
-def _candidate_options(
-    options: Mapping[str, Any],
-) -> tuple[bytes, tuple[dict[str, str], ...]]:
-    allowed = {"extension_source", "tool_bindings"}
-    missing = sorted({"extension_source"} - set(options))
-    unknown = sorted(set(options) - allowed)
-    if missing or unknown:
-        raise ValueError(
-            "Expected extension_source with optional tool_bindings; "
-            f"missing={missing}, unknown={unknown}"
-        )
-    encoded = _encoded_extension_source(options["extension_source"])
-    bindings_value = options.get("tool_bindings")
-    if bindings_value is None:
-        return encoded, ()
-    if (
-        isinstance(bindings_value, (str, bytes))
-        or not isinstance(bindings_value, (list, tuple))
-        or not bindings_value
-    ):
-        raise TypeError("tool_bindings must be a non-empty list")
-    previous: str | None = None
-    collected: list[dict[str, str]] = []
-    kinds: set[str] = set()
-    for index, binding_value in enumerate(bindings_value):
-        field = f"tool_bindings[{index}]"
-        if not isinstance(binding_value, Mapping) or set(binding_value) != {
-            "id",
-            "kind",
-            "model",
-        }:
-            raise ValueError(f"{field} must contain only id, kind, and model")
-        binding: dict[str, str] = {}
-        for key in ("id", "kind", "model"):
-            value = binding_value[key]
-            if not isinstance(value, str) or not value.strip():
-                raise TypeError(f"{field}.{key} must be a non-empty string")
-            binding[key] = value
-        if previous is not None and previous >= binding["id"]:
-            raise ValueError("tool_bindings must be sorted and unique by id")
-        if binding["kind"] != "draft_model":
-            raise ValueError(
-                f"tool kind {binding['kind']!r} is not stageable by the read extension station"
-            )
-        if binding["kind"] in kinds:
-            raise ValueError(
-                f"tool_bindings repeats stageable kind {binding['kind']!r}"
-            )
-        previous = binding["id"]
-        kinds.add(binding["kind"])
-        collected.append(binding)
-    return encoded, tuple(collected)
 
 def _read_submission(
     workspace: Path,
@@ -798,6 +726,7 @@ def _read_submission(
         )
     return text.strip(), layers
 
+
 def _bounded_bytes(path: Path, *, maximum: int, label: str) -> bytes:
     try:
         with path.open("rb") as stream:
@@ -809,6 +738,7 @@ def _bounded_bytes(path: Path, *, maximum: int, label: str) -> bytes:
     if len(data) > maximum:
         raise agent_cell.AgentCellError(f"{label} exceeds {maximum} bytes")
     return data
+
 
 def _json_object(data: bytes, *, label: str) -> dict[str, Any]:
     try:
@@ -823,6 +753,7 @@ def _json_object(data: bytes, *, label: str) -> dict[str, Any]:
         raise agent_cell.AgentCellError(f"{label} must be a JSON object")
     return value
 
+
 def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     value: dict[str, Any] = {}
     for key, item in pairs:
@@ -831,8 +762,10 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         value[key] = item
     return value
 
+
 def _reject_json_constant(value: str) -> Never:
     raise ValueError(f"non-standard JSON constant: {value}")
+
 
 _SHA256_HEX = 64
 
@@ -846,14 +779,18 @@ _FOREMAN_TASK = (
     "accepted output; do not put the transcription in final prose."
 )
 
-_SENSOR_ARTIFACT_KEYS = frozenset(
-    {"detections_sha256", "classifier_verdicts_sha256"}
-)
+_SENSOR_ARTIFACT_KEYS = frozenset({"detections_sha256", "classifier_verdicts_sha256"})
+
 
 def _instrumented_options(
     options: Mapping[str, Any],
 ) -> tuple[bytes, dict[str, str], dict[str, str], int]:
-    allowed = {"extension_source", "tool_bindings", "sensors", "quiet_max_disagreements"}
+    allowed = {
+        "extension_source",
+        "tool_bindings",
+        "sensors",
+        "quiet_max_disagreements",
+    }
     required = {"extension_source", "tool_bindings", "sensors"}
     missing = sorted(required - set(options))
     unknown = sorted(set(options) - allowed)
@@ -888,7 +825,10 @@ def _instrumented_options(
         raise ValueError("the instrumented base engine binding must be a draft_model")
 
     sensors_value = options["sensors"]
-    if not isinstance(sensors_value, Mapping) or set(sensors_value) != _SENSOR_ARTIFACT_KEYS:
+    if (
+        not isinstance(sensors_value, Mapping)
+        or set(sensors_value) != _SENSOR_ARTIFACT_KEYS
+    ):
         raise ValueError(
             "sensors must contain exactly detections_sha256 and classifier_verdicts_sha256"
         )
@@ -907,117 +847,3 @@ def _instrumented_options(
     if isinstance(quiet_value, bool) or not isinstance(quiet_value, int):
         raise TypeError("quiet_max_disagreements must be an integer")
     return encoded, binding, sensors, quiet_value
-
-class OmpExtensionRead(Read):
-    """Run one OMP reader with only image-read and structured-submit tools."""
-
-    variant = "omp_extension"
-    param_keys = frozenset()
-    option_keys = frozenset({"extension_source", "tool_bindings"})
-    production_dependencies = (
-        "factory/agent_cell.py",
-            )
-
-    def validate_options(self, options: Mapping[str, Any]) -> None:
-        _candidate_options(options)
-
-    def run(self, job: Job) -> StationResult:
-        source_bytes, tool_bindings = _candidate_options(job.config.options)
-        page_image = job.path_of("page_image_clean")
-        page_key, run_root = _run_identity(job, "read_omp_extension")
-        workspace = agent_cell.stage_workspace(
-            run_root / page_key,
-            skill=job.config.prompt.text,
-            evidence={},
-            images=[page_image],
-        )
-        _stage_detail_tiles(workspace, image=page_image)
-        extension_dir = workspace / ".omp" / "extensions"
-        extension_dir.mkdir(parents=True)
-        (extension_dir / "00-submit-transcription.ts").write_bytes(
-            _SUBMISSION_EXTENSION_BYTES
-        )
-        (extension_dir / "transcription.ts").write_bytes(source_bytes)
-
-        task = _TASK
-        scholar_timeout_s = TRANSCRIPTION_TIMEOUT_SECONDS
-        draft_tokens = 0
-        draft_cost: float | None = 0.0
-        draft_binding = next(
-            (binding for binding in tool_bindings if binding["kind"] == "draft_model"),
-            None,
-        )
-        if draft_binding is not None:
-            staged_drafts: list[tuple[str, str]] = []
-            for draft_index, draft_name in enumerate(_DRAFT_NAMES, start=1):
-                try:
-                    draft_text, draft_run = _stage_draft(
-                        run_root / f"{page_key}-draft-{draft_index}",
-                        image=page_image,
-                        model=draft_binding["model"],
-                    )
-                except agent_cell.AgentCellError:
-                    # Drafts are staged evidence, never the result. A failed,
-                    # empty, or timed-out read degrades to the remaining reads;
-                    # if all fail, the scholar receives the draft-less task.
-                    draft_cost = None
-                    continue
-                staged_drafts.append((draft_name, draft_text))
-                draft_tokens += draft_run.tokens
-                if draft_cost is not None:
-                    if draft_run.cost_usd is None:
-                        draft_cost = None
-                    else:
-                        draft_cost += draft_run.cost_usd
-
-            if staged_drafts:
-                tools_dir = workspace / "tools"
-                tools_dir.mkdir()
-                for draft_name, draft_text in staged_drafts:
-                    (tools_dir / draft_name).write_text(
-                        draft_text, encoding="utf-8", newline="\n"
-                    )
-                task = _TASK + _DRAFT_TASK_SUFFIX
-                scholar_timeout_s = _DRAFT_SCHOLAR_TIMEOUT_SECONDS
-
-        run = agent_cell.run(
-            workspace,
-            task,
-            model=job.config.model,
-            timeout_s=scholar_timeout_s,
-            executor="omp",
-            tool_names=("read",),
-        )
-        transcription, layers = _read_submission(workspace)
-        page = job.page or {}
-        payload: dict[str, Any] = {
-            "doc_id": job.doc_id,
-            "page_id": job.page_id,
-            "page_seq": page.get("order", 0),
-            "canvas_id": page.get("canvas_id", ""),
-            "text": transcription,
-            "route": "full_page",
-            "regions": [],
-            "candidate_readings": [],
-            "adjudication_status": "extension",
-            "adjudication_requested_model": job.config.model,
-            "adjudication_model": job.config.model,
-            "adjudication_reasoning": "",
-            "unresolved": [],
-            "adjudication_error": None,
-        }
-        if layers is not None:
-            payload["layers"] = layers
-        # Draft spend is real spend; draft behavior stays out of process_stats
-        # because asi measures the scholar session, not its staged evidence.
-        return StationResult(
-            payload=payload,
-            tokens_in=run.tokens + draft_tokens,
-            cost_usd=None
-            if run.cost_usd is None or draft_cost is None
-            else run.cost_usd + draft_cost,
-            process_stats=run.process_stats,
-        )
-
-
-register(OmpExtensionRead())

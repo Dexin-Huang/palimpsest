@@ -28,7 +28,7 @@ _DOC = "read_omp_test"
 def _stage_object(library_root: Path, rows: list[dict]) -> str:
     body = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
     digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
-    objects = library_root / "evaluations" / "objects"
+    objects = library_root / "objects"
     objects.mkdir(parents=True, exist_ok=True)
     (objects / digest).write_text(body, encoding="utf-8", newline="\n")
     return digest
@@ -184,7 +184,16 @@ def test_quiet_page_adopts_base_without_foreman(
 
     monkeypatch.setattr(read_omp, "_stage_draft", fake_stage)
     monkeypatch.setattr(
-        read_omp.instrumented_sensors, "compute_sensors", lambda *_a: ({}, {"count_mismatch_lines": 0, "classifier_dispute_lines": 0, "disagreement_lines": 0})
+        read_omp.instrumented_sensors,
+        "compute_sensors",
+        lambda *_a: (
+            {},
+            {
+                "count_mismatch_lines": 0,
+                "classifier_dispute_lines": 0,
+                "disagreement_lines": 0,
+            },
+        ),
     )
     monkeypatch.setattr(read_omp.agent_cell, "run", forbidden)
 
@@ -221,7 +230,14 @@ def test_flagged_page_runs_foreman_and_reports_adjudication(
     monkeypatch.setattr(
         read_omp.instrumented_sensors,
         "compute_sensors",
-        lambda *_a: ({}, {"count_mismatch_lines": 0, "classifier_dispute_lines": 0, "disagreement_lines": 1}),
+        lambda *_a: (
+            {},
+            {
+                "count_mismatch_lines": 0,
+                "classifier_dispute_lines": 0,
+                "disagreement_lines": 1,
+            },
+        ),
     )
     monkeypatch.setattr(
         read_omp.instrumented_sensors, "write_dossier", lambda *_a, **_k: None

@@ -5,15 +5,10 @@ requires inspecting evidence, zooming page images, and revising a structured
 artifact after validation feedback. Agents are executors inside the factory;
 they do not plan the product, choose recipe order, or mutate production state.
 
-This is different from an **engineering agent** working on the repository. An
-engineering agent uses the source-controlled `palimpsest-experiment` project
-skill, changes a candidate, prompt, suite, or station variant in an isolated
-Git worktree, and may run the evaluation track. It is initialized by an
-operator using
-[`OPERATIONS.md` §5.1](OPERATIONS.md#51-initialize-an-isolated-engineering-agent).
-It never becomes a production executor merely because it authored an
-experiment. Conversely, an agent cell never receives repository-wide authority
-or promotes its own output.
+Research agents may author or evaluate station implementations in the separate
+`palimpsest-research` repository. They do not become production executors or
+receive access to the production ledger. A production agent cell receives only
+its resolved recipe configuration and declared evidence.
 
 ## Execution contract
 

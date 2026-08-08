@@ -1,6 +1,6 @@
 ---
 name: palimpsest-production-ops
-description: Operate and recover the Palimpsest manuscript production line. Use this skill whenever the user asks to intake or adopt a manuscript, run or resume a work order, inspect status, refresh a changed station, rebuild the site, diagnose failed or stale cells, locate book/EPUB outputs, or handle a production incident. Do not use benchmark experimentation as a substitute for this production workflow.
+description: Operate and recover the Palimpsest manuscript production line. Use this skill whenever the user asks to intake or adopt a manuscript, run or resume a work order, inspect status, refresh a changed station, rebuild the site, diagnose failed or stale cells, locate book/EPUB outputs, publish a release, or handle a production incident.
 ---
 
 # Palimpsest Production Operations
@@ -11,7 +11,7 @@ static library. It does not compare challengers.
 
 ## Read First
 
-- `docs/OPERATIONS.md` sections 1, 3, 4, 11, and 12
+- `docs/OPERATIONS.md` for the affected production protocol
 - `docs/FACTORY.md` only for the affected runtime invariant
 - `docs/CONTRACTS.md` for the affected artifact path and station socket
 - the selected recipe under `palimpsest/factory/recipes/`
@@ -34,9 +34,9 @@ Choose one:
 6. **Incident recovery**: preserve failure evidence, diagnose the boundary, and
    retry or refresh only after the cause is corrected.
 
-A model, prompt, parameter, option, or implementation comparison belongs to
-`palimpsest-experiment`. A recipe selection change belongs to
-`palimpsest-promotion`.
+Model, prompt, parameter, option, or implementation comparisons belong in the
+separate `palimpsest-research` repository. This skill operates only the
+selected production configuration already installed in a recipe.
 
 ## Source Boundary
 
@@ -87,8 +87,8 @@ Refresh is the auditable paid-work control. Never delete output, provenance, or
 ledger rows to make a cell appear missing or stale. Refresh only the intended
 station; let artifact fingerprints propagate downstream staleness.
 
-If the change has not passed its required experiment, qualification, canary,
-and promotion gates, stop rather than refreshing production.
+Confirm that the recipe change is the selected production configuration before
+refreshing. The factory records identity and drift; it does not judge quality.
 
 ## Inspect Terminal Product
 
@@ -118,12 +118,10 @@ source evidence links relevant to the change.
    presentation.
 4. Fix the cause; never patch freshness or completion state.
 5. Run the smallest deterministic reproduction and focused tests.
-6. Run the affected development/conformance suite for behavior-bearing fixes.
-7. Use a protected canary when production behavior changes.
-8. Apply explicit refresh only to intended manuscripts.
-9. Reinspect status and terminal output.
-10. Use an exact append-only rollback for a prior promotion rather than editing
-    history.
+6. Apply explicit refresh only to intended manuscripts.
+7. Reinspect status and terminal output.
+8. Revert the reviewed recipe or implementation change if the new production
+   configuration must be withdrawn.
 
 Never hand-edit `library/factory.db`, provenance stamps, or generated artifacts.
 Unknown cost or usage remains unknown.
@@ -146,7 +144,7 @@ Choose focused proof from the changed boundary:
 
 - intake/adopt: canonical source record and ledger behavior;
 - conductor/freshness: affected conductor tests and a work-order smoke path;
-- station behavior: focused station tests and its suite;
+- station behavior: focused station tests and a bounded production smoke path;
 - publication/site: book, EPUB, reader, and evidence-link checks;
 - package/release: full tests, lint, dependency check, and built-wheel smoke.
 
@@ -164,7 +162,7 @@ Cost and unknown-cost state:
 Artifacts produced or preserved:
 Book/EPUB/site checks:
 Incident cause, if any:
-Explicit refresh or rollback used:
+Explicit refresh or configuration revert used:
 Remaining operator action:
 ```
 

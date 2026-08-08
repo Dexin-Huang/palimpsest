@@ -1,9 +1,0 @@
-schema_version: 1
-id: emend/current-development-v1
-station: emend
-variant: default
-model: gpt-5.6-luna
-prompt: emend/generic/agent
-params: {}
-options: {}
-notes: Development/conformance identity for the current production emend station; not qualification evidence.

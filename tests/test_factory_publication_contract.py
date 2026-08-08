@@ -16,15 +16,7 @@ from palimpsest.factory.publication_contract import (
     validate_library_object,
 )
 
-BOOK_FIXTURE = (
-    Path(__file__).parents[1]
-    / "palimpsest"
-    / "factory"
-    / "evaluation"
-    / "gold"
-    / "publish"
-    / "expected-book-v2.json"
-)
+BOOK_FIXTURE = Path(__file__).with_name("fixtures") / "book-v1.json"
 
 
 def test_book_schema_accepts_the_canonical_book_fixture() -> None:

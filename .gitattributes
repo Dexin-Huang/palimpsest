@@ -1,4 +1,2 @@
 palimpsest/factory/prompts/** text eol=lf
 palimpsest/factory/publication_contract/*.json text eol=lf
-palimpsest/factory/evaluation/gold/** -text
-palimpsest/factory/evaluation/cases/** -text

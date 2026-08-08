@@ -6,7 +6,7 @@ Two instruments, both pure code:
   prompt plea: every span where the reading departs from the original must
   be covered by an anchored apparatus entry, and parallel citations must
   name work·section.
-- ``systematic_sweeps`` catches the class no model caught in evaluation
+- ``systematic_sweeps`` catches a measured reader failure
   (P.3477: 候 fixed to 焦's reading in one line, left corrupt in the next):
   when the same graph substitution was applied in several places, every
   surviving instance of the old graph becomes a checklist item for the

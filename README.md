@@ -66,27 +66,13 @@ editorial changes in an apparatus, then gives a Sol agent the explicit goal of
 reconciling every reader-facing translation and heading against the final
 emended text. Publication never mutates the diplomatic transcription.
 
-## Try it — no model calls, no network
+## Verify a checkout
 
-The repository ships its own evaluation fixtures, so the evaluation plane runs
-at zero cost. Inventory the tracked candidates, suites, and judges:
-
-```bash
-python -m palimpsest bench list
-```
-
-The hermetic conformance suite (no network or model calls)
-exercises every production station:
+The test suite is hermetic: no network, model calls, or paid services.
 
 ```bash
 python -m pytest -q
 ```
-
-`bench verify --suite <path>` resolves a suite against the local object cache;
-for suites whose cases declare external `iiif:` sources, populate the cache
-first with `palimpsest bench fetch --suite <path>` (read-only network, sha256
-verified). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the zero-cost bench
-workflow.
 
 `palimpsest publish` packages validated books and evidence into immutable,
 content-addressed R2 releases for downstream readers. Publication artifacts are
@@ -199,9 +185,9 @@ under a strict JSON schema. The transcription artifact retains the final text,
 both candidate readings and their model IDs, the adjudication status, reasoning
 and unresolved items, plus combined token and cost usage across every attempted
 call.
-The `read/omp_instrumented` variant runs the instrumented rig (draft reads
-plus RF-DETR count and glyph-classifier witnesses, a quiet gate, and a foreman
-audit) behind the same socket.
+The `read/omp_instrumented` variant runs a sensor-assisted reader (draft reads,
+RF-DETR counts, glyph-classifier witnesses, a quiet gate, and a foreman audit)
+behind the same station socket.
 
 The conductor resumes from `library/factory.db`. Fresh cells are skipped;
 input drift reruns stale cells; configuration drift is reported as outdated
@@ -213,7 +199,7 @@ python -m palimpsest run \
   --refresh read
 ```
 
-Bound a canary to selected pages and an inclusive station:
+Run selected pages through an inclusive station:
 
 ```bash
 python -m palimpsest run \
@@ -299,76 +285,33 @@ verifies every declared SHA-256 digest, and builds the downstream reader.
 | `park` | Retire a work order from active operation without deleting history |
 | `run` | Execute one work order or a bounded active queue |
 | `status` | Show work-order lifecycle, terminal product readiness, or station history |
-| `doctor` | Check databases, work orders, products, recipes, exact candidates, and qualification coverage |
+| `doctor` | Check authoritative databases, work orders, products, recipes, and configuration freshness |
 | `snapshot` | Create, verify, or restore a content-verified library snapshot |
 | `graph` | Render the live artifact/station contract graph |
 | `preview` | Render preprocessing stages and segmentation lassos |
 | `tune` | Tune segmentation offline without network or ledger writes |
 | `site` | Rebuild the static library from published book models |
-| `bench` | Verify, run, report, canary, promote, and roll back immutable evaluations |
-| `rig` | Export or import one fixed-model agent harness |
 | `export-library` | Export validated books and reader assets without a presentation layer |
 | `publish` | Export, upload, and verify an immutable publication release |
-| `consumer-canary` | Import a bundle through Alexandria and complete its production build |
 
 Run `python -m palimpsest <command> --help` for command-specific options.
 
-### Portable agent rigs
-
-Export one candidate as a `.palrig` archive:
-
-```bash
-python -m palimpsest rig export \
-  --candidate palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml \
-  --output example.palrig
-```
-
-Copy the archive SHA-256 from the export output through a trusted channel. Then
-import the archive into the local content-addressed rig store:
-
-```bash
-python -m palimpsest rig import example.palrig \
-  --expected-sha256 ARCHIVE_SHA256
-```
-
-The archive contains the candidate, skill prompt, implementation source
-closure, and exact local runtime versions. Import verifies all hashes. It also
-checks the installed prompt, source closure, packages, Python version, and OMP
-version when the rig uses OMP.
-
-Import does not execute the rig or install its source snapshots. SHA-256 proves
-origin only when the expected value came through a trusted channel. A later
-benchmark executes the extensions declared by the candidate, so review the rig
-before you run it.
-
-The archive does not include credentials, remote model weights, evaluation
-cases, gold, or reports. A benchmark can use the stored `rig.palrig` path as a
-candidate. The runner treats an imported rig as untracked, so it cannot qualify
-for promotion.
-
 ## Operating protocols
 
-[`docs/OPERATIONS.md`](docs/OPERATIONS.md) is the canonical runbook for
-day-to-day work: manuscript operations, new experiments, candidate and suite
-versioning, interrupted-run recovery, promotion, production refresh, rollback,
-benchmark governance, and release verification. Use it when deciding what
-record to create and which gate comes next; use
-[`docs/EVALUATION.md`](docs/EVALUATION.md) for the underlying evaluation
-contracts.
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md) is the canonical runbook for intake,
+bounded execution, recovery, publication, and release verification.
 
 Repository-aware coding sessions should use the source-controlled project
 skills under `.claude/skills/`:
 
 | Skill | Use it for |
 |---|---|
-| `palimpsest-experiment` | Design, initialize, run, resume, or review one bounded station experiment |
 | `palimpsest-production-ops` | Intake, adopt, run, refresh, recover, publish, and inspect manuscripts |
-| `palimpsest-promotion` | Qualification, proposal, canary, promotion, explicit production refresh, and rollback |
-| `palimpsest-station-development` | Station variants, new transformations, artifact contracts, and implementation fingerprints |
+| `palimpsest-station-development` | Station variants, transformations, artifact contracts, and implementation fingerprints |
 
-The skills encode procedure and safety boundaries; the runbook and live
-contracts remain the sources of truth. Invoke a skill explicitly when intent
-could span experiment, production, and promotion boundaries.
+Research, evaluation, candidate selection, and promotion are owned by the
+separate `palimpsest-research` repository. This repository accepts only the
+selected production configuration in a recipe.
 
 ## Swappable seams
 
@@ -419,24 +362,6 @@ The conductor sends a complete `CellSpec` to an executor. `inline` and
 freshness, or the ledger. Agentic editorial stations have a second contained
 executor seam for `codex` and `omp`.
 
-### Evaluation and promotion
-
-The evaluation plane runs outside the production conductor. Immutable
-candidates and suites drive paired, isolated executions through the same cell
-and artifact contracts as production. Scorecards retain quality, hard-limit,
-downstream, reliability, latency, cost, and blinded-judge evidence. A qualified
-report can produce a compare-and-swap recipe proposal; a protected production
-canary gates promotion, and append-only records support exact rollback.
-[`docs/EVALUATION.md`](docs/EVALUATION.md) defines the contracts and
-`palimpsest bench --help` exposes the operator workflow.
-
-The checked-in suites exercise every production station but are deliberately
-non-authorizing development/conformance evidence. Promotion remains blocked
-until a curated suite explicitly opts into qualification; changing that flag
-changes the suite fingerprint and therefore the evidence identity.
-[`docs/BENCH.html`](docs/BENCH.html) carries the design notes behind the
-evaluation plane.
-
 ### Contracts and workspace
 
 `palimpsest/factory/core/contracts.py` is the artifact type system.
@@ -479,8 +404,7 @@ docs/
   FACTORY.md                architecture and invariants
   CONTRACTS.md              generated live graph
   GLYPHS.md                 alignment and glyph-system design
-  EVALUATION.md             evaluation and promotion contracts
-  OPERATIONS.md             canonical operator and experiment runbook
+  OPERATIONS.md             canonical production runbook
 ```
 
 The research lane (unsupervised separation, frame detection, classifier
@@ -515,9 +439,8 @@ portable source records for adopted workspaces.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md): development setup, the hermetic
-test conventions (no network or model calls), the zero-cost bench workflow,
-and the branch and commit conventions.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, hermetic test
+conventions, and branch and commit conventions.
 
 The pre-cutover repository is preserved remotely on
 `archive/pre-factory-cutover-2026-07-20`.

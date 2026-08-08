@@ -118,14 +118,6 @@ class Read(Station):
         "factory/usage.py",
     )
 
-    def _single_reader_fallback(
-        self,
-        candidates: list[dict],
-        completed_readers: list[tuple[str, str, object, GatewayError | None]],
-        adjudicator_model: str,
-    ) -> _Reading | None:
-        return None
-
     def run(self, job: Job) -> StationResult:
         plan = read_json(job.path_of("page_regions"))
         usage = _Usage()
@@ -196,7 +188,7 @@ class Read(Station):
             detect_truncation=True,
         )
         if reading.adjudication_status == "failed":
-            # Usage from the failed reader/judge is already accumulated. Raise
+            # Usage from the failed reader/adjudicator is already accumulated. Raise
             # a zero-usage error so run() attaches it exactly once and the cell
             # remains retryable instead of committing an empty transcription.
             raise GatewayError(
@@ -424,13 +416,6 @@ class Read(Station):
                 responses.append(response)
 
         if reader_errors:
-            fallback = self._single_reader_fallback(
-                candidates,
-                completed_readers,
-                params["adjudicator_model"],
-            )
-            if fallback is not None:
-                return fallback
             return _Reading(
                 text="",
                 candidate_readings=candidates,
@@ -662,58 +647,4 @@ def _tile(image: np.ndarray, bbox: list[int], pad: int) -> np.ndarray:
     return tile
 
 
-class TransientSingleReaderFallbackRead(Read):
-    """Commit one valid reader when its peer has a recoverable transient failure."""
-
-    variant = "dual-transient-fallback/v1"
-
-    def _single_reader_fallback(
-        self,
-        candidates: list[dict],
-        completed_readers: list[tuple[str, str, object, GatewayError | None]],
-        adjudicator_model: str,
-    ) -> _Reading | None:
-        failures = [
-            (role, model, error)
-            for role, model, _result, error in completed_readers
-            if error is not None
-        ]
-        successes = [
-            (role, result)
-            for role, _model, result, error in completed_readers
-            if error is None
-        ]
-        if len(candidates) != 1 or len(failures) != 1 or len(successes) != 1:
-            return None
-
-        failed_role, failed_model, error = failures[0]
-        successful_role, result = successes[0]
-        assert error is not None and result is not None
-        _raw_text, text, response = result
-        if (
-            not error.transient
-            or is_truncated(error)
-            or is_truncated(response)
-            or not text
-        ):
-            return None
-
-        return _Reading(
-            text=text,
-            candidate_readings=candidates,
-            adjudication_status="single_reader_fallback",
-            adjudication_requested_model=adjudicator_model,
-            adjudication_reasoning=(
-                f"Committed the {successful_role} candidate without adjudication "
-                f"because the {failed_role} reader failure was explicitly "
-                "classified transient."
-            ),
-            adjudication_error=(
-                f"{failed_role} reader transient failure "
-                f"(single-reader fallback; requested model {failed_model!r}): {error}"
-            ),
-        )
-
-
 register(Read())
-register(TransientSingleReaderFallbackRead())

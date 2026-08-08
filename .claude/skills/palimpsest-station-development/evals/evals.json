@@ -4,13 +4,13 @@
     {
       "id": 1,
       "prompt": "I want to compare a second segmentation algorithm that reads the same cleaned page image and still emits page_regions. Add whatever new pipeline component is needed.",
-      "expected_output": "Classifies the change as a same-socket segment variant rather than a new logical station; preserves grain and artifact socket; declares localized production dependencies; creates a candidate; adds focused identity and behavior tests; routes paired comparison through the experiment skill; leaves the production recipe unchanged.",
+      "expected_output": "Classifies the change as a same-socket segment variant rather than a new logical station; preserves grain and artifact socket; declares localized production dependencies; adds focused identity and behavior tests; exposes the registered variant for external research; and leaves the production recipe unchanged.",
       "files": []
     },
     {
       "id": 2,
       "prompt": "My new layout analyzer needs an additional page-level artifact and changes the required fields in page_regions. Can I just add optional reads to segment?",
-      "expected_output": "Classifies the request as an artifact contract and station graph change, rejects undeclared or compatibility-shim reads, identifies the single contract and workspace path updates, requires registry/conductor/failure tests, regenerates CONTRACTS.md from live registries, and requires a candidate and suite before production use.",
+      "expected_output": "Classifies the request as an artifact contract and station graph change, rejects undeclared or compatibility-shim reads, identifies the single contract and workspace path updates, requires registry/conductor/failure tests, regenerates CONTRACTS.md from live registries, and leaves comparative evaluation to the external research repository.",
       "files": []
     }
   ]

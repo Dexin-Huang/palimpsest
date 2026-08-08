@@ -1,8 +1,0 @@
-schema_version: 1
-id: publish/current-default-v1
-station: publish
-variant: default
-params: {}
-options:
-  original_language: la
-notes: Current deterministic production implementation used for conformance reporting

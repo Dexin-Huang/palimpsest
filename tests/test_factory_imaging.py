@@ -12,7 +12,6 @@ from palimpsest.factory import imaging
 from palimpsest.factory.core.station import Job, StationConfig
 from palimpsest.factory.gateway import GatewayError, ImageContent, ModelResponse
 from palimpsest.factory.prompt_store import Prompt
-from palimpsest.factory.stations.deframe import Deframe, SpreadSafeDeframe
 from palimpsest.factory.stations.read import Read
 from palimpsest.factory.stations.segment import Segment
 from palimpsest.factory.workspace.io import atomic_write_json
@@ -55,14 +54,6 @@ def _write_clean_image(job, image):
     path.write_bytes(buffer.tobytes())
 
 
-def _write_page_image(job, image):
-    path = job.path_of("page_image")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    ok, buffer = cv2.imencode(".jpg", image)
-    assert ok
-    path.write_bytes(buffer.tobytes())
-
-
 # --- imaging primitives -------------------------------------------------------
 
 
@@ -94,49 +85,6 @@ def test_ink_masks_split_dark_and_faint():
     assert dark[107, 200] == 255 and faint[107, 200] == 0
     assert faint[200, 110] == 255 and dark[200, 110] == 0
     assert faint[220, 300] == 0  # large light overlay is not a faint annotation
-
-
-def test_spread_safe_deframe_keeps_both_leaves_across_dark_crease(tmp_path):
-    page = np.full((1000, 1400, 3), 20, np.uint8)
-    cv2.rectangle(page, (100, 80), (1299, 919), (230,) * 3, -1)
-    cv2.rectangle(page, (385, 80), (414, 919), (25,) * 3, -1)
-    cv2.rectangle(page, (190, 180), (320, 820), (45,) * 3, -1)
-    cv2.rectangle(page, (520, 180), (1150, 820), (45,) * 3, -1)
-    job = _job(tmp_path)
-    _write_page_image(job, page)
-
-    Deframe().run(job)
-    default = cv2.imread(str(job.path_of("page_image_framed")))
-    SpreadSafeDeframe().run(job)
-    spread_safe = cv2.imread(str(job.path_of("page_image_framed")))
-
-    assert default is not None and spread_safe is not None
-    assert default.shape[1] < 900
-    assert spread_safe.shape[1] > 1100
-    assert spread_safe.shape[1] > default.shape[1] * 1.25
-
-
-def test_spread_safe_deframe_matches_default_without_gutter(tmp_path):
-    page = np.full((1000, 1400, 3), 20, np.uint8)
-    cv2.rectangle(page, (100, 80), (1299, 919), (230,) * 3, -1)
-    cv2.rectangle(page, (300, 180), (1100, 820), (45,) * 3, -1)
-    job = _job(tmp_path)
-    _write_page_image(job, page)
-
-    Deframe().run(job)
-    default = job.path_of("page_image_framed").read_bytes()
-    SpreadSafeDeframe().run(job)
-
-    assert job.path_of("page_image_framed").read_bytes() == default
-
-
-def test_spread_safe_deframe_is_a_same_socket_variant():
-    baseline = Deframe()
-    challenger = SpreadSafeDeframe()
-
-    assert challenger.variant == "spread-safe/v1"
-    assert challenger.socket == baseline.socket
-    assert challenger.implementation_fingerprint != baseline.implementation_fingerprint
 
 
 # --- segment station ----------------------------------------------------------

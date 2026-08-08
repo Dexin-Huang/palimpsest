@@ -1,23 +1,23 @@
 ---
 name: palimpsest-station-development
-description: Add or change a Palimpsest station, implementation variant, artifact contract, recipe slot, workspace path, or localized production fingerprint. Use this skill whenever the user wants to modify one pipeline transformation in code, introduce an alternative algorithm, add a new artifact kind or station, change station inputs or outputs, update production dependencies, regenerate the contract graph, or make a code-backed challenger for an experiment.
+description: Add or change a Palimpsest station, implementation variant, artifact contract, recipe slot, workspace path, or localized production fingerprint. Use this skill whenever the user wants to modify one pipeline transformation in code, introduce an alternative algorithm, add a new artifact kind or station, change station inputs or outputs, update production dependencies, regenerate the contract graph, or install a selected production implementation.
 ---
 
 # Palimpsest Station Development
 
-Use this skill for production architecture and code boundaries. It does not
-select a challenger for production; evaluation and promotion remain separate.
+Use this skill for production architecture and code boundaries. Comparative
+evaluation and candidate selection remain in `palimpsest-research`.
 
 ## Read First
 
-- `docs/OPERATIONS.md` sections 2, 5.3, 9, 10, and 12
+- `docs/OPERATIONS.md` for the affected production protocol
 - `docs/FACTORY.md` sections governing station, conductor, ledger, freshness,
   and workspace behavior affected by the change
 - `docs/CONTRACTS.md` for the current live socket graph
 - `palimpsest/factory/core/contracts.py`
 - `palimpsest/factory/core/station.py`
 - `palimpsest/factory/core/registry.py`
-- the affected station, recipe, candidate, suite, and focused tests
+- the affected station, recipe, prompt, and focused tests
 
 Use symbol-aware references before modifying exported code when a language
 server is available. Reuse the repository's existing station, contract,
@@ -63,15 +63,15 @@ State the classification and why before editing.
    `production_dependencies`.
 5. Do not repeat the concrete station module or shared runtime sources already
    included automatically.
-6. Ensure evaluation source cannot enter production identity.
-7. Create an immutable candidate selecting the new variant.
-8. Verify the old and new variants resolve to distinct implementation and
-   candidate fingerprints.
-9. Add focused tests for registration, socket compatibility, behavior,
+6. Verify that old and new variants resolve to distinct implementation
+   fingerprints.
+7. Add focused tests for registration, socket compatibility, behavior,
    failures, and source-dependency identity.
-10. Run the affected development suite through `palimpsest-experiment`.
+8. Leave the production recipe unchanged unless this task explicitly installs
+   the externally selected production configuration.
 
-Do not change the production recipe during variant development.
+The research repository can install this package and evaluate either registered
+variant through the same station socket.
 
 ## New Station or Contract Protocol
 
@@ -86,16 +86,14 @@ Do not change the production recipe during variant development.
    corpus-specific order.
 7. Add focused contract, registry, station, cell, conductor, workspace, and
    failure-path tests as affected.
-8. Add a tracked candidate.
-9. Add station-owned fitness metrics and a development/conformance suite.
-10. Regenerate the graph from live registries:
+8. Regenerate the graph from live registries:
 
     ```text
     python -m palimpsest graph --write-docs
     ```
 
-11. Run the generated-document freshness test and an end-to-end manuscript path
-    before calling the station production-ready.
+9. Run the generated-document freshness test and an end-to-end manuscript path
+   before calling the station production-ready.
 
 Never edit `docs/CONTRACTS.md` manually.
 
@@ -136,34 +134,30 @@ unrelated production invalidation.
 Add tests proving:
 
 - changing a declared dependency changes only relevant station identity;
-- unrelated evaluation code does not change production identity;
-- duplicate, missing, external, non-Python, or evaluation dependencies fail;
+- unrelated package code does not change production identity;
+- duplicate, missing, external, or non-Python dependencies fail;
 - all built-in station source closures resolve in the installed wheel.
 
 ## Recipe and Freshness Boundary
 
 Recipes choose logical station variant, model, prompt, parameters, and options.
-The conductor knows ordering and freshness, not experimental intent.
+The conductor knows ordering and freshness, not why that configuration won.
 
 After an authorized recipe or implementation change, prior production cells are
 outdated and require explicit `--refresh STATION`. Development must not delete
 artifacts or provenance to simulate that state.
 
-## Evaluation Requirement
+## Research Boundary
 
-Every production station needs:
+This repository supplies executable station sockets, artifact contracts,
+localized implementation fingerprints, and production recipes. It does not
+store comparison suites, candidate records, promotion history, or research
+scorecards. `palimpsest-research` owns that evidence and consumes the installed
+factory package.
 
-- at least one tracked candidate;
-- a localized mission;
-- contract/conformance checks;
-- station-specific fitness metrics;
-- hard failure limits;
-- relevant protected slices;
-- a downstream probe or explicit terminal-product gate;
-- development evidence before qualification.
-
-Use `.claude/skills/palimpsest-experiment/SKILL.md` for the paired comparison.
-Use `.claude/skills/palimpsest-promotion/SKILL.md` only after qualification.
+When research selects a result, install it here as one explicit station,
+prompt, or recipe change. Do not add a parallel candidate registry or
+production alias.
 
 ## Verification
 
@@ -178,8 +172,7 @@ python -m pytest -q tests/test_factory_contracts.py::test_contracts_doc_is_curre
 
 For package-data or source-closure changes, build and smoke-test the wheel.
 
-Do not run production refresh, promotion, commit, or push unless explicitly
-requested.
+Do not refresh production, commit, or push unless explicitly requested.
 
 ## Output Format
 
@@ -190,12 +183,12 @@ Classification: variant | station | contract
 Transformation and socket:
 Files and symbols changed:
 Production dependency closure:
-Candidate and fingerprint change:
+Implementation fingerprint change:
 Contract graph change:
 Focused tests:
-Development evaluation:
-Production recipe unchanged:
-Risks and exact next permitted action:
+End-to-end production proof:
+Production recipe change, if requested:
+Research handoff boundary:
 ```
 
 Separate observed proof from inferred impact.

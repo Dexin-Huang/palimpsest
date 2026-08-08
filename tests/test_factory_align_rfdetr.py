@@ -14,23 +14,13 @@ import pytest
 
 from palimpsest.factory.core import registry
 from palimpsest.factory.core.station import Job, StationConfig
-from palimpsest.factory.evaluation.candidate import load_candidate
+from palimpsest.factory.core.recipe import load as load_recipe
 from palimpsest.factory.stations.align import Align
 from palimpsest.factory.stations import align_rfdetr_runtime
 from palimpsest.factory.stations.align_rfdetr import (
     RfDetrAlign,
     _request_worker,
     align_detections,
-)
-
-
-CANDIDATE = (
-    Path(__file__).parents[1]
-    / "palimpsest"
-    / "factory"
-    / "candidates"
-    / "align"
-    / "rfdetr-mth600-development-v3.yaml"
 )
 
 
@@ -103,17 +93,13 @@ def test_rfdetr_align_is_registered_as_a_distinct_same_socket_variant():
     }
 
 
-def test_rfdetr_candidate_resolves_fixed_checkpoint_options():
-    candidate = load_candidate(CANDIDATE)
+def test_chinese_scroll_recipe_pins_fixed_rfdetr_options():
+    recipe = load_recipe("chinese_scroll_rig")
+    step = next(spec for spec in recipe.steps if spec.station.name == "align")
 
-    assert candidate.id == "align/rfdetr-mth600-development-v3"
-    assert candidate.variant == "rfdetr-mth600/v1"
-    assert candidate.options["checkpoint_sha256"] == (
+    assert step.station.variant == "rfdetr-mth600/v1"
+    assert step.options["checkpoint_sha256"] == (
         "cdc06d36dd2273e139571b3196d58c13dee11211ec847fadffa9fee3af46624d"
-    )
-    assert (
-        candidate.fingerprint
-        != load_candidate(CANDIDATE.with_name("current.yaml")).fingerprint
     )
 
 

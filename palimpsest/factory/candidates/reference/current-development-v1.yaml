@@ -1,9 +1,0 @@
-schema_version: 1
-id: reference/current-development-v1
-station: reference
-variant: default
-model: gpt-5.6-sol
-prompt: reference/generic/identify
-params: {}
-options: {}
-notes: Development/conformance identity for the current production reference station; not qualification evidence.

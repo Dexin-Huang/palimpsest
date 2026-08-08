@@ -12,7 +12,6 @@ from palimpsest.factory.core.station import Job, Station, StationResult
 from palimpsest.factory.imaging import (
     encode_jpeg,
     parchment_frame,
-    parchment_spread_frame,
     to_gray,
     trim_gutter,
 )
@@ -45,22 +44,6 @@ class Deframe(Station):
         return StationResult()
 
 
-class SpreadSafeDeframe(Deframe):
-    """Remove the scanner backdrop without treating an interior crease as a crop."""
-
-    variant = "spread-safe/v1"
-
-    def run(self, job: Job) -> StationResult:
-        image = load_image(job, "page_image")
-        gray = to_gray(image)
-        x0, y0, x1, y1 = parchment_spread_frame(
-            gray,
-            margin_fraction=float(job.config.options.get("frame_margin", 0.02)),
-        )
-        atomic_write_bytes(self.output_path(job), encode_jpeg(image[y0:y1, x0:x1]))
-        return StationResult()
-
-
 class PassthroughDeframe(Deframe):
     """Copy the input bytes untouched so recipes can hand the instrumented rig
     raw archive bytes (its certified input domain) with the contract chain intact."""
@@ -77,5 +60,4 @@ class PassthroughDeframe(Deframe):
 
 
 register(Deframe())
-register(SpreadSafeDeframe())
 register(PassthroughDeframe())

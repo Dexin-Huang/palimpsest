@@ -10,10 +10,10 @@ before ``/``) at ``MODEL_PROVIDER_WORKERS``. The cap is enforced by
 :func:`provider_lease`, a cross-process file lease held for the duration of
 every provider call. Each provider owns a row of lock files under the library
 root (``<library>/.gateway-locks/<provider>.<i>.lock``), so every factory
-process that issues provider calls contends for the same permits: inline
-executor threads, subprocess executor cells, and canary lanes. Contention for
-subprocess cells and canary lanes is transitive — their station code calls
-``generate()``, which acquires the lease inside this module. Agent-cell
+process that issues provider calls contends for the same permits, including
+inline executor threads and subprocess executor cells. Contention for
+subprocess cells is transitive: station code calls ``generate()``, which
+acquires the lease inside this module. Agent-cell
 sessions are outside the gateway cap: they spawn external codex/omp CLIs and
 never call the gateway. A per-process permit semaphore additionally guards
 threads inside this process, where the OS byte-range lock semantics may not
@@ -68,10 +68,10 @@ def provider_lease(provider: str) -> Iterator[None]:
 
     The lease spans processes: the permit set is a per-provider row of lock
     files under the library root, so every factory process that issues
-    provider calls (inline executor threads, subprocess executor cells,
-    canary lanes) contends for the same cap. Contention for subprocess cells
-    and canary lanes is transitive: their station code calls ``generate()``,
-    which acquires this lease here. Agent-cell sessions spawn external
+    provider calls, including inline executor threads and subprocess executor
+    cells, contends for the same cap. Contention for subprocess cells is
+    transitive: station code calls ``generate()``, which acquires this lease
+    here. Agent-cell sessions spawn external
     codex/omp CLIs and never call the gateway, so they are outside this cap.
     A per-process semaphore guards threads in this process because OS
     byte-range lock semantics are not guaranteed to distinguish two handles

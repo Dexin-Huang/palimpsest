@@ -1,8 +1,0 @@
-schema_version: 1
-id: flatten/current-default-v1
-station: flatten
-variant: default
-params: {}
-options:
-  mode: flatten
-notes: current deterministic illumination flattening

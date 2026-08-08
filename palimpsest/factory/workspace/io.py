@@ -2,8 +2,7 @@
 
 Workspace artifact writes go through this module (FACTORY.md invariant 6,
 "artifact commits are atomic"): temp file + fsync + ``os.replace`` so a
-crash never leaves a half-written artifact. Evaluation-side record files
-are exempt by design; they are written through their own runners.
+crash never leaves a half-written artifact.
 """
 
 from __future__ import annotations

@@ -103,7 +103,7 @@ def _load_detector(args: argparse.Namespace):
             f"got {torch.__version__}"
         )
     if not torch.cuda.is_available():
-        raise RuntimeError("RF-DETR development candidate requires CUDA")
+        raise RuntimeError("RF-DETR alignment requires CUDA")
     started = time.perf_counter()
     detector = RFDETR.from_checkpoint(str(args.checkpoint))
     return detector, time.perf_counter() - started

@@ -10,7 +10,7 @@ from palimpsest.factory.core import station as station_module
 from palimpsest.factory.core.station import Station
 from palimpsest.factory.stations.acquire import Acquire
 from palimpsest.factory.stations.align import Align
-from palimpsest.factory.stations.deframe import Deframe, SpreadSafeDeframe
+from palimpsest.factory.stations.deframe import Deframe
 from palimpsest.factory.stations.dewatermark import Dewatermark
 from palimpsest.factory.stations.flatten import Flatten
 from palimpsest.factory.stations.read import Read
@@ -20,7 +20,6 @@ from palimpsest.factory.stations.segment import Segment
 PAGE_STATIONS = (
     Acquire,
     Deframe,
-    SpreadSafeDeframe,
     Dewatermark,
     Flatten,
     Segment,
@@ -30,10 +29,6 @@ PAGE_STATIONS = (
 EXPECTED_DEPENDENCIES = {
     Acquire: (),
     Deframe: (
-        "factory/imaging.py",
-        "factory/stations/image_input.py",
-    ),
-    SpreadSafeDeframe: (
         "factory/imaging.py",
         "factory/stations/image_input.py",
     ),
@@ -181,23 +176,6 @@ def test_fingerprint_reacts_to_each_declared_dependency(
         assert changed != baseline, dependency
 
 
-def test_fingerprints_do_not_read_evaluation_source(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    original_read_bytes = Path.read_bytes
-
-    def reject_evaluation_source(path: Path) -> bytes:
-        relative = path.resolve().relative_to(PACKAGE_ROOT).as_posix()
-        if relative.startswith("factory/evaluation/"):
-            raise AssertionError(f"Fingerprint read evaluation source {relative}")
-        return original_read_bytes(path)
-
-    monkeypatch.setattr(Path, "read_bytes", reject_evaluation_source)
-
-    for station_type in PAGE_STATIONS:
-        assert station_type().implementation_fingerprint
-
-
 @pytest.mark.parametrize(
     ("dependencies", "message"),
     (
@@ -206,12 +184,8 @@ def test_fingerprints_do_not_read_evaluation_source(
             "declares duplicate production dependency",
         ),
         (("factory/does_not_exist.py",), "production dependency does not exist"),
-        (
-            ("factory/evaluation/__init__.py",),
-            "production dependency cannot include evaluation source",
-        ),
     ),
-    ids=("duplicate", "missing", "evaluation"),
+    ids=("duplicate", "missing"),
 )
 def test_registration_rejects_invalid_production_dependency_closures(
     dependencies: tuple[str, ...],

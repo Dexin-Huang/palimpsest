@@ -7,12 +7,10 @@ import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
-import yaml
 
 from palimpsest.factory.core.recipe import Recipe, load as load_recipe
-from palimpsest.factory.evaluation.candidate import load_candidate
 from palimpsest.factory.publication_bundle import epub_is_current, load_book
 from palimpsest.factory.workspace.layout import artifact_path
 
@@ -45,31 +43,22 @@ def inspect_factory(
     *,
     factory_db: Path,
     catalog_db: Path,
-    evaluation_db: Path,
     library_root: Path,
     recipes_root: Path,
-    candidates_root: Path,
-    suites_root: Path,
 ) -> dict[str, Any]:
-    """Return machine-readable checks without mutating production or evaluation state."""
+    """Return machine-readable checks without mutating factory state."""
     checks: list[HealthCheck] = []
     factory_ready = _database_check(checks, "factory.database", factory_db)
     catalog_ready = _database_check(checks, "catalog.database", catalog_db)
-    evaluation_ready = _database_check(checks, "evaluation.database", evaluation_db)
 
     if factory_ready:
         _factory_checks(checks, factory_db, library_root)
     if catalog_ready:
         _catalog_checks(checks, catalog_db)
-    if evaluation_ready:
-        _evaluation_checks(checks, evaluation_db)
 
     recipes = _recipe_checks(checks, recipes_root)
-    if recipes is not None:
-        _candidate_checks(checks, recipes, candidates_root)
-        if factory_ready:
-            _production_configuration_checks(checks, factory_db, recipes)
-    _qualification_checks(checks, suites_root, recipes)
+    if recipes is not None and factory_ready:
+        _production_configuration_checks(checks, factory_db, recipes)
 
     overall = "fail" if any(check.status == "fail" for check in checks) else "pass"
     if overall == "pass" and any(check.status == "warn" for check in checks):
@@ -190,30 +179,6 @@ def _catalog_checks(checks: list[HealthCheck], database_path: Path) -> None:
     )
 
 
-def _evaluation_checks(checks: list[HealthCheck], database_path: Path) -> None:
-    try:
-        with closing(sqlite3.connect(database_path)) as connection:
-            runs = connection.execute(
-                "SELECT COUNT(*) FROM evaluation_runs"
-            ).fetchone()[0]
-            running = connection.execute(
-                "SELECT COUNT(*) FROM evaluation_runs WHERE status = 'running'"
-            ).fetchone()[0]
-            promotions = connection.execute(
-                "SELECT COUNT(*) FROM evaluation_promotions"
-            ).fetchone()[0]
-    except sqlite3.Error as error:
-        checks.append(HealthCheck("evaluation.index", "fail", f"query failed: {error}"))
-        return
-    checks.append(
-        HealthCheck(
-            "evaluation.index",
-            "warn" if running else "pass",
-            f"indexed_runs={runs} promotions={promotions} running={running}",
-        )
-    )
-
-
 def _recipe_checks(
     checks: list[HealthCheck], recipes_root: Path
 ) -> tuple[Recipe, ...] | None:
@@ -237,58 +202,6 @@ def _recipe_checks(
         )
     )
     return recipes
-
-
-def _candidate_checks(
-    checks: list[HealthCheck], recipes: tuple[Recipe, ...], candidates_root: Path
-) -> None:
-    try:
-        candidates = _raw_candidates(candidates_root)
-    except (OSError, TypeError, ValueError, yaml.YAMLError) as error:
-        checks.append(HealthCheck("production.candidates", "fail", str(error)))
-        return
-
-    missing: list[str] = []
-    ambiguous: list[str] = []
-    matched_paths: set[Path] = set()
-    for recipe in recipes:
-        for step in recipe.steps:
-            if not step.station.uses_model:
-                continue
-            matches = [
-                path for path, record in candidates if _matches_step(record, step)
-            ]
-            label = f"{recipe.name}:{step.station.name}/{step.station.variant}"
-            if not matches:
-                missing.append(label)
-            elif len(matches) > 1:
-                ambiguous.append(
-                    f"{label} ({', '.join(path.name for path in matches)})"
-                )
-            else:
-                matched_paths.add(matches[0])
-
-    invalid: list[str] = []
-    for path in sorted(matched_paths):
-        try:
-            load_candidate(path)
-        except (OSError, ValueError) as error:
-            invalid.append(f"{path}: {error}")
-    if missing or ambiguous or invalid:
-        details = [
-            *(f"missing {label}" for label in missing),
-            *(f"ambiguous {label}" for label in ambiguous),
-            *(f"invalid {label}" for label in invalid),
-        ]
-        checks.append(HealthCheck("production.candidates", "fail", "; ".join(details)))
-        return
-    checks.append(
-        HealthCheck(
-            "production.candidates",
-            "pass",
-            f"every model-backed recipe slot resolves to one of {len(matched_paths)} tracked candidates",
-        )
-    )
 
 
 def _production_configuration_checks(
@@ -371,69 +284,3 @@ def _production_configuration_checks(
                 "every completed work order matches its selected recipe configuration",
             )
         )
-
-
-def _raw_candidates(candidates_root: Path) -> list[tuple[Path, Mapping[str, Any]]]:
-    records: list[tuple[Path, Mapping[str, Any]]] = []
-    for path in sorted(candidates_root.rglob("*.yaml")):
-        value = yaml.safe_load(path.read_text(encoding="utf-8"))
-        if not isinstance(value, Mapping):
-            raise ValueError(f"candidate must be an object: {path}")
-        records.append((path, value))
-    if not records:
-        raise ValueError(f"no candidate YAML files under {candidates_root}")
-    return records
-
-
-def _matches_step(record: Mapping[str, Any], step: Any) -> bool:
-    return bool(
-        record.get("station") == step.station.name
-        and record.get("variant", "default") == step.station.variant
-        and record.get("model") == step.model
-        and record.get("prompt") == step.prompt_name
-        and record.get("params", {}) == dict(step.params)
-        and record.get("options", {}) == dict(step.options)
-    )
-
-
-def _qualification_checks(
-    checks: list[HealthCheck],
-    suites_root: Path,
-    recipes: tuple[Recipe, ...] | None,
-) -> None:
-    total = 0
-    authorizing: list[str] = []
-    covered_stations: set[str] = set()
-    try:
-        for path in sorted(suites_root.rglob("*.yaml")):
-            value = yaml.safe_load(path.read_text(encoding="utf-8"))
-            if not isinstance(value, Mapping) or not isinstance(value.get("id"), str):
-                raise ValueError(f"suite must be an identified object: {path}")
-            total += 1
-            if value.get("qualification_eligible") is True:
-                authorizing.append(value["id"])
-                station = value.get("station")
-                if isinstance(station, str) and station:
-                    covered_stations.add(station)
-    except (OSError, TypeError, ValueError, yaml.YAMLError) as error:
-        checks.append(HealthCheck("qualification", "fail", str(error)))
-        return
-
-    required_stations = (
-        set()
-        if recipes is None
-        else {
-            step.station.name
-            for recipe in recipes
-            for step in recipe.steps
-            if step.station.uses_model
-        }
-    )
-    missing = sorted(required_stations - covered_stations)
-    covered = sorted(required_stations & covered_stations)
-    detail = (
-        f"{len(authorizing)}/{total} suites authorize qualification; "
-        f"covered={','.join(covered) or 'none'}; "
-        f"missing={','.join(missing) or 'none'}"
-    )
-    checks.append(HealthCheck("qualification", "warn" if missing else "pass", detail))

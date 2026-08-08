@@ -15,11 +15,6 @@ PACKAGE_ROOT = PROJECT_ROOT / "palimpsest" / "factory"
 RESOURCE_TREES = {
     "recipes": frozenset({".yaml"}),
     "prompts": frozenset({".txt"}),
-    "candidates": frozenset({".yaml"}),
-    "judges": frozenset({".yaml"}),
-    "evaluation/suites": frozenset({".yaml"}),
-    "evaluation/cases": frozenset({".json", ".jsonl", ".jpg", ".pgm"}),
-    "evaluation/gold": frozenset({".json", ".jpg", ".epub"}),
     "publication_contract": frozenset({".json"}),
 }
 
@@ -82,12 +77,9 @@ def test_wheel_contains_and_resolves_factory_runtime_resources(tmp_path: Path) -
         "palimpsest/factory/recipes/latin_manuscript.yaml",
         "palimpsest/factory/recipes/chinese_scroll_rig.yaml",
         "palimpsest/factory/prompts/read/la/diplomatic.txt",
-        "palimpsest/factory/prompts/read/zh/diplomatic.txt",
-        "palimpsest/factory/candidates/read/zh-current-production-moving-v1.yaml",
-        "palimpsest/factory/judges/read-image-pairwise-qwen3.8-v1.yaml",
-        "palimpsest/factory/evaluation/suites/read/zh-vatican-borg-cin-361-f004r-development-v1.yaml",
-        "palimpsest/factory/evaluation/cases/emend/assets/p001_clean.jpg",
-        "palimpsest/factory/evaluation/gold/render_epub/expected-book-v2.epub",
+        "palimpsest/factory/prompts/read/zh/foreman_v12.txt",
+        "palimpsest/factory/publication_contract/book-object-v1.schema.json",
+        "palimpsest/factory/publication_contract/library-object-v1.schema.json",
     } <= members
     for recipe in recipe_documents.values():
         for step in recipe["line"]:
@@ -95,9 +87,7 @@ def test_wheel_contains_and_resolves_factory_runtime_resources(tmp_path: Path) -
             if prompt_name is not None:
                 assert f"palimpsest/factory/prompts/{prompt_name}.txt" in members
     assert not any(
-        name.startswith(("library/", ".env"))
-        or "/__pycache__/" in name
-        or "/evaluations/runs/" in name
+        name.startswith(("library/", ".env")) or "/__pycache__/" in name
         for name in members
     )
 
@@ -107,7 +97,9 @@ def test_wheel_contains_and_resolves_factory_runtime_resources(tmp_path: Path) -
         if path.is_file()
     }
     stray = {
-        name for name in members if name.startswith("palimpsest/") and name not in source_files
+        name
+        for name in members
+        if name.startswith("palimpsest/") and name not in source_files
     }
     assert not stray, (
         "wheel ships files absent from the source tree "

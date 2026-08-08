@@ -1,7 +1,6 @@
-"""Apparatus checks against the failure modes observed in the P.3477
-executor evaluation: silent orthographic normalization (caught on terra),
-unanchored entries, missing citations, and the systematic-substitution
-sweep that no model performed reliably (候/焦)."""
+"""Apparatus checks against measured P.3477 reader failures: silent
+orthographic normalization, unanchored entries, missing citations, and a
+systematic substitution that no reader handled reliably (候/焦)."""
 
 from copy import deepcopy
 

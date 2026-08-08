@@ -347,7 +347,11 @@ def is_quiet(flags: dict, quiet_max_disagreements: int) -> bool:
 
 
 def write_dossier(
-    workspace: Path, context_lines: list[str], base_text: str, sensors: dict, image: Path
+    workspace: Path,
+    context_lines: list[str],
+    base_text: str,
+    sensors: dict,
+    image: Path,
 ) -> None:
     """Stage the foreman dossier: base text, sensors, context, and line crops."""
 
@@ -413,13 +417,13 @@ def write_dossier(
 def load_object(job: Job, sha256_hex: str, label: str) -> Path:
     """Resolve a content-addressed sensor artifact to a verified local path.
 
-    Isolated evaluation roots carry only materialized case inputs, so
-    candidate-scoped objects fall back to the shared library store. The
-    content hash makes any byte source equally trustworthy.
+    A production workspace may use a temporary library root, so the configured
+    shared library remains the fallback. The content hash makes either source
+    equally trustworthy.
     """
     candidates = (
-        job.library_root / "evaluations" / "objects" / sha256_hex,
-        LIBRARY_ROOT / "evaluations" / "objects" / sha256_hex,
+        job.library_root / "objects" / sha256_hex,
+        LIBRARY_ROOT / "objects" / sha256_hex,
     )
     for path in candidates:
         if path.is_file():

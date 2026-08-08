@@ -19,11 +19,7 @@ class SnapshotError(RuntimeError):
     pass
 
 
-_EXCLUDED_PREFIXES = (
-    (".gateway-locks",),
-    ("evaluations", "assets"),
-    ("evaluations", "runs"),
-)
+_EXCLUDED_PREFIXES = ((".gateway-locks",),)
 _EXCLUDED_SUFFIXES = ("-shm", "-wal", "-journal", ".lock")
 
 
@@ -76,8 +72,6 @@ def create_snapshot(
                 "database_paths": [path.as_posix() for path in sorted(backups)],
                 "excluded": [
                     ".gateway-locks/",
-                    "evaluations/assets/",
-                    "evaluations/runs/",
                     "SQLite WAL/SHM/journal files",
                     "lock files",
                 ],
@@ -194,9 +188,6 @@ def _refuse_running_operations(root: Path, databases: dict[Path, Path]) -> None:
         Path(
             "catalog.db"
         ): "SELECT COUNT(*) FROM catalog_sync_runs WHERE status = 'running'",
-        Path("evaluations/evaluation.sqlite3"): (
-            "SELECT COUNT(*) FROM evaluation_runs WHERE status = 'running'"
-        ),
     }
     for relative, source in databases.items():
         query = queries.get(relative)

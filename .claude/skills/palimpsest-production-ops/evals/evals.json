@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "I changed the read model in the Latin manuscript recipe. Make all existing manuscripts use it now.",
-      "expected_output": "Inspects whether the recipe change was authorized, refuses silent or bulk paid reruns, routes unqualified behavior through experiment and promotion, and only after authorization uses explicit per-document --refresh read followed by status and terminal-product checks.",
+      "expected_output": "Confirms that the recipe contains the selected production configuration, refuses silent or unbounded paid reruns, inspects affected completed work orders, and uses explicit per-document --refresh read followed by status and terminal-product checks.",
       "files": []
     },
     {

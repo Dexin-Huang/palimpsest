@@ -7,11 +7,11 @@ record and supplies its IIIF manifest to intake; catalog presence never creates
 a work order. The factory then moves provenance-stamped artifacts through a
 validated recipe and emits a readable EPUB and static HTML book.
 
-[`FACTORY.md`](FACTORY.md) defines production in detail;
+[`FACTORY.md`](FACTORY.md) defines production in detail.
 [`CONTRACTS.md`](CONTRACTS.md) is its generated artifact and station graph.
-[`EVALUATION.md`](EVALUATION.md) defines the benchmark, candidate, promotion,
-canary, and rollback plane used to improve stations without coupling it to
-production orchestration.
+Research and candidate evaluation live in the separate `palimpsest-research`
+repository; this factory executes the production configuration selected in a
+recipe without deciding whether that configuration is good.
 
 ## Runtime layers
 
@@ -68,6 +68,10 @@ checks their declared inputs and output. `palimpsest/factory/core/recipe.py`
 loads YAML route sheets, validates station order, checks model bindings, and
 rejects undeclared parameters or options.
 
+Recipes are the full production slot authority. A model-backed slot names its
+station variant, exact model, prompt, parameters, and options directly; there
+is no second candidate or promotion registry in the factory.
+
 ### Orchestration layer
 
 `palimpsest/factory/core/conductor.py` resolves work orders, computes freshness,
@@ -118,22 +122,11 @@ content-only book model. `stations/render_epub.py` renders EPUB from that model.
 `factory/site.py` rebuilds the hosted shelf and reader from published book
 models. Presentation never reaches back into intermediate station outputs.
 
-### Evaluation and promotion layer
-
-Evaluation runs outside the production conductor in isolated workspaces. A
-versioned suite compares a current and challenger station candidate on paired
-inputs, validates both through the production artifact contract, measures
-local and downstream fitness, and emits an immutable scorecard. Only a
-qualified scorecard plus a passing end-to-end canary may produce a promotion
-record. Production continues to resolve exactly one candidate for each recipe
-station. [`EVALUATION.md`](EVALUATION.md) defines the implemented contracts and
-the qualification policy.
-
 ## Dependency direction
 
 ```text
 cli
-  -> catalog / intake / conductor / graph / preview / tune / site / bench
+  -> catalog / intake / conductor / graph / preview / tune / site
 catalog
   -> source heads / normalized records / catalog database
 conductor
@@ -172,13 +165,6 @@ palimpsest/
     seams.py
     apparatus.py
     site.py
-    evaluation/
-      candidate.py / suite.py / judge.py
-      runner.py / metrics.py / statistics.py / judging.py
-      report.py / store.py / promotion.py / canary.py
-      exodia_evaluator.py / read_extension.py / probes.py
-      assets.py
-      station_metrics/
     config.py
     core/
       contracts.py

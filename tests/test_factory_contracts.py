@@ -12,17 +12,11 @@ from palimpsest.factory.core import registry
 from palimpsest.factory.core.contracts import CONTRACTS, validate_payload
 from palimpsest.factory.core.station import Station
 
-EVALUATION_ROOT = (
-    Path(__file__).resolve().parents[1] / "palimpsest" / "factory" / "evaluation"
-)
+BOOK_FIXTURE = Path(__file__).with_name("fixtures") / "book-v1.json"
 
 
 def _book_v1() -> dict:
-    return json.loads(
-        (EVALUATION_ROOT / "gold" / "publish" / "expected-book-v2.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    return json.loads(BOOK_FIXTURE.read_text(encoding="utf-8"))
 
 
 def test_every_registered_station_references_known_kinds():
@@ -170,8 +164,6 @@ def test_book_v1_contract_accepts_the_canonical_fixture():
     validate_payload("book", _book_v1(), expected_doc_id="fixture_ms")
 
 
-
-
 def test_book_v1_contract_accepts_deletion_apparatus():
     book = _book_v1()
     book["sections"][0]["apparatus_ids"] = ["apparatus-0001"]
@@ -187,7 +179,6 @@ def test_book_v1_contract_accepts_deletion_apparatus():
     ]
 
     validate_payload("book", book)
-
 
 
 def test_book_v1_contract_rejects_legacy_top_level_shape():
