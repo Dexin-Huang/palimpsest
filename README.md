@@ -26,7 +26,7 @@ flowchart TB
     head --> catalog[(Catalog DB)]
     cli[palimpsest CLI] --> head
     catalog --> selection[Explicit operator selection]
-    selection --> intake[IIIF intake]
+    selection --> intake[Intake]
     cli --> intake
     cli --> conductor[Conductor]
     recipe[Recipe loader] --> conductor
@@ -139,10 +139,20 @@ each recipe and require that executor's CLI on `PATH`.
 
 ## Run a manuscript
 
-### 1. Intake from IIIF
+### 1. Intake
 
-Intake validates a IIIF Presentation 2 or 3 manifest, writes the two source
-contracts, and creates the work order in the ledger:
+Intake accepts exactly one source selector. Catalog-backed intake resolves the
+current active catalog row by exact record ID and derives the manifest URL
+from CatalogDB:
+
+```bash
+python -m palimpsest intake \
+  --doc-id vatican_pal_lat_1267 \
+  --catalog-record-id source-record:SHA256 \
+  --recipe latin_manuscript
+```
+
+Direct manifest intake accepts an IIIF Presentation 2 or 3 manifest URL:
 
 ```bash
 python -m palimpsest intake \
@@ -150,6 +160,21 @@ python -m palimpsest intake \
   --manifest https://digi.vatlib.it/iiif/MSS_Pal.lat.1267/manifest.json \
   --recipe latin_manuscript
 ```
+
+`--catalog-record-id` and `--manifest` are mutually exclusive source
+selectors: supplying both (or neither) fails before any workspace is created.
+Catalog-backed intake resolves the record ID against the current active
+catalog rows and fails on an unknown, tombstoned, or manifest-less record
+before creating a workspace. Both paths validate the selected recipe, write
+the two source contracts (`metadata.json`, `page_list.json`) atomically, and
+create the work order in the ledger.
+
+Every workspace metadata record carries exactly one top-level
+`catalog_record_id` pointer: the exact `source-record:SHA256` of the adopted
+active catalog row, or `null` for direct manifest intake. The pointer is
+copied unchanged into the published book. Catalog adoption is never inferred
+from titles, shelfmarks, ARKs, manifest or catalog URLs, or doc IDs; only an
+explicit catalog-backed intake records a non-null value.
 
 For a document that already has `library/<doc_id>/metadata.json` and
 `page_list.json`, adopt it without rewriting either source record:
@@ -263,6 +288,10 @@ and `source_modified_at`, and the untouched `raw` source payload. Syncs are
 resumable, unchanged records do not create revisions, changed records do, and
 records absent from a completed refresh are tombstoned rather than deleted.
 
+Catalog-backed intake consumes these records by exact record ID:
+`--catalog-record-id` resolves against the current active rows and fails on
+unknown, tombstoned, or manifest-less records before creating a workspace.
+
 ## Publication
 
 `python -m palimpsest publish` rebuilds the renderer-independent publication
@@ -273,6 +302,13 @@ releases live at `https://releases.slothful.ai/releases/<bundle_id>/`.
 verifies every declared SHA-256 digest, and builds the downstream reader.
 `publication/` is local build output, not source or a release authority.
 
+Books are produced under the current contract: Book `schema_version` 2 with
+profile `facsimile-spread`, library bundles with profile `palimpsest-library`,
+and bundles declaring `contract_version` 2.0.0. The canonical schemas are
+`book-object.schema.json` and `library-object.schema.json`. `publish` copies
+`metadata.catalog_record_id` unchanged into the top level of each BookObject;
+it adds no source keys, revisions, or duplicate pointers in library entries.
+
 ## Commands
 
 | Command | Purpose |
@@ -280,7 +316,7 @@ verifies every declared SHA-256 digest, and builds the downstream reader.
 | `init-db` | Initialize the SQLite inventory and production ledger |
 | `catalog` | Register source heads, normalize records, and refresh the pointer catalog |
 | `select` | Sample IIIF pages with Qwen and write a bounded catalog triage record |
-| `intake` | Turn an IIIF manifest into source contracts and a work order |
+| `intake` | Turn a catalog record or IIIF manifest into source contracts and a work order |
 | `adopt` | Put an existing library workspace on the line |
 | `park` | Retire a work order from active operation without deleting history |
 | `run` | Execute one work order or a bounded active queue |
@@ -300,6 +336,8 @@ Run `python -m palimpsest <command> --help` for command-specific options.
 
 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) is the canonical runbook for intake,
 bounded execution, recovery, publication, and release verification.
+[`docs/AGENT_WORKERS.md`](docs/AGENT_WORKERS.md) is the agent-cell executor
+contract: airlocked workspaces, bounded repair, and harness boundaries.
 
 Repository-aware coding sessions should use the source-controlled project
 skills under `.claude/skills/`:
@@ -388,7 +426,7 @@ palimpsest/
     workspace/              atomic I/O and the single path contract
     prompts/                content-hashed prompt files
     recipes/                swappable route sheets
-    intake.py               IIIF boundary
+    intake.py               archive boundary
     site.py                 static-library renderer
 library/
   <doc_id>/                 source records and local factory artifacts
@@ -404,6 +442,7 @@ docs/
   FACTORY.md                architecture and invariants
   CONTRACTS.md              generated live graph
   GLYPHS.md                 alignment and glyph-system design
+  AGENT_WORKERS.md          agent-cell executor contract
   OPERATIONS.md             canonical production runbook
 ```
 
@@ -416,7 +455,9 @@ preserved on `archive/pre-research-cutover-2026-08-06`.
 
 Generated images, model artifacts, books, runs, the ledger, and the static site
 are local and ignored by Git. `metadata.json` and `page_list.json` are the
-portable source records for adopted workspaces.
+portable source records for adopted workspaces; `metadata.json` records the
+adopted catalog record ID (or `null`) in the required top-level
+`catalog_record_id` field.
 
 ## Design rules
 

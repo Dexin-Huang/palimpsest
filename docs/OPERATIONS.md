@@ -16,6 +16,7 @@ repository as an explicit station, prompt, or recipe change.
 | Which manuscripts are on the line? | `library/factory.db` |
 | Which configuration does a manuscript run? | `palimpsest/factory/recipes/*.yaml` |
 | Which artifacts exist? | `library/<doc_id>/` |
+| Which catalog record did a workspace adopt? | `catalog_record_id` in `library/<doc_id>/metadata.json` (`null` = no catalog adoption) |
 | Which artifact and station shapes are valid? | `docs/CONTRACTS.md` |
 | Which books are released? | The immutable publication bundle in object storage |
 
@@ -71,19 +72,39 @@ python -m palimpsest select SOURCE_ID \
 ```
 
 Review the written selection record. Catalog presence and a model
-recommendation do not create a production work order. An operator must choose
-the manifest and document identity.
+recommendation do not create a production work order. An operator chooses
+either an active catalog record (by exact record ID) or a direct IIIF
+manifest; the two source selectors are mutually exclusive.
 
 ## 4. Intake or adopt
 
-Create source contracts and a work order from IIIF:
+Create source contracts and a work order from an active catalog record
+(catalog-backed) or directly from IIIF:
 
 ```bash
+python -m palimpsest intake \
+  --doc-id DOC_ID \
+  --catalog-record-id source-record:SHA256 \
+  --recipe RECIPE
+
 python -m palimpsest intake \
   --doc-id DOC_ID \
   --manifest IIIF_MANIFEST_URL \
   --recipe RECIPE
 ```
+
+`--catalog-record-id` and `--manifest` are mutually exclusive source
+selectors. Catalog-backed intake resolves the exact record ID against the
+current active catalog rows and derives the manifest URL from CatalogDB;
+unknown, tombstoned, or manifest-less records fail before a workspace is
+created. Direct manifest intake accepts an IIIF Presentation 2 or 3 URL
+directly. Either path validates the recipe first, writes `metadata.json` and
+`page_list.json` atomically, and creates the work order in the same command.
+
+Workspace metadata records exactly one top-level `catalog_record_id`: the
+exact `source-record:SHA256` of the adopted active row, or `null` for direct
+manifest intake. Catalog adoption is never inferred from titles, shelfmarks,
+ARKs, manifest or catalog URLs, or doc IDs.
 
 Use `adopt` only when `library/<doc_id>/metadata.json` and `page_list.json`
 already exist and validate:
@@ -185,6 +206,13 @@ library/<doc_id>/book/book.json
 library/<doc_id>/book/<doc_id>.epub
 ```
 
+Books are produced under the current contract: Book `schema_version` 2 with
+profile `facsimile-spread`, library bundles with profile `palimpsest-library`,
+and bundles declaring `contract_version` 2.0.0 (canonical schemas
+`book-object.schema.json` and `library-object.schema.json`). `publish` copies
+`catalog_record_id` unchanged from workspace metadata into the top level of
+each BookObject.
+
 Rebuild the local static library:
 
 ```bash
@@ -222,7 +250,7 @@ python -m palimpsest snapshot create \
 
 The command refuses active work and creates online SQLite backups. It includes
 production workspaces and the shared content-addressed object store. It
-excludes locks, transient SQLite files, and local research evidence.
+excludes lock files and transient SQLite sidecars.
 
 Verify the archive:
 

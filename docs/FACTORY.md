@@ -33,6 +33,7 @@ All production commands are top-level Palimpsest commands:
 
 ```text
 palimpsest init-db
+palimpsest intake --doc-id DOC --recipe RECIPE --catalog-record-id RECORD_ID
 palimpsest intake --doc-id DOC --recipe RECIPE --manifest URL
 palimpsest adopt --doc-id DOC --recipe RECIPE
 palimpsest park --doc-id DOC
@@ -44,10 +45,20 @@ palimpsest tune --doc-id DOC --pages PAGE...
 palimpsest site
 ```
 
-`intake` is the normal entry point. It fetches one IIIF manifest, validates the
-selected recipe before writing anything, builds canonical `metadata.json` and
-`page_list.json` records, writes both atomically, and creates the work order in
-the same command. `adopt` only registers an already-valid canonical workspace.
+`intake` is the normal entry point. It accepts exactly one source selector:
+`--catalog-record-id` (catalog-backed, resolving the current active catalog
+row by exact record ID and deriving its manifest URL from CatalogDB) or
+`--manifest` (a direct IIIF Presentation 2 or 3 URL). Unknown, tombstoned, or
+manifest-less catalog records fail before any workspace is created. Intake
+validates the selected recipe before writing anything, builds canonical
+`metadata.json` and `page_list.json` records, writes both atomically, and
+creates the work order in the same command. `adopt` only registers an
+already-valid canonical workspace.
+
+Workspace metadata carries one required top-level `catalog_record_id` pointer:
+the exact `source-record:SHA256` of the adopted active catalog row, or `null`
+for direct manifest intake. Adoption identity is never inferred from titles,
+shelfmarks, ARKs, URLs, or doc IDs.
 
 `run` executes the work order's recipe. A successful full run marks the work
 order `complete`; a run containing any failed cell marks it `failed`. Starting
@@ -141,6 +152,8 @@ cell outcome. They never choose recipe order and never mutate the ledger.
 - `subprocess` runs a fresh Python process for crash and interpreter isolation;
 - configured agent executors stage an airlocked workspace containing only the
   station prompt, declared evidence, relevant images, and an output directory.
+  The agent-cell contract (workspace recreation, bounded repair, harness
+  boundaries) is specified in [`AGENT_WORKERS.md`](AGENT_WORKERS.md).
 
 Agent-backed stations run a production attempt, validate the artifact, and may
 send bounded repair turns into the same session. Exhausted repairs produce a
@@ -246,7 +259,7 @@ The editorial line preserves separate evidence layers:
 - `edition`: reader-facing headings, translations, and note reconciled against
   every final emended reading;
 - `book`: chapters containing translation, verbatim original, emended reading,
-  apparatus, catalog identity, and production colophon.
+  apparatus, the adopted catalog record ID, and production colophon.
 
 Emendation never mutates the diplomatic transcription or reconstructed
 manuscript. The final-edition agent reviews each section but can only write the
@@ -268,6 +281,14 @@ station artifacts directly.
 The publication colophon reports the model and prompt identity for model-backed
 stations, implementation fingerprints for every contributing station, total
 recorded production cost, source catalog identity, and page count.
+
+Books are produced under the current contract (Book `schema_version` 2,
+profile `facsimile-spread`; library bundles use profile `palimpsest-library`)
+and bundles declare `contract_version` 2.0.0, with the canonical Book and
+Library schemas in `book-object.schema.json` and
+`library-object.schema.json`. `publish` copies the workspace
+`catalog_record_id` unchanged into the top level of each BookObject; it adds
+no source keys, revisions, or duplicate pointers.
 
 ## Research boundary
 
@@ -291,3 +312,5 @@ configuration drift; it does not score or promote its own components.
 9. Source evidence, editorial intervention, and presentation remain distinct.
 10. Every published book can be traced to page artifacts, prompts, models,
     implementation content, and archive source.
+11. Catalog adoption is recorded by exact catalog record ID only; identity is
+    never inferred from titles, shelfmarks, URLs, or identifiers.

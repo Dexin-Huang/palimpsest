@@ -2,10 +2,12 @@
 
 Palimpsest has a continuously refreshed source catalog in front of one
 production factory. Source heads translate repository conventions into
-source-grounded pointers in `catalog.db`. An operator explicitly selects a
-record and supplies its IIIF manifest to intake; catalog presence never creates
-a work order. The factory then moves provenance-stamped artifacts through a
-validated recipe and emits a readable EPUB and static HTML book.
+source-grounded pointers in `catalog.db`. An operator either selects a catalog
+record by exact record ID (catalog-backed intake resolves its manifest from
+`catalog.db`) or supplies a direct IIIF manifest; the two source selectors are
+mutually exclusive, and catalog presence never creates a work order. The
+factory then moves provenance-stamped artifacts through a validated recipe and
+emits a readable EPUB and static HTML book.
 
 [`FACTORY.md`](FACTORY.md) defines production in detail.
 [`CONTRACTS.md`](CONTRACTS.md) is its generated artifact and station graph.
@@ -21,7 +23,7 @@ flowchart TB
     head --> catalog[(Catalog DB)]
     cli[palimpsest CLI] --> head
     catalog --> selection[Explicit operator selection]
-    selection --> intake[IIIF intake]
+    selection --> intake[Intake]
     cli --> intake
     cli --> conductor[Conductor]
     recipe[Recipe loader] --> conductor
@@ -56,9 +58,12 @@ source history.
 
 `palimpsest/cli.py` owns argument parsing and dispatch. Production commands are
 top-level; station modules are imported only by commands that need them.
-`palimpsest/factory/intake.py` is the external archive boundary. It fetches and
-normalizes IIIF manifests, derives stable page identities, validates source
-records, and writes them atomically.
+`palimpsest/factory/intake.py` is the external archive boundary. Catalog-backed
+intake resolves the current active catalog row by exact record ID and derives
+its manifest URL; direct intake fetches an IIIF Presentation 2 or 3 manifest.
+Either path normalizes the manifest, derives stable page identities, validates
+source records, and writes them atomically, recording the adopted record ID
+(or `null`) in the required top-level `catalog_record_id`.
 
 ### Contract and recipe layer
 
@@ -195,6 +200,8 @@ palimpsest/
   and normalize before persistence.
 - Keep source-record identity separate from tentative manuscript-object
   identity. Never merge conflicting source claims during harvest.
+- Record catalog adoption by exact catalog record ID only; never infer it from
+  titles, shelfmarks, ARKs, URLs, or doc IDs.
 - Add a station in `stations/`, register it, and declare every accepted recipe
   key on the station.
 - Change production order only in a recipe.

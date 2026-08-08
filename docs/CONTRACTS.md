@@ -120,7 +120,7 @@ flowchart TB
 
 | Kind | Grain | Format | Required fields | Stored at |
 |---|---|---|---|---|
-| `metadata` | manuscript | json | `doc_id` | `metadata.json` |
+| `metadata` | manuscript | json | `doc_id`, `catalog_record_id` | `metadata.json` |
 | | | | *Catalog identity and immutable source provenance for one work order.* | |
 | `page_list` | manuscript | json | `doc_id`, `pages` | `page_list.json` |
 | | | | *Ordered source canvases and image URLs consumed by the page line.* | |
@@ -152,8 +152,8 @@ flowchart TB
 | | | | *The final editorial pass: an emended reading per section + the apparatus recording every change. The diplomatic layer is never edited; this sits beside it.* | |
 | `edition` | manuscript | json | `doc_id`, `readers_note`, `sections` | `edition.json` |
 | | | | *Reader-facing prose reconciled against the final emended reading: one heading and translation per manuscript section, plus the manuscript-level reader's note.* | |
-| `book` | manuscript | json | `schema_version`, `profile`, `doc_id`, `identity`, `languages`, `readers_note`, `folios`, `sections`, `apparatus`, `colophon` | `book/book.json` |
-| | | | *Book Model v1: normalized folios, reader-facing sections, explicit source descriptors, editorial apparatus, and production colophon.* | |
+| `book` | manuscript | json | `schema_version`, `profile`, `doc_id`, `catalog_record_id`, `identity`, `languages`, `readers_note`, `folios`, `sections`, `apparatus`, `colophon` | `book/book.json` |
+| | | | *Book Model: normalized folios, reader-facing sections, explicit source descriptors, editorial apparatus, and production colophon.* | |
 | `book_epub` | manuscript | epub | — | `book/{doc_id}.epub` |
 | | | | *EPUB 3 rendering of the book model.* | |
 
@@ -161,22 +161,22 @@ flowchart TB
 
 | Station | Implementation | Grain | Consumes | Produces | Model |
 |---|---|---|---|---|---|
-| `acquire` | `bf534f1749865682` | page | `page_list` | `page_image` | no |
-| `align` | `4c102df822c7e81c` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
-| `assemble_page` | `dc7b4a3a03dca29e` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
-| `deframe` | `606fd311b705aa26` | page | `page_image` | `page_image_framed` | no |
-| `dewatermark` | `9ac8e1283ab03e92` | page | `page_image_framed` | `page_image_unmarked` | no |
-| `emend` | `3c052aafb0c3b344` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
-| `finalize_edition` | `1df49a08cd939b4a` | manuscript | `page_transcription`, `manuscript`, `reference`, `emendations` | `edition` | yes |
-| `flatten` | `4a77817bbe768cdc` | page | `page_image_unmarked` | `page_image_clean` | no |
-| `publish` | `079a8a321a17835d` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
-| `read` | `708f80c8c662727c` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
-| `reconstruct` | `588e3cc71c40dbda` | manuscript | `page_assembled` | `manuscript` | yes |
-| `reference` | `6fc11933c7d755c2` | manuscript | `manuscript` | `reference` | yes |
-| `render_epub` | `800bde291207532d` | manuscript | `book` | `book_epub` | no |
-| `segment` | `38428a9021cdc48e` | page | `page_image_clean` | `page_regions` | no |
-| `survey` | `eed49ee3f94315d7` | manuscript | `page_transcription` | `translation_brief` | yes |
-| `translate` | `0e27c49ea4f886f1` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
+| `acquire` | `803a5bc95a1717d5` | page | `page_list` | `page_image` | no |
+| `align` | `8a8ebb8c02cf63a6` | page | `page_image_clean`, `page_transcription` | `page_alignment` | no |
+| `assemble_page` | `80a2fcc3ab79dc0d` | page | `page_transcription`, `page_translation` | `page_assembled` | no |
+| `deframe` | `5d5cd48d12aca3d8` | page | `page_image` | `page_image_framed` | no |
+| `dewatermark` | `1b74dd51303d9925` | page | `page_image_framed` | `page_image_unmarked` | no |
+| `emend` | `2dfefa0093b9265e` | manuscript | `manuscript`, `reference`, `page_assembled`, `page_image_clean` | `emendations` | yes |
+| `finalize_edition` | `518abb2edbdce655` | manuscript | `page_transcription`, `manuscript`, `reference`, `emendations` | `edition` | yes |
+| `flatten` | `a153ae0949fe4f45` | page | `page_image_unmarked` | `page_image_clean` | no |
+| `publish` | `79926480f327a597` | manuscript | `metadata`, `manuscript`, `translation_brief`, `page_transcription`, `page_image`, `page_image_clean`, `page_translation`, `reference`, `emendations`, `edition`, `page_alignment` (optional) | `book` | no |
+| `read` | `f57baa2465ca8eab` | page | `page_image_clean`, `page_regions` | `page_transcription` | yes |
+| `reconstruct` | `dbe654a8b49576b4` | manuscript | `page_assembled` | `manuscript` | yes |
+| `reference` | `d0f910efc88e902a` | manuscript | `manuscript` | `reference` | yes |
+| `render_epub` | `c72b282e847a8371` | manuscript | `book` | `book_epub` | no |
+| `segment` | `0bea40061210c95d` | page | `page_image_clean` | `page_regions` | no |
+| `survey` | `be0da2089d530476` | manuscript | `page_transcription` | `translation_brief` | yes |
+| `translate` | `7f87eea553cbd71d` | page | `page_transcription`, `translation_brief` | `page_translation` | yes |
 
 Contracts are enforced twice at runtime: a station referencing an
 unknown kind fails at registration, and a JSON artifact missing its

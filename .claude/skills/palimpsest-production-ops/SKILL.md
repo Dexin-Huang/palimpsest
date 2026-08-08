@@ -24,7 +24,8 @@ workspace can establish it.
 
 Choose one:
 
-1. **Intake**: create canonical source records and a work order from IIIF.
+1. **Intake**: create canonical source records and a work order from an active
+   catalog record or direct IIIF manifest.
 2. **Adopt**: register an existing workspace whose canonical source records
    already exist.
 3. **Run/resume**: let the conductor execute missing or input-stale cells and
@@ -40,11 +41,23 @@ selected production configuration already installed in a recipe.
 
 ## Source Boundary
 
-For a new IIIF source:
+Intake accepts exactly one source selector. For an active catalog record
+(catalog-backed; the manifest is derived from CatalogDB by exact record ID):
+
+```text
+python -m palimpsest intake --doc-id DOC_ID --catalog-record-id source-record:SHA256 --recipe RECIPE
+```
+
+For a direct IIIF manifest:
 
 ```text
 python -m palimpsest intake --doc-id DOC_ID --manifest MANIFEST_URL --recipe RECIPE
 ```
+
+`--catalog-record-id` and `--manifest` are mutually exclusive. Catalog-backed
+intake fails on unknown, tombstoned, or manifest-less records before creating
+a workspace. Direct manifest intake records `catalog_record_id: null`. Never
+infer catalog adoption from titles, shelfmarks, ARKs, URLs, or doc IDs.
 
 For an existing workspace with canonical `metadata.json` and `page_list.json`:
 
