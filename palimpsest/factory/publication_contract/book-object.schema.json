@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://palimpsest.invalid/contracts/book-object-v1.schema.json",
+  "$id": "https://palimpsest.invalid/contracts/book-object.schema.json",
   "title": "BookObject",
   "description": "One complete reader-facing Palimpsest book with evidence and provenance.",
   "type": "object",
@@ -9,6 +9,7 @@
     "schema_version",
     "profile",
     "doc_id",
+    "catalog_record_id",
     "identity",
     "languages",
     "readers_note",
@@ -18,9 +19,13 @@
     "colophon"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
-    "profile": { "const": "facsimile-spread/v1" },
+    "schema_version": { "const": 2 },
+    "profile": { "const": "facsimile-spread" },
     "doc_id": { "$ref": "#/$defs/identifier" },
+    "catalog_record_id": {
+      "type": ["string", "null"],
+      "pattern": "^source-record:[0-9a-f]{64}$"
+    },
     "identity": { "$ref": "#/$defs/identity" },
     "languages": { "$ref": "#/$defs/languages" },
     "readers_note": { "type": "string" },

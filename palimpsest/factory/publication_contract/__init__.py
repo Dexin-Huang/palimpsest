@@ -13,11 +13,11 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 
 LIBRARY_SCHEMA_VERSION = 2
-LIBRARY_PROFILE = "palimpsest-library/v2"
+LIBRARY_PROFILE = "palimpsest-library"
 CONTRACT_NAME = "palimpsest-publication"
-CONTRACT_VERSION = "1.0.0"
-LIBRARY_SCHEMA_NAME = "library-object-v1.schema.json"
-BOOK_SCHEMA_NAME = "book-object-v1.schema.json"
+CONTRACT_VERSION = "2.0.0"
+LIBRARY_SCHEMA_NAME = "library-object.schema.json"
+BOOK_SCHEMA_NAME = "book-object.schema.json"
 
 
 @dataclass(frozen=True)

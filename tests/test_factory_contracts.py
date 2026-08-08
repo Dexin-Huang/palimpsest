@@ -12,10 +12,10 @@ from palimpsest.factory.core import registry
 from palimpsest.factory.core.contracts import CONTRACTS, validate_payload
 from palimpsest.factory.core.station import Station
 
-BOOK_FIXTURE = Path(__file__).with_name("fixtures") / "book-v1.json"
+BOOK_FIXTURE = Path(__file__).with_name("fixtures") / "book.json"
 
 
-def _book_v1() -> dict:
+def _book() -> dict:
     return json.loads(BOOK_FIXTURE.read_text(encoding="utf-8"))
 
 
@@ -160,12 +160,58 @@ def test_page_list_contract_rejects_cross_document_reload():
         )
 
 
-def test_book_v1_contract_accepts_the_canonical_fixture():
-    validate_payload("book", _book_v1(), expected_doc_id="fixture_ms")
+def test_book_contract_accepts_the_canonical_fixture():
+    validate_payload("book", _book(), expected_doc_id="fixture_ms")
 
 
-def test_book_v1_contract_accepts_deletion_apparatus():
-    book = _book_v1()
+def test_book_contract_requires_catalog_record_id():
+    book = _book()
+    del book["catalog_record_id"]
+
+    with pytest.raises(ValueError, match="missing required fields.*catalog_record_id"):
+        validate_payload("book", book)
+
+
+def test_book_contract_validates_catalog_record_id_shape():
+    book = _book()
+    book["catalog_record_id"] = None
+    validate_payload("book", book)
+    book["catalog_record_id"] = "source-record:" + "0" * 64
+    validate_payload("book", book)
+    book["catalog_record_id"] = "source-record:not-a-hex-digest"
+
+    with pytest.raises(ValueError, match="source-record pointer"):
+        validate_payload("book", book)
+
+
+def test_metadata_contract_requires_catalog_record_id():
+    validate_payload("metadata", {"doc_id": "doc", "catalog_record_id": None})
+
+    with pytest.raises(ValueError, match="missing required fields.*catalog_record_id"):
+        validate_payload("metadata", {"doc_id": "doc"})
+
+
+def test_metadata_contract_validates_catalog_record_id_shape():
+    validate_payload(
+        "metadata",
+        {"doc_id": "doc", "catalog_record_id": "source-record:" + "0" * 64},
+    )
+    for record_id in (
+        "source-record:not-a-hex-digest",
+        "catalog-record:" + "0" * 64,
+        "source-record:" + "A" * 64,
+    ):
+        with pytest.raises(ValueError, match="source-record pointer"):
+            validate_payload("metadata", {"doc_id": "doc", "catalog_record_id": record_id})
+
+
+def test_metadata_contract_rejects_non_string_catalog_record_id():
+    with pytest.raises(ValueError, match="must be a string"):
+        validate_payload("metadata", {"doc_id": "doc", "catalog_record_id": 123})
+
+
+def test_book_contract_accepts_deletion_apparatus():
+    book = _book()
     book["sections"][0]["apparatus_ids"] = ["apparatus-0001"]
     book["apparatus"] = [
         {
@@ -181,32 +227,32 @@ def test_book_v1_contract_accepts_deletion_apparatus():
     validate_payload("book", book)
 
 
-def test_book_v1_contract_rejects_legacy_top_level_shape():
-    legacy = _book_v1()
+def test_book_contract_rejects_legacy_top_level_shape():
+    legacy = _book()
     del legacy["schema_version"]
 
     with pytest.raises(ValueError, match="missing required fields.*schema_version"):
         validate_payload("book", legacy)
 
 
-def test_book_v1_contract_rejects_dangling_folio_reference():
-    book = _book_v1()
+def test_book_contract_rejects_dangling_folio_reference():
+    book = _book()
     book["sections"][0]["folio_ids"] = ["missing-folio"]
 
     with pytest.raises(ValueError, match="cites unknown folio"):
         validate_payload("book", book)
 
 
-def test_book_v1_contract_rejects_wrong_content_source_kind():
-    book = _book_v1()
+def test_book_contract_rejects_wrong_content_source_kind():
+    book = _book()
     book["sections"][0]["content"]["translation"]["source"]["kind"] = "manuscript"
 
     with pytest.raises(ValueError, match="translation source kind must be 'edition'"):
         validate_payload("book", book)
 
 
-def test_book_v1_contract_rejects_uncited_apparatus():
-    book = _book_v1()
+def test_book_contract_rejects_uncited_apparatus():
+    book = _book()
     book["apparatus"] = [
         {
             "id": "apparatus-0001",

@@ -3,6 +3,7 @@
   "status": "downloaded",
   "source_url": "https://digi.vatlib.it/iiif/MSS_Borg.cin.398/manifest.json",
   "doc_id": "vatican_borg_cin_398",
+  "catalog_record_id": null,
   "created_at": "2026-02-02T00:43:06Z",
   "updated_at": "2026-02-02T00:53:40Z",
   "downloaded_count": 182,

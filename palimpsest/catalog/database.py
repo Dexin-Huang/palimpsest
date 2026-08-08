@@ -138,6 +138,23 @@ class PageChanges:
     revived: int = 0
 
 
+@dataclass(frozen=True)
+class CatalogRecord:
+    """One active catalog record with its current normalized claims.
+
+    Identity fields come from the catalog; ``record`` is a fresh JSON
+    deserialization of the current revision's claims, so callers cannot
+    mutate catalog state through it.
+    """
+
+    record_id: str
+    source_id: str
+    source_key: str
+    revision: int
+    source_url: str | None
+    record: Mapping[str, Any]
+
+
 class CatalogDB:
     def __init__(self, path: Path | str = CATALOG_DB_PATH):
         self.path = Path(path)
@@ -422,6 +439,36 @@ class CatalogDB:
                 }
             )
         return tuple(records)
+
+    def record(self, record_id: str) -> CatalogRecord:
+        """Resolve the current active catalog record by exact global record id.
+
+        Raises KeyError for an unknown id and ValueError for a tombstoned
+        record; only active records are returned.
+        """
+        row = self._connection.execute(
+            """
+            SELECT r.record_id, r.source_id, r.source_key, r.current_revision,
+                   r.tombstoned, v.source_url, v.normalized_json
+            FROM catalog_records r
+            JOIN catalog_record_revisions v
+              ON v.record_id = r.record_id AND v.revision = r.current_revision
+            WHERE r.record_id = ?
+            """,
+            (record_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"unknown catalog record {record_id!r}")
+        if row["tombstoned"]:
+            raise ValueError(f"catalog record {record_id!r} is tombstoned")
+        return CatalogRecord(
+            record_id=row["record_id"],
+            source_id=row["source_id"],
+            source_key=row["source_key"],
+            revision=row["current_revision"],
+            source_url=row["source_url"],
+            record=json.loads(row["normalized_json"]),
+        )
 
     def sync_run(self, sync_id: int) -> dict[str, Any]:
         row = self._connection.execute(

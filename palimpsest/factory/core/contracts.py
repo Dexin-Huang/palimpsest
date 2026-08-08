@@ -25,8 +25,10 @@ FORMAT_SUFFIX = {"json": ".json", "jpeg": ".jpg", "epub": ".epub"}
 # have one source of truth.
 SOURCE_KINDS = ("metadata", "page_list")
 
-BOOK_SCHEMA_VERSION = 1
-BOOK_PROFILE = "facsimile-spread/v1"
+BOOK_SCHEMA_VERSION = 2
+BOOK_PROFILE = "facsimile-spread"
+
+CATALOG_RECORD_ID_RE = re.compile(r"^source-record:[0-9a-f]{64}$")
 
 TRANSCRIPTION_AUDIT_FIELDS = (
     "candidate_readings",
@@ -60,7 +62,7 @@ _ALL = (
         "manuscript",
         "json",
         "Catalog identity and immutable source provenance for one work order.",
-        required=("doc_id",),
+        required=("doc_id", "catalog_record_id"),
         store="metadata.json",
     ),
     ArtifactContract(
@@ -191,12 +193,13 @@ _ALL = (
         "book",
         "manuscript",
         "json",
-        "Book Model v1: normalized folios, reader-facing sections, explicit "
+        "Book Model: normalized folios, reader-facing sections, explicit "
         "source descriptors, editorial apparatus, and production colophon.",
         required=(
             "schema_version",
             "profile",
             "doc_id",
+            "catalog_record_id",
             "identity",
             "languages",
             "readers_note",
@@ -260,10 +263,30 @@ def validate_payload(
             raise ValueError(
                 f"{kind} doc_id {doc_id!r} does not match {expected_doc_id!r}"
             )
-    if kind == "page_list":
+    if kind == "metadata":
+        _validate_metadata(payload)
+    elif kind == "page_list":
         _validate_pages(payload["pages"])
     elif kind == "book":
         _validate_book(payload)
+
+
+def _validate_metadata(payload: Mapping[str, Any]) -> None:
+    _validate_catalog_record_id(
+        payload["catalog_record_id"], "metadata catalog_record_id"
+    )
+
+
+def _validate_catalog_record_id(value: object, label: str) -> str | None:
+    if value is None:
+        return None
+    record_id = _string(value, label)
+    if not CATALOG_RECORD_ID_RE.fullmatch(record_id):
+        raise ValueError(
+            f"{label} must be a source-record pointer "
+            "(source-record:<64 hex chars>) or null"
+        )
+    return record_id
 
 
 def _validate_pages(value: object) -> None:
@@ -295,6 +318,7 @@ def _validate_book(payload: Mapping[str, Any]) -> None:
             "schema_version",
             "profile",
             "doc_id",
+            "catalog_record_id",
             "identity",
             "languages",
             "readers_note",
@@ -312,6 +336,7 @@ def _validate_book(payload: Mapping[str, Any]) -> None:
         )
     if root["profile"] != BOOK_PROFILE:
         raise ValueError(f"book profile must be {BOOK_PROFILE!r}")
+    _validate_catalog_record_id(root["catalog_record_id"], "book catalog_record_id")
 
     identity = _object(
         root["identity"],

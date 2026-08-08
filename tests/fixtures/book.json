@@ -1,7 +1,8 @@
 {
-  "schema_version": 1,
-  "profile": "facsimile-spread/v1",
+  "schema_version": 2,
+  "profile": "facsimile-spread",
   "doc_id": "fixture_ms",
+  "catalog_record_id": "source-record:b3a1c2d4e5f60718293a4b5c6d7e8f901a2b3c4d5e6f708192a3b4c5d6e7f809",
   "identity": {
     "title": "Deterministic Codex",
     "author": "Archive Scribe",

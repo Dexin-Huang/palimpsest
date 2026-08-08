@@ -2,6 +2,7 @@
   "status": "transcription_failed",
   "source_url": "https://digi.vatlib.it/iiif/MSS_Pal.lat.1074/manifest.json",
   "doc_id": "vat_pal_lat_1074",
+  "catalog_record_id": null,
   "created_at": "2026-01-30T20:58:40Z",
   "updated_at": "2026-01-31T01:36:59Z",
   "downloaded_count": 0,

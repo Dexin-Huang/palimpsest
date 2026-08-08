@@ -39,6 +39,7 @@ def library(tmp_path):
         doc_dir / "metadata.json",
         {
             "doc_id": DOC,
+            "catalog_record_id": None,
             "source_catalog": {"title": "Test", "archive": "Test Archive"},
         },
     )

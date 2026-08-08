@@ -18,6 +18,7 @@ def _line(
     *,
     raw_title: str | None = None,
     source_modified_at: str | None = None,
+    manifest_url: str | None = None,
 ) -> str:
     value = {
         "source_key": source_key,
@@ -32,6 +33,8 @@ def _line(
     }
     if source_modified_at is not None:
         value["source_modified_at"] = source_modified_at
+    if manifest_url is not None:
+        value["record"]["manifest_url"] = manifest_url
     return json.dumps(value)
 
 
@@ -269,3 +272,76 @@ def test_catalog_is_a_top_level_cli_surface():
         action.choices for action in parser._actions if getattr(action, "choices", None)
     )
     assert "catalog" in choices
+
+
+def test_record_lookup_returns_active_record_with_normalized_claims(tmp_path):
+    source_path = tmp_path / "records.jsonl"
+    _write(
+        source_path,
+        _line(
+            "MS-1",
+            "One",
+            manifest_url="https://archive.test/iiif/1/manifest.json",
+        ),
+        _line("MS-2", "Two"),
+    )
+    with CatalogDB(tmp_path / "catalog.db") as database:
+        database.add_source(
+            "archive-a", "normalized-jsonl", {"path": str(source_path)}
+        )
+        sync_source(database, "archive-a")
+
+        rows = {row["source_key"]: row for row in database.records("archive-a")}
+        first = database.record(rows["MS-1"]["record_id"])
+
+        assert first.record_id == rows["MS-1"]["record_id"]
+        assert first.source_id == "archive-a"
+        assert first.source_key == "MS-1"
+        assert first.revision == 1
+        assert first.source_url == "https://archive.test/MS-1"
+        assert first.record["titles"] == ["One"]
+        assert (
+            first.record["manifest_url"]
+            == "https://archive.test/iiif/1/manifest.json"
+        )
+        assert database.record(rows["MS-2"]["record_id"]).source_key == "MS-2"
+
+
+def test_record_lookup_rejects_unknown_and_tombstoned(tmp_path):
+    source_path = tmp_path / "records.jsonl"
+    _write(source_path, _line("MS-1", "One"), _line("MS-2", "Two"))
+    with CatalogDB(tmp_path / "catalog.db") as database:
+        database.add_source(
+            "archive-a", "normalized-jsonl", {"path": str(source_path)}
+        )
+        sync_source(database, "archive-a")
+
+        with pytest.raises(KeyError, match="unknown catalog record"):
+            database.record("source-record:" + "0" * 64)
+
+        tombstoned_id = {
+            row["source_key"]: row for row in database.records("archive-a")
+        }["MS-2"]["record_id"]
+        _write(source_path, _line("MS-1", "One"))
+        sync_source(database, "archive-a")
+
+        with pytest.raises(ValueError, match="tombstoned"):
+            database.record(tombstoned_id)
+
+
+def test_record_lookup_returns_fresh_claims_not_catalog_state(tmp_path):
+    source_path = tmp_path / "records.jsonl"
+    _write(source_path, _line("MS-1", "One"))
+    with CatalogDB(tmp_path / "catalog.db") as database:
+        database.add_source(
+            "archive-a", "normalized-jsonl", {"path": str(source_path)}
+        )
+        sync_source(database, "archive-a")
+        record_id = database.records("archive-a")[0]["record_id"]
+
+        resolved = database.record(record_id)
+        resolved.record["titles"] = ["Mutated"]
+        again = database.record(record_id)
+
+        assert again.record["titles"] == ["One"]
+        assert database.records("archive-a")[0]["record"]["titles"] == ["One"]

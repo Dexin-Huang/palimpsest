@@ -113,6 +113,7 @@ class Publish(Station):
                 "schema_version": BOOK_SCHEMA_VERSION,
                 "profile": BOOK_PROFILE,
                 "doc_id": job.doc_id,
+                "catalog_record_id": metadata["catalog_record_id"],
                 "identity": {
                     "title": catalog.get("title") or catalog.get("label") or job.doc_id,
                     "author": catalog.get("author"),

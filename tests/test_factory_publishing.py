@@ -77,8 +77,9 @@ def test_full_line_to_book(ledger, library, gateway, fetch):  # noqa: F811
         "f001r",
         "f001v",
     ]
-    assert book["schema_version"] == 1
-    assert book["profile"] == "facsimile-spread/v1"
+    assert book["schema_version"] == 2
+    assert book["profile"] == "facsimile-spread"
+    assert book["catalog_record_id"] is None
     first_folio = book["folios"][0]
     assert first_folio["images"]["original"]["kind"] == "page_image"
     assert first_folio["images"]["enhanced"]["kind"] == "page_image_clean"
@@ -129,6 +130,49 @@ def test_publish_maps_apparatus_to_final_reader_heading(
 
     assert book["sections"][0]["heading"] == "Final Remedies"
     assert book["apparatus"][0]["section_id"] == book["sections"][0]["id"]
+
+
+def test_publish_copies_catalog_record_id_unchanged(
+    ledger, library, gateway, fetch
+):  # noqa: F811
+    run_line(ledger, library)
+    metadata_file = artifact_path(DOC, "metadata", None, library)
+    metadata = read_json(metadata_file)
+    record_id = "source-record:" + "9" * 64
+    metadata["catalog_record_id"] = record_id
+    atomic_write_json(metadata_file, metadata)
+    job = Job(
+        DOC,
+        tuple(line_cases.PAGES),
+        None,
+        library,
+        StationConfig(options={"original_language": "la"}),
+    )
+
+    book = Publish().run(job).payload
+
+    assert book["catalog_record_id"] == record_id
+    validate_payload("book", book, expected_doc_id=DOC)
+
+
+def test_publish_rejects_metadata_without_catalog_record_id(
+    ledger, library, gateway, fetch
+):  # noqa: F811
+    run_line(ledger, library)
+    metadata_file = artifact_path(DOC, "metadata", None, library)
+    metadata = read_json(metadata_file)
+    del metadata["catalog_record_id"]
+    atomic_write_json(metadata_file, metadata)
+    job = Job(
+        DOC,
+        tuple(line_cases.PAGES),
+        None,
+        library,
+        StationConfig(options={"original_language": "la"}),
+    )
+
+    with pytest.raises(KeyError, match="catalog_record_id"):
+        Publish().run(job)
 
 
 def test_publish_rejects_mismatched_editorial_section_counts(
@@ -345,9 +389,9 @@ def test_publication_bundle_exports_renderer_independent_books(
     assert [book.doc_id for book in exported.books] == [DOC]
     payload = read_json(bundle_root / "library.json")
     assert payload["schema_version"] == 2
-    assert payload["profile"] == "palimpsest-library/v2"
+    assert payload["profile"] == "palimpsest-library"
     assert payload["contract"] == "palimpsest-publication"
-    assert payload["contract_version"] == "1.0.0"
+    assert payload["contract_version"] == "2.0.0"
     assert payload["bundle_id"] == exported.bundle_id
     assert [entry["doc_id"] for entry in payload["books"]] == [DOC]
     (record,) = payload["books"]
@@ -355,9 +399,25 @@ def test_publication_bundle_exports_renderer_independent_books(
     assert record["epub"] == f"books/{DOC}/{DOC}.epub"
     assert [folio["page_id"] for folio in record["folios"]] == ["f001r", "f001v"]
     assert all(folio["original"] for folio in record["folios"])
+    assert "catalog_record_id" not in record  # LibraryObject entries are pointer-free
     assert not list(bundle_root.rglob("*.html"))
     assert all((bundle_root / item["path"]).is_file() for item in payload["files"])
     assert set(payload["schemas"]) == {"book", "library"}
+    assert payload["schemas"]["book"]["path"] == "contract/book-object.schema.json"
+    assert (
+        payload["schemas"]["library"]["path"]
+        == "contract/library-object.schema.json"
+    )
+    for name in ("book", "library"):
+        reference = payload["schemas"][name]
+        file_record = next(
+            item for item in payload["files"] if item["path"] == reference["path"]
+        )
+        assert file_record["sha256"] == reference["sha256"]
+    exported_model = read_json(bundle_root / record["model"])
+    assert exported_model["schema_version"] == 2
+    assert exported_model["profile"] == "facsimile-spread"
+    assert exported_model["catalog_record_id"] is None
     publication_bundle.validate_library_object(payload)
 
 

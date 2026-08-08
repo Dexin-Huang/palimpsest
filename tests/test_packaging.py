@@ -78,8 +78,8 @@ def test_wheel_contains_and_resolves_factory_runtime_resources(tmp_path: Path) -
         "palimpsest/factory/recipes/chinese_scroll_rig.yaml",
         "palimpsest/factory/prompts/read/la/diplomatic.txt",
         "palimpsest/factory/prompts/read/zh/foreman_v12.txt",
-        "palimpsest/factory/publication_contract/book-object-v1.schema.json",
-        "palimpsest/factory/publication_contract/library-object-v1.schema.json",
+        "palimpsest/factory/publication_contract/book-object.schema.json",
+        "palimpsest/factory/publication_contract/library-object.schema.json",
     } <= members
     for recipe in recipe_documents.values():
         for step in recipe["line"]:
@@ -171,8 +171,8 @@ print(json.dumps({{
     ]
     assert {"read/la/diplomatic", "read/zh/foreman_v12"} <= set(proof["prompts"])
     assert proof["schemas"] == [
-        "book-object-v1.schema.json",
-        "library-object-v1.schema.json",
+        "book-object.schema.json",
+        "library-object.schema.json",
     ]
     assert proof["name"] == "palimpsest-cli"
     assert proof["version"] == "0.2.0"

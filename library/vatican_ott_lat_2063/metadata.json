@@ -3,6 +3,7 @@
   "status": "downloaded",
   "source_url": "https://digi.vatlib.it/iiif/MSS_Ott.lat.2063/manifest.json",
   "doc_id": "vatican_ott_lat_2063",
+  "catalog_record_id": null,
   "created_at": "2026-02-01T22:31:23Z",
   "updated_at": "2026-02-01T22:58:20Z",
   "downloaded_count": 618,

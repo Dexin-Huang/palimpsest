@@ -21,6 +21,7 @@ from palimpsest.factory.workspace.layout import metadata_path, page_list_path
 REQUEST_HEADERS = {"User-Agent": "palimpsest manuscript recovery factory"}
 TIMEOUT_SECONDS = 30.0
 LOC_MANIFEST_PATH = re.compile(r"^/item/([^/]+)/manifest\.json$")
+CATALOG_RECORD_ID = re.compile(r"^source-record:[0-9a-f]{64}$")
 
 
 def fetch_manifest(url: str) -> dict[str, Any]:
@@ -151,10 +152,22 @@ def build_records(
     manifest_url: str,
     manifest: Mapping[str, Any],
     *,
+    catalog_record_id: str | None = None,
     image_size: int | str = "max",
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Convert a IIIF Presentation 2 or 3 manifest into source contracts."""
+    """Convert a IIIF Presentation 2 or 3 manifest into source contracts.
+
+    ``catalog_record_id`` is the exact catalog record adopted for this work
+    order, or None when the manifest was ingested directly without an
+    authoritative catalog adoption.
+    """
     validate_doc_id(doc_id)
+    if catalog_record_id is not None and not CATALOG_RECORD_ID.fullmatch(
+        catalog_record_id
+    ):
+        raise ValueError(
+            "catalog_record_id must be null or match source-record:<sha256 hex>"
+        )
 
     canvases = _canvases(manifest)
     if not canvases:
@@ -181,6 +194,7 @@ def build_records(
     now = utc_now()
     metadata = {
         "doc_id": doc_id,
+        "catalog_record_id": catalog_record_id,
         "source": {"kind": "iiif", "manifest_url": manifest_url},
         "source_catalog": catalog,
         "created_at": now,

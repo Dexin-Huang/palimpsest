@@ -3,6 +3,7 @@
   "status": "transcribing",
   "source_url": "https://digi.vatlib.it/iiif/MSS_Borg.cin.377/manifest.json",
   "doc_id": "vatican_borg_cin_377",
+  "catalog_record_id": null,
   "created_at": "2026-02-02T00:43:01Z",
   "updated_at": "2026-02-02T01:46:32Z",
   "downloaded_count": 301,

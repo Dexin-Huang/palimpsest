@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://palimpsest.invalid/contracts/library-object-v1.schema.json",
+  "$id": "https://palimpsest.invalid/contracts/library-object.schema.json",
   "title": "LibraryObject",
   "description": "One immutable Palimpsest library release containing published Book objects.",
   "type": "object",
@@ -17,9 +17,9 @@
   ],
   "properties": {
     "schema_version": { "const": 2 },
-    "profile": { "const": "palimpsest-library/v2" },
+    "profile": { "const": "palimpsest-library" },
     "contract": { "const": "palimpsest-publication" },
-    "contract_version": { "const": "1.0.0" },
+    "contract_version": { "const": "2.0.0" },
     "bundle_id": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"

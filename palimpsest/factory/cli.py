@@ -82,7 +82,13 @@ def add_commands(subparsers) -> None:
     doctor.add_argument("--recipes-root", type=Path, default=FACTORY_ROOT / "recipes")
     doctor.add_argument("--json", action="store_true")
 
-    intake.add_argument("--manifest", required=True)
+    intake_source = intake.add_mutually_exclusive_group(required=True)
+    intake_source.add_argument("--manifest", help="Direct IIIF manifest URL")
+    intake_source.add_argument(
+        "--catalog-record-id",
+        help="Adopt the current active catalog record by exact record id",
+    )
+    intake.add_argument("--catalog-db", type=Path, default=CATALOG_DB_PATH)
     intake.add_argument("--recipe", required=True)
     intake.add_argument("--image-size", default="max")
     intake.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
@@ -315,6 +321,7 @@ def cmd_snapshot_restore(args: argparse.Namespace) -> None:
 
 
 def cmd_intake(args: argparse.Namespace) -> None:
+    from palimpsest.catalog.database import CatalogDB
     from palimpsest.factory.core.recipe import load as load_recipe
     from palimpsest.factory.intake import build_records, fetch_manifest, write_records
 
@@ -322,9 +329,25 @@ def cmd_intake(args: argparse.Namespace) -> None:
     image_size = (
         int(args.image_size) if str(args.image_size).isdigit() else args.image_size
     )
-    manifest = fetch_manifest(args.manifest)
+    if args.catalog_record_id is not None:
+        with CatalogDB(args.catalog_db) as catalog:
+            record = catalog.record(args.catalog_record_id)
+        manifest_url = record.record.get("manifest_url")
+        if not manifest_url:
+            raise ValueError(
+                f"catalog record {args.catalog_record_id!r} has no manifest URL"
+            )
+        catalog_record_id = record.record_id
+    else:
+        manifest_url = args.manifest
+        catalog_record_id = None
+    manifest = fetch_manifest(manifest_url)
     metadata, page_list = build_records(
-        args.doc_id, args.manifest, manifest, image_size=image_size
+        args.doc_id,
+        manifest_url,
+        manifest,
+        catalog_record_id=catalog_record_id,
+        image_size=image_size,
     )
     with Ledger(args.db) as ledger:
         if ledger.item(args.doc_id) is not None:
