@@ -26,7 +26,7 @@ from palimpsest.factory.snapshot import (
     restore_snapshot,
     verify_snapshot,
 )
-from palimpsest import selection as selection_module
+from palimpsest import survey as survey_module
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -140,18 +140,19 @@ def _catalog_line(source_key: str) -> str:
     )
 
 
-def test_selection_samples_pages_with_qwen_and_writes_auditable_decisions(
-    tmp_path, monkeypatch
-):
+def test_survey_persists_decisions_and_advances_the_window(tmp_path, monkeypatch):
     source_path = tmp_path / "records.jsonl"
-    source_path.write_text(_catalog_line("MS-1") + "\n", encoding="utf-8")
+    source_path.write_text(
+        _catalog_line("MS-1") + "\n" + _catalog_line("MS-2") + "\n",
+        encoding="utf-8",
+    )
     database_path = tmp_path / "catalog.db"
     with CatalogDB(database_path) as database:
         database.add_source("archive-a", "normalized-jsonl", {"path": str(source_path)})
         sync_source(database, "archive-a")
 
     monkeypatch.setattr(
-        selection_module,
+        survey_module,
         "_sample_record",
         lambda _record, _count: (
             [
@@ -162,17 +163,19 @@ def test_selection_samples_pages_with_qwen_and_writes_auditable_decisions(
                     "url": "https://images.test/3.jpg",
                 }
             ],
-            (selection_module.ImageContent(b"jpeg", mime="image/jpeg"),),
+            (survey_module.ImageContent(b"jpeg", mime="image/jpeg"),),
         ),
     )
     requests = []
 
     def fake_generate_json(request):
         requests.append(request)
+        key = request.prompt.split('"source_key": "MS-')[1][0]
+        verdict = "prioritize" if key == "1" else "skip"
         return (
             {
-                "verdict": "prioritize",
-                "score": 91,
+                "verdict": verdict,
+                "score": 91 if key == "1" else 20,
                 "summary": "Unpublished colophon with readable text.",
                 "significance": "A dated witness.",
                 "language_or_script": "Chinese",
@@ -190,26 +193,56 @@ def test_selection_samples_pages_with_qwen_and_writes_auditable_decisions(
             ),
         )
 
-    monkeypatch.setattr(selection_module, "generate_json", fake_generate_json)
-    output = tmp_path / "selection.json"
+    monkeypatch.setattr(survey_module, "generate_json", fake_generate_json)
+    survey_db_path = tmp_path / "survey.db"
+    output = tmp_path / "survey.json"
 
-    manifest = selection_module.select_catalog(
+    first = survey_module.survey_catalog(
         source_id="archive-a",
         catalog_db=database_path,
+        survey_db=survey_db_path,
         library_root=tmp_path,
         record_limit=1,
         page_samples=3,
         recommendation_limit=1,
         after=None,
+        reset_cursor=False,
         max_cost_usd=1.0,
         output=output,
     )
 
     assert requests[0].model == "token-plan/qwen3.8-max"
     assert len(requests[0].images) == 1
-    assert manifest["evaluations"][0]["sampled_pages"][0]["order"] == 3
-    assert manifest["evaluations"][0]["usage"]["cost_usd"] == 0.02
-    assert json.loads(output.read_text(encoding="utf-8")) == manifest
+    assert first["evaluations"][0]["sampled_pages"][0]["order"] == 3
+    assert first["evaluations"][0]["usage"]["cost_usd"] == 0.02
+    assert json.loads(output.read_text(encoding="utf-8")) == first
+
+    with survey_module.SurveyDB(survey_db_path) as survey:
+        stats = survey.stats("archive-a")
+        assert stats["evaluated"] == 1
+        assert stats["recommended"] == 1
+        cursor = survey.cursor_for("archive-a")
+        assert cursor == "MS-1"
+
+    # Second run resumes after the cursor and never re-pays for MS-1.
+    second = survey_module.survey_catalog(
+        source_id="archive-a",
+        catalog_db=database_path,
+        survey_db=survey_db_path,
+        library_root=tmp_path,
+        record_limit=1,
+        page_samples=3,
+        recommendation_limit=1,
+        after=None,
+        reset_cursor=False,
+        max_cost_usd=1.0,
+        output=tmp_path / "survey-2.json",
+    )
+    assert [e["source_key"] for e in second["evaluations"]] == ["MS-2"]
+    assert len(requests) == 2
+    with survey_module.SurveyDB(survey_db_path) as survey:
+        assert survey.cursor_for("archive-a") == "MS-2"
+        assert survey.stats("archive-a")["evaluated"] == 2
 
 
 def test_active_queue_is_bounded_by_count_and_observed_cost(

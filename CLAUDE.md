@@ -22,10 +22,12 @@ python -m palimpsest catalog source add-gallica pelliot-chinois \
 python -m palimpsest catalog sync pelliot-chinois
 ```
 
-Sample catalog records and shortlist candidates (paid):
+Survey a bounded window and persist decisions as evidence (paid):
 
 ```
-python -m palimpsest select pelliot-chinois --limit 12 --pages 3 --keep 5 --max-cost 1
+python -m palimpsest survey run pelliot-chinois --limit 12 --pages 3 --keep 5 --max-cost 1
+python -m palimpsest survey status pelliot-chinois
+python -m palimpsest survey queue pelliot-chinois
 ```
 
 Intake from an active catalog record (catalog-backed):

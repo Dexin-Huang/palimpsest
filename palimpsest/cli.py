@@ -4,7 +4,7 @@ import argparse
 
 from palimpsest.catalog.cli import add_catalog_commands
 from palimpsest.factory.cli import add_commands
-from palimpsest.selection import add_selection_command
+from palimpsest.survey import add_survey_command
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -12,7 +12,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_catalog_commands(subparsers)
     add_commands(subparsers)
-    add_selection_command(subparsers)
+    add_survey_command(subparsers)
     return parser
 
 
