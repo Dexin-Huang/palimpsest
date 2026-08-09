@@ -1,4 +1,4 @@
-"""Durable survey store: cursor advancement, evidence, and the derived queue."""
+"""Durable survey store: hit checks, cursor advancement, evidence, and the queue."""
 
 from __future__ import annotations
 
@@ -57,11 +57,23 @@ def _noop_sample(_record, _count):
     )
 
 
-def _fake_generator(verdicts: dict[str, dict], cost_usd: float = 0.01):
+def _result(checks: dict[str, bool], summary: str = "Manuscript.") -> dict:
+    full = {name: False for name in survey_module._CHECK_NAMES}
+    full.update(checks)
+    return {
+        "what_was_read": "Sampled pages show handwritten text in an unidentified script.",
+        "content_guess": "A manuscript whose content could not be determined from the samples.",
+        "summary": summary,
+        "checks": full,
+        "risks": ["Page 1 has faded ink."],
+    }
+
+
+def _fake_generator(by_key: dict[str, dict], cost_usd: float = 0.01):
     def generate(request):
         key = json.loads(request.prompt.split("Evidence:\n", 1)[1])["source_key"]
         return (
-            verdicts[key],
+            by_key[key],
             ModelResponse(
                 text="{}",
                 model=request.model,
@@ -79,7 +91,7 @@ def _run(
     tmp_path,
     *,
     keys=("MS-1",),
-    verdicts=None,
+    checks=None,
     limit=2,
     max_cost=1.0,
     monkeypatch=None,
@@ -89,21 +101,9 @@ def _run(
 ):
     database_path = _seed_catalog(tmp_path, *keys)
     if generator is None:
-        if verdicts is None:
-            verdicts = {
-                key: {
-                    "verdict": "consider",
-                    "score": 60,
-                    "summary": "Readable manuscript.",
-                    "significance": "A witness.",
-                    "language_or_script": "Chinese",
-                    "transcription_feasibility": "medium",
-                    "evidence": ["Sample page 1 contains text."],
-                    "risks": [],
-                }
-                for key in keys
-            }
-        generator = _fake_generator(verdicts)
+        if checks is None:
+            checks = {"sustained_text": True, "handwritten": True}
+        generator = _fake_generator({key: _result(checks) for key in keys})
     assert monkeypatch is not None
     monkeypatch.setattr(survey_module, "_sample_record", _noop_sample)
     monkeypatch.setattr(survey_module, "generate_json", generator)
@@ -122,6 +122,45 @@ def _run(
     )
 
 
+def test_hits_are_the_sum_of_true_checks():
+    assert survey_module._hits(_result({"sustained_text": True})) == 1
+    assert (
+        survey_module._hits(
+            _result(
+                {
+                    "sustained_text": True,
+                    "handwritten": True,
+                    "language_identified": True,
+                    "transcribable": True,
+                }
+            )
+        )
+        == 4
+    )
+    assert survey_module._hits(_result({})) == 0
+
+
+def test_survey_persists_checks_and_advances_the_window(tmp_path, monkeypatch):
+    report = _run(tmp_path, keys=("MS-1", "MS-2"), limit=1, monkeypatch=monkeypatch)
+
+    assert report["evaluations"][0]["result"]["checks"]["handwritten"] is True
+    assert report["recommendations"][0]["hits"] == 2
+    assert report["schema_version"] == 2
+
+    with survey_module.SurveyDB(tmp_path / "survey.db") as survey:
+        stats = survey.stats("archive-a")
+        assert stats["evaluated"] == 1
+        assert stats["hits"] == 1
+        assert survey.cursor_for("archive-a") == "MS-1"
+
+    # Second run resumes after the cursor and never re-pays for MS-1.
+    second = _run(tmp_path, keys=("MS-1", "MS-2"), limit=1, monkeypatch=monkeypatch)
+    assert [e["source_key"] for e in second["evaluations"]] == ["MS-2"]
+    with survey_module.SurveyDB(tmp_path / "survey.db") as survey:
+        assert survey.cursor_for("archive-a") == "MS-2"
+        assert survey.stats("archive-a")["evaluated"] == 2
+
+
 def test_survey_stops_at_the_cost_ceiling(tmp_path, monkeypatch):
     report = _run(
         tmp_path,
@@ -133,13 +172,11 @@ def test_survey_stops_at_the_cost_ceiling(tmp_path, monkeypatch):
     assert report["cost_usd"] == pytest.approx(0.02)
     assert report["stop_reason"] == "the $0.0150 cost ceiling was reached"
     assert [e["source_key"] for e in report["evaluations"]] == ["MS-1", "MS-2"]
-    # The run is recorded; the cursor stops before the unspent record.
     with survey_module.SurveyDB(tmp_path / "survey.db") as survey:
         assert survey.cursor_for("archive-a") == "MS-2"
-        assert survey.stats("archive-a")["evaluated"] == 2
 
 
-def test_survey_records_failures_and_advances_past_them(tmp_path, monkeypatch):
+def test_survey_records_failures_and_does_not_advance(tmp_path, monkeypatch):
     def generate(_request):
         raise survey_module.GatewayError("provider down")
 
@@ -154,17 +191,17 @@ def test_survey_records_failures_and_advances_past_them(tmp_path, monkeypatch):
     assert report["cost_usd"] == 0.0
     assert len(report["failures"]) == 2
     assert report["evaluations"] == []
-    # Failed records do not advance the window: the next run retries them.
     with survey_module.SurveyDB(tmp_path / "survey.db") as survey:
         assert survey.cursor_for("archive-a") is None
 
 
-def test_survey_queue_excludes_adopted_records(tmp_path, monkeypatch):
+def test_survey_queue_lists_hits_and_excludes_adopted(tmp_path, monkeypatch):
     _run(tmp_path, keys=("MS-1", "MS-2"), monkeypatch=monkeypatch)
 
     with survey_module.SurveyDB(tmp_path / "survey.db") as survey:
         evaluations = survey.latest_evaluations("archive-a")
     assert len(evaluations) == 2
+    assert all(entry["hits"] == 2 for entry in evaluations)
 
     # Adopt MS-1 through a workspace metadata pointer, as intake would.
     workspace = tmp_path / "library" / "doc_ms1"
@@ -184,7 +221,6 @@ def test_survey_queue_excludes_adopted_records(tmp_path, monkeypatch):
 
 
 def test_survey_skips_records_already_in_the_library(tmp_path, monkeypatch):
-    # MS-1's manifest already exists in a workspace, so it must not be paid for.
     workspace = tmp_path / "doc_ms1"
     workspace.mkdir(parents=True)
     (workspace / "metadata.json").write_text(
@@ -214,7 +250,6 @@ def test_survey_cursor_override_and_reset(tmp_path, monkeypatch):
     with survey_module.SurveyDB(tmp_path / "survey.db") as survey:
         assert survey.cursor_for("archive-a") == "MS-2"
 
-    # An explicit --after overrides the stored cursor without losing evidence.
     report = _run(
         tmp_path,
         keys=("MS-1", "MS-2", "MS-3"),
@@ -225,6 +260,19 @@ def test_survey_cursor_override_and_reset(tmp_path, monkeypatch):
     assert [e["source_key"] for e in report["evaluations"]] == ["MS-3"]
     with survey_module.SurveyDB(tmp_path / "survey.db") as survey:
         assert survey.cursor_for("archive-a") == "MS-3"
+
+
+def test_survey_schema_version_guard_rejects_stale_store(tmp_path, monkeypatch):
+    store = tmp_path / "survey.db"
+    with survey_module.SurveyDB(store):
+        pass
+    import sqlite3
+
+    with sqlite3.connect(store) as connection:
+        connection.execute("PRAGMA user_version = 99")
+    with pytest.raises(RuntimeError, match="schema 99 is not supported"):
+        with survey_module.SurveyDB(store):
+            pass
 
 
 def test_survey_cli_surface_replaces_select(tmp_path):

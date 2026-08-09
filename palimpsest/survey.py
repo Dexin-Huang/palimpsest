@@ -1,20 +1,24 @@
 """Durable model-grounded survey between the source catalog and factory intake.
 
 A survey run samples page images from a bounded catalog window, asks the
-triage model for a grounded verdict (the determinant of what the item is,
-based on what could be read), and persists every evaluation as evidence.
+triage model to describe what it read (neutral) and to guess the content,
+then answer independent yes/no checks. Every evaluation is persisted as
+evidence. The derived hit score is the number of true checks (0-5), computed
+by us — the model never emits a verdict or an arbitrary score.
+
 The survey store keeps:
 
 - ``survey_evaluations``: one immutable row per (record_id, revision) with
-  the verdict, score, evidence, sampled pages, model identity, and cost;
+  the checks, hit score, what_was_read, content guess, sampled pages, model
+  identity, and cost;
 - ``survey_runs``: an audit row per executed window;
 - ``survey_cursor``: the durable window position per source, so repeated
   runs advance without re-paying for already-surveyed records.
 
-The queue is derived at read time: recommendations (verdict != skip) whose
-manifest is not already in the library and whose record is not adopted by a
-workspace ``catalog_record_id``. Nothing in this module creates a work order;
-intake remains the explicit operator action.
+The queue is derived at read time: evaluations with hits > 0 whose manifest
+is not already in the library and whose record is not adopted by a workspace
+``catalog_record_id``. Nothing in this module creates a work order; intake
+remains the explicit operator action.
 """
 
 from __future__ import annotations
@@ -53,35 +57,44 @@ DEFAULT_RECOMMENDATIONS = 5
 DEFAULT_MAX_COST_USD = 1.0
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 SURVEY_DB_PATH = LIBRARY_ROOT / "survey.db"
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+
+_CHECK_NAMES = (
+    "sustained_text",
+    "handwritten",
+    "language_identified",
+    "transcribable",
+    "distinctive",
+)
 
 _RESULT_SCHEMA: Mapping[str, Any] = {
     "type": "object",
     "properties": {
-        "verdict": {"type": "string", "enum": ["prioritize", "consider", "skip"]},
-        "score": {"type": "integer", "minimum": 0, "maximum": 100},
+        "what_was_read": {"type": "string"},
+        "content_guess": {"type": "string"},
         "summary": {"type": "string"},
-        "significance": {"type": "string"},
-        "language_or_script": {"type": "string"},
-        "transcription_feasibility": {
-            "type": "string",
-            "enum": ["high", "medium", "low"],
+        "checks": {
+            "type": "object",
+            "properties": {name: {"type": "boolean"} for name in _CHECK_NAMES},
+            "required": list(_CHECK_NAMES),
+            "additionalProperties": False,
         },
-        "evidence": {"type": "array", "items": {"type": "string"}},
         "risks": {"type": "array", "items": {"type": "string"}},
     },
     "required": [
-        "verdict",
-        "score",
+        "what_was_read",
+        "content_guess",
         "summary",
-        "significance",
-        "language_or_script",
-        "transcription_feasibility",
-        "evidence",
+        "checks",
         "risks",
     ],
     "additionalProperties": False,
 }
+
+
+def _hits(result: Mapping[str, Any]) -> int:
+    """The derived score: the number of true checks (0-5), computed by us."""
+    return sum(1 for name in _CHECK_NAMES if result["checks"].get(name) is True)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS survey_schema (
@@ -96,13 +109,11 @@ CREATE TABLE IF NOT EXISTS survey_evaluations (
     source_key TEXT NOT NULL,
     source_url TEXT NOT NULL,
     manifest_url TEXT NOT NULL,
-    verdict TEXT NOT NULL,
-    score INTEGER NOT NULL,
+    hits INTEGER NOT NULL,
     summary TEXT NOT NULL,
-    significance TEXT NOT NULL,
-    language_or_script TEXT NOT NULL,
-    transcription_feasibility TEXT NOT NULL,
-    evidence_json TEXT NOT NULL,
+    what_was_read TEXT NOT NULL,
+    content_guess TEXT NOT NULL,
+    checks_json TEXT NOT NULL,
     risks_json TEXT NOT NULL,
     sampled_pages_json TEXT NOT NULL,
     model TEXT NOT NULL,
@@ -129,7 +140,7 @@ CREATE TABLE IF NOT EXISTS survey_cursor (
     last_source_key TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 """
 
 
@@ -173,6 +184,12 @@ class SurveyDB:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self._path)
         self._connection.row_factory = sqlite3.Row
+        stored = self._connection.execute("PRAGMA user_version").fetchone()[0]
+        if stored not in (0, _SCHEMA_VERSION):
+            raise RuntimeError(
+                f"survey store schema {stored} is not supported by this version "
+                f"(expected {_SCHEMA_VERSION}); remove {self._path} and re-survey"
+            )
         self._connection.executescript(_SCHEMA)
         return self
 
@@ -250,11 +267,10 @@ class SurveyDB:
             """
             INSERT INTO survey_evaluations (
                 record_id, revision, source_id, source_key, source_url,
-                manifest_url, verdict, score, summary, significance,
-                language_or_script, transcription_feasibility, evidence_json,
-                risks_json, sampled_pages_json, model, prompt_name, prompt_hash,
-                cost_usd, run_id, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                manifest_url, hits, summary, what_was_read, content_guess,
+                checks_json, risks_json, sampled_pages_json, model,
+                prompt_name, prompt_hash, cost_usd, run_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 entry["record_id"],
@@ -263,13 +279,11 @@ class SurveyDB:
                 entry["source_key"],
                 entry["source_url"],
                 entry["manifest_url"],
-                result["verdict"],
-                result["score"],
+                _hits(result),
                 result["summary"],
-                result["significance"],
-                result["language_or_script"],
-                result["transcription_feasibility"],
-                json.dumps(result["evidence"], ensure_ascii=False),
+                result["what_was_read"],
+                result["content_guess"],
+                json.dumps(result["checks"], ensure_ascii=False),
                 json.dumps(result["risks"], ensure_ascii=False),
                 json.dumps(entry["sampled_pages"], ensure_ascii=False),
                 usage["resolved_model"],
@@ -287,7 +301,7 @@ class SurveyDB:
             """
             SELECT * FROM survey_evaluations
             WHERE source_id = ?
-            ORDER BY score DESC, source_key
+            ORDER BY hits DESC, source_key
             """,
             (source_id,),
         ).fetchall()
@@ -310,16 +324,16 @@ class SurveyDB:
             "SELECT COUNT(*) FROM survey_evaluations WHERE source_id = ?",
             (source_id,),
         ).fetchone()[0]
-        recommendations = self._connection.execute(
+        hits = self._connection.execute(
             """
             SELECT COUNT(*) FROM survey_evaluations
-            WHERE source_id = ? AND verdict != 'skip'
+            WHERE source_id = ? AND hits > 0
             """,
             (source_id,),
         ).fetchone()[0]
         return {
             "evaluated": evaluations,
-            "recommended": recommendations,
+            "hits": hits,
         }
 
 
@@ -384,8 +398,7 @@ def cmd_survey_run(args: argparse.Namespace) -> None:
     print(output)
     for result in report["recommendations"]:
         print(
-            f"{result['score']:>3}  {result['verdict']:<10}  "
-            f"{result['source_key']}  {result['summary']}"
+            f"{result['hits']:>2}/5  {result['source_key']}  {result['summary']}"
         )
     if report["stop_reason"] is not None:
         print(f"stopped: {report['stop_reason']}")
@@ -400,7 +413,7 @@ def cmd_survey_status(args: argparse.Namespace) -> None:
         run = survey.latest_run(args.source_id)
     print(
         f"source={args.source_id} eligible={eligible} "
-        f"evaluated={stats['evaluated']} recommended={stats['recommended']} "
+        f"evaluated={stats['evaluated']} hits={stats['hits']} "
         f"remaining={eligible - stats['evaluated']}"
     )
     if cursor:
@@ -419,18 +432,17 @@ def cmd_survey_queue(args: argparse.Namespace) -> None:
     queued = [
         entry
         for entry in evaluations
-        if entry["verdict"] != "skip" and entry["record_id"] not in adopted
+        if entry["hits"] > 0 and entry["record_id"] not in adopted
     ]
     if args.keep:
         queued = queued[: args.keep]
     for entry in queued:
-        evidence = json.loads(entry["evidence_json"])
-        print(
-            f"{entry['score']:>3}  {entry['verdict']:<10}  {entry['source_key']}  "
-            f"{entry['summary']}"
-        )
-        for line in evidence:
-            print(f"         evidence: {line}")
+        checks = json.loads(entry["checks_json"])
+        true_checks = ", ".join(name for name in _CHECK_NAMES if checks.get(name))
+        print(f"{entry['hits']:>2}/5  {entry['source_key']}  {entry['summary']}")
+        print(f"         checks: {true_checks}")
+        print(f"         content: {entry['content_guess']}")
+        print(f"         read:    {entry['what_was_read']}")
     print(f"queue size: {len(queued)}")
 
 
@@ -541,20 +553,21 @@ def survey_catalog(
             survey.advance_cursor(source_id, last_key)
 
     recommendations = sorted(
-        (entry for entry in evaluations if entry["result"]["verdict"] != "skip"),
-        key=lambda entry: (-entry["result"]["score"], entry["source_key"]),
+        (entry for entry in evaluations if _hits(entry["result"]) > 0),
+        key=lambda entry: (-_hits(entry["result"]), entry["source_key"]),
     )[:recommendation_limit]
     flattened = [
         {
             "record_id": entry["record_id"],
             "source_key": entry["source_key"],
             "manifest_url": entry["manifest_url"],
+            "hits": _hits(entry["result"]),
             **entry["result"],
         }
         for entry in recommendations
     ]
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "created_at": _utc_timestamp(),
         "source_id": source_id,
         "after_source_key": cursor,

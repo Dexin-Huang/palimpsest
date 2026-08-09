@@ -72,13 +72,14 @@ python -m palimpsest survey run SOURCE_ID \
 ```
 
 Each run samples page images from the current catalog window, asks the triage
-model for a grounded verdict (the determinant of what the item is, based on
-what could be read) and a 0-100 score, and persists every decision as
-immutable evidence in `library/survey.db` (`survey_evaluations`,
-`survey_runs`). The window position is durable: the next run resumes after the
-last evaluated record, already-surveyed records are never re-paid, and records
-whose manifest already exists in the library are skipped. `--after SOURCE_KEY`
-overrides the cursor; `--reset-cursor` starts the window over.
+model to describe what it read (neutral) and to guess the content, then answer
+independent yes/no checks; the hit score is the number of true checks (0-5),
+computed by us, and every decision is persisted as immutable evidence in
+`library/survey.db` (`survey_evaluations`, `survey_runs`). The window position
+is durable: the next run resumes after the last evaluated record,
+already-surveyed records are never re-paid, and records whose manifest already
+exists in the library are skipped. `--after SOURCE_KEY` overrides the cursor;
+`--reset-cursor` starts the window over.
 
 Inspect progress and the derived queue:
 
@@ -87,10 +88,10 @@ python -m palimpsest survey status SOURCE_ID
 python -m palimpsest survey queue SOURCE_ID
 ```
 
-`status` reports eligible, evaluated, recommended, remaining, and last-run
-cost. `queue` lists recommendations (verdict != skip) that are not yet adopted
-by a workspace `catalog_record_id`, newest evidence first, with the model's
-grounded evidence lines.
+`status` reports eligible, evaluated, hits, remaining, and last-run cost.
+`queue` lists evaluations with hits > 0 that are not yet adopted by a
+workspace `catalog_record_id`, hit score first, with the true checks, the
+content guess, and the neutral what-was-read description.
 
 Catalog presence and a model recommendation do not create a production work
 order. An operator chooses either an active catalog record (by exact record

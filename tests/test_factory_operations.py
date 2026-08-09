@@ -171,16 +171,15 @@ def test_survey_persists_decisions_and_advances_the_window(tmp_path, monkeypatch
     def fake_generate_json(request):
         requests.append(request)
         key = request.prompt.split('"source_key": "MS-')[1][0]
-        verdict = "prioritize" if key == "1" else "skip"
+        checks = {"sustained_text": True, "handwritten": True}
+        if key == "2":
+            checks = {}
         return (
             {
-                "verdict": verdict,
-                "score": 91 if key == "1" else 20,
+                "what_was_read": "Sampled page 3 shows a dated colophon in a readable hand.",
+                "content_guess": "A colophon-bearing manuscript.",
                 "summary": "Unpublished colophon with readable text.",
-                "significance": "A dated witness.",
-                "language_or_script": "Chinese",
-                "transcription_feasibility": "high",
-                "evidence": ["Sample page 3 contains a dated colophon."],
+                "checks": checks,
                 "risks": ["Outer margin is damaged."],
             },
             ModelResponse(
@@ -220,7 +219,7 @@ def test_survey_persists_decisions_and_advances_the_window(tmp_path, monkeypatch
     with survey_module.SurveyDB(survey_db_path) as survey:
         stats = survey.stats("archive-a")
         assert stats["evaluated"] == 1
-        assert stats["recommended"] == 1
+        assert stats["hits"] == 1
         cursor = survey.cursor_for("archive-a")
         assert cursor == "MS-1"
 
