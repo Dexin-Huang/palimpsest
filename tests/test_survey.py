@@ -558,6 +558,54 @@ def test_survey_cost_gate_stops_dispatch_before_spending_past_ceiling(
         assert survey.cursor_for("archive-a") == "MS-2"
 
 
+def test_manifest_fetch_retries_archive_rate_limits(tmp_path, monkeypatch):
+    import requests as requests_module
+
+    calls = {"count": 0}
+
+    def flaky_fetch(url):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            response = requests_module.Response()
+            response.status_code = 429
+            response.url = url
+            raise requests_module.HTTPError(
+                "429 Too Many Requests for url: " + url, response=response
+            )
+        return {"type": "Manifest", "items": []}
+
+    monkeypatch.setattr(survey_module, "fetch_manifest", flaky_fetch)
+    monkeypatch.setattr(survey_module, "_RETRY_BACKOFF_S", 0.0)
+
+    manifest = survey_module._fetch_manifest_retry("https://archive.test/manifest")
+    assert manifest == {"type": "Manifest", "items": []}
+    assert calls["count"] == 2
+
+
+def test_image_download_retries_archive_rate_limits(tmp_path, monkeypatch):
+    import requests as requests_module
+
+    calls = {"count": 0}
+
+    def flaky_download(url):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            response = requests_module.Response()
+            response.status_code = 429
+            response.url = url
+            raise requests_module.HTTPError(
+                "429 Too Many Requests for url: " + url, response=response
+            )
+        return survey_module.ImageContent(b"jpeg", mime="image/jpeg")
+
+    monkeypatch.setattr(survey_module, "_download_image_once", flaky_download)
+    monkeypatch.setattr(survey_module, "_RETRY_BACKOFF_S", 0.0)
+
+    content = survey_module._download_image("https://archive.test/1.jpg")
+    assert content.mime == "image/jpeg"
+    assert calls["count"] == 2
+
+
 def test_filter_rules_file_rejects_unknown_fields(tmp_path):
     rules = tmp_path / "rules.json"
     rules.write_text(json.dumps({"bogus": 1}), encoding="utf-8")

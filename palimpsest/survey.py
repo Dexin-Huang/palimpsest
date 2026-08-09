@@ -26,6 +26,7 @@ import argparse
 import json
 import sqlite3
 import threading
+import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
@@ -54,6 +55,11 @@ DEFAULT_MAX_COST_USD = 10.0
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 SURVEY_DB_PATH = LIBRARY_ROOT / "survey.db"
 _SCHEMA_VERSION = 3
+_ARCHIVE_MAX_CONCURRENT = 2
+_ARCHIVE_RETRIES = 3
+_RETRY_BACKOFF_S = 5.0
+
+_archive_slots = threading.BoundedSemaphore(_ARCHIVE_MAX_CONCURRENT)
 
 TASK = (
     "Perform the survey defined in AGENTS.md: read evidence/catalog.json and "
@@ -760,7 +766,7 @@ def _sample_record(
     samples_dir: Path,
 ) -> tuple[list[dict[str, Any]], list[Path]]:
     manifest_url = record["record"]["manifest_url"]
-    manifest = fetch_manifest(manifest_url)
+    manifest = _fetch_manifest_retry(manifest_url)
     _, page_list = build_records(
         "catalog_survey", manifest_url, manifest, image_size=1200
     )
@@ -794,29 +800,64 @@ def _evenly_spaced(pages: list[dict[str, Any]], count: int) -> list[dict[str, An
 
 
 def _download_image(url: str) -> ImageContent:
-    with requests.get(
-        url,
-        timeout=TIMEOUT_SECONDS,
-        headers=REQUEST_HEADERS,
-        stream=True,
-    ) as response:
-        response.raise_for_status()
-        mime = (
-            response.headers.get("Content-Type", "").partition(";")[0].strip().lower()
-        )
-        if not mime.startswith("image/"):
-            raise ValueError(
-                f"Sample page is not an image: {url} ({mime or 'unknown'})"
+    last_error: Exception | None = None
+    for attempt in range(_ARCHIVE_RETRIES):
+        try:
+            return _download_image_once(url)
+        except requests.HTTPError as error:
+            last_error = error
+            time.sleep(_RETRY_BACKOFF_S * (attempt + 1))
+    assert last_error is not None
+    raise last_error
+
+
+def _download_image_once(url: str) -> ImageContent:
+    with _archive_slots:
+        with requests.get(
+            url,
+            timeout=TIMEOUT_SECONDS,
+            headers=REQUEST_HEADERS,
+            stream=True,
+        ) as response:
+            response.raise_for_status()
+            mime = (
+                response.headers.get("Content-Type", "").partition(";")[0].strip().lower()
             )
-        declared_size = response.headers.get("Content-Length")
-        if declared_size is not None and int(declared_size) > MAX_IMAGE_BYTES:
-            raise ValueError(f"Sample page exceeds {MAX_IMAGE_BYTES} bytes: {url}")
-        body = bytearray()
-        for chunk in response.iter_content(1024 * 1024):
-            body.extend(chunk)
-            if len(body) > MAX_IMAGE_BYTES:
+            if not mime.startswith("image/"):
+                raise ValueError(
+                    f"Sample page is not an image: {url} ({mime or 'unknown'})"
+                )
+            declared_size = response.headers.get("Content-Length")
+            if declared_size is not None and int(declared_size) > MAX_IMAGE_BYTES:
                 raise ValueError(f"Sample page exceeds {MAX_IMAGE_BYTES} bytes: {url}")
+            body = bytearray()
+            for chunk in response.iter_content(1024 * 1024):
+                body.extend(chunk)
+                if len(body) > MAX_IMAGE_BYTES:
+                    raise ValueError(f"Sample page exceeds {MAX_IMAGE_BYTES} bytes: {url}")
     return ImageContent(bytes(body), mime=mime)
+
+
+def _fetch_manifest_retry(url: str) -> dict[str, Any]:
+    """Fetch a manifest with bounded backoff on archive rate limits.
+
+    The shared ``fetch_manifest`` fails hard on 429, which is correct for
+    single intakes but wrong for the parallel survey: Gallica throttles
+    concurrent IIIF requests, and a single 429 should not waste a paid
+    agent cell. This wrapper retries the archive, throttling the whole
+    survey to ``_ARCHIVE_MAX_CONCURRENT`` in-flight archive requests so
+    the workers do not blast the archive simultaneously.
+    """
+    last_error: Exception | None = None
+    for attempt in range(_ARCHIVE_RETRIES):
+        try:
+            with _archive_slots:
+                return fetch_manifest(url)
+        except requests.HTTPError as error:
+            last_error = error
+            time.sleep(_RETRY_BACKOFF_S * (attempt + 1))
+    assert last_error is not None
+    raise last_error
 
 
 def _work_root(library_root: Path, source_id: str, record_id: str) -> Path:
