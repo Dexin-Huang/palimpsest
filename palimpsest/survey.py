@@ -25,6 +25,8 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+import threading
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -47,6 +49,7 @@ SURVEY_MODEL = "gpt-5.6-luna"
 SURVEY_PROMPT = "selection/catalog/checklist"
 DEFAULT_RECORD_LIMIT = 12
 DEFAULT_PAGE_SAMPLES = 3
+DEFAULT_WORKERS = 3
 DEFAULT_MAX_COST_USD = 10.0
 MAX_IMAGE_BYTES = 12 * 1024 * 1024
 SURVEY_DB_PATH = LIBRARY_ROOT / "survey.db"
@@ -355,6 +358,12 @@ def add_survey_command(subparsers: argparse._SubParsersAction) -> None:
     run.add_argument("--library-root", type=Path, default=LIBRARY_ROOT)
     run.add_argument("--limit", type=_positive_int, default=DEFAULT_RECORD_LIMIT)
     run.add_argument("--pages", type=_positive_int, default=DEFAULT_PAGE_SAMPLES)
+    run.add_argument(
+        "--workers",
+        type=_positive_int,
+        default=DEFAULT_WORKERS,
+        help="Concurrent agent cells (default: 3)",
+    )
     run.add_argument("--keep", type=_positive_int, default=10)
     run.add_argument("--after", default=None, metavar="SOURCE_KEY")
     run.add_argument("--reset-cursor", action="store_true")
@@ -395,6 +404,7 @@ def cmd_survey_run(args: argparse.Namespace) -> None:
         library_root=args.library_root,
         record_limit=args.limit,
         page_samples=args.pages,
+        workers=args.workers,
         after=args.after,
         reset_cursor=args.reset_cursor,
         max_cost_usd=args.max_cost,
@@ -461,6 +471,43 @@ def cmd_survey_filter(args: argparse.Namespace) -> None:
     print(f"queue size: {len(queued)}")
 
 
+class _CostGate:
+    """Thread-safe cost ceiling shared across parallel survey cells.
+
+    ``can_continue`` is checked before dispatching each new cell; the ceiling
+    is therefore approximate up to ``workers`` in flight, which is the point:
+    we never spend past the ceiling, and in-flight cells always finish.
+    """
+
+    def __init__(self, ceiling: float):
+        self._ceiling = ceiling
+        self._lock = threading.Lock()
+        self._total: float | None = 0.0
+        self.stop_reason: str | None = None
+
+    def can_continue(self) -> bool:
+        with self._lock:
+            if self._total is None:
+                self.stop_reason = "a prior agent call returned unknown cost"
+                return False
+            if self._total >= self._ceiling:
+                self.stop_reason = f"the ${self._ceiling:.4f} cost ceiling was reached"
+                return False
+            return True
+
+    def record_cost(self, cost: float | None) -> None:
+        with self._lock:
+            if cost is None:
+                self._total = None
+            elif self._total is not None:
+                self._total += cost
+
+    @property
+    def total_cost(self) -> float | None:
+        with self._lock:
+            return self._total
+
+
 def survey_catalog(
     *,
     source_id: str,
@@ -469,6 +516,7 @@ def survey_catalog(
     library_root: Path,
     record_limit: int,
     page_samples: int,
+    workers: int,
     after: str | None,
     reset_cursor: bool,
     max_cost_usd: float,
@@ -477,6 +525,8 @@ def survey_catalog(
     """Survey a bounded catalog window and persist agent checklists as evidence."""
     if record_limit < 1 or page_samples < 1:
         raise ValueError("survey limits must be positive")
+    if workers < 1:
+        raise ValueError("survey workers must be a positive integer")
     if max_cost_usd < 0:
         raise ValueError("survey max cost must be non-negative")
 
@@ -499,37 +549,51 @@ def survey_catalog(
         stop_reason: str | None = None
         evaluated_count = 0
 
-        for record in records:
-            if total_cost is None:
-                stop_reason = "a prior agent call returned unknown cost"
-                break
-            if total_cost >= max_cost_usd:
-                stop_reason = f"the ${max_cost_usd:.4f} cost ceiling was reached"
-                break
-            try:
-                entry = _survey_record(
-                    record, source_id, prompt, library_root, page_samples
+        gate = _CostGate(max_cost_usd)
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            pending: dict[Any, Mapping[str, Any]] = {}
+            queue = list(records)
+            while queue or pending:
+                while queue and len(pending) < workers and gate.can_continue():
+                    record = queue.pop(0)
+                    pending[
+                        pool.submit(
+                            _survey_record,
+                            record,
+                            source_id,
+                            prompt,
+                            library_root,
+                            page_samples,
+                        )
+                    ] = record
+                if not pending:
+                    break
+                done, _ = wait(
+                    tuple(pending), return_when=FIRST_COMPLETED
                 )
-            except (
-                requests.RequestException,
-                agent_cell.AgentCellError,
-                ValueError,
-            ) as error:
-                failures.append(
-                    {
-                        "record_id": record["record_id"],
-                        "source_key": record["source_key"],
-                        "error": f"{type(error).__name__}: {str(error)[:500]}",
-                    }
-                )
-                continue
-
-            response_cost = entry["usage"]["cost_usd"]
-            total_cost = (
-                None if response_cost is None else total_cost + response_cost
-            )
-            evaluations.append(entry)
-            evaluated_count += 1
+                for future in done:
+                    record = pending.pop(future)
+                    try:
+                        entry = future.result()
+                    except (
+                        requests.RequestException,
+                        agent_cell.AgentCellError,
+                        ValueError,
+                    ) as error:
+                        failures.append(
+                            {
+                                "record_id": record["record_id"],
+                                "source_key": record["source_key"],
+                                "error": f"{type(error).__name__}: {str(error)[:500]}",
+                            }
+                        )
+                        continue
+                    gate.record_cost(entry["usage"]["cost_usd"])
+                    evaluations.append(entry)
+                    evaluated_count += 1
+        stop_reason = gate.stop_reason
+        total_cost = gate.total_cost
+        evaluations.sort(key=lambda entry: entry["source_key"])
 
         run_id = survey.record_run(
             source_id=source_id,

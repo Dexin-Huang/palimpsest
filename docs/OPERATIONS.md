@@ -67,8 +67,14 @@ Survey a bounded, paid window of records:
 python -m palimpsest survey run SOURCE_ID \
   --limit 12 \
   --pages 3 \
+  --workers 3 \
   --max-cost 10
 ```
+
+Records are surveyed by concurrent agent cells (`--workers`, default 3); a
+thread-safe cost gate stops dispatching new cells once the ceiling is reached
+without interrupting in-flight ones. The cost ceiling is generous by default;
+the cost structure is refined later.
 
 Each record is surveyed by an OMP agent (Luna, with web search and page-read
 tools): it reads the catalog metadata, inspects sampled page images (it can

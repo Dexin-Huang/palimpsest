@@ -111,6 +111,7 @@ def _run(
     checklists=None,
     limit=2,
     max_cost=10.0,
+    workers=1,
     monkeypatch=None,
     reset_cursor=False,
     after=None,
@@ -143,6 +144,7 @@ def _run(
         library_root=tmp_path,
         record_limit=limit,
         page_samples=3,
+        workers=workers,
         after=after,
         reset_cursor=reset_cursor,
         max_cost_usd=max_cost,
@@ -239,6 +241,7 @@ def test_survey_repairs_an_invalid_checklist_once(tmp_path, monkeypatch):
         library_root=tmp_path,
         record_limit=1,
         page_samples=3,
+        workers=1,
         after=None,
         reset_cursor=False,
         max_cost_usd=10.0,
@@ -307,6 +310,7 @@ def test_survey_rejects_after_exhausted_repair(tmp_path, monkeypatch):
         library_root=tmp_path,
         record_limit=1,
         page_samples=3,
+        workers=1,
         after=None,
         reset_cursor=False,
         max_cost_usd=10.0,
@@ -358,6 +362,7 @@ def test_survey_records_failures_and_does_not_advance(tmp_path, monkeypatch):
         library_root=tmp_path,
         record_limit=2,
         page_samples=3,
+        workers=1,
         after=None,
         reset_cursor=False,
         max_cost_usd=10.0,
@@ -409,6 +414,148 @@ def test_filter_scores_stored_checklists_and_excludes_adopted(tmp_path, monkeypa
     )
     adopted = survey_module._adopted_record_ids(tmp_path / "library")
     assert adopted == {evaluations[1]["record_id"]}
+
+
+def test_survey_runs_cells_in_parallel_with_a_cost_gate(tmp_path, monkeypatch):
+    database_path = _seed_catalog(tmp_path, "MS-1", "MS-2", "MS-3")
+    barrier = __import__("threading").Barrier(3)
+    entered = {"count": 0}
+
+    def slow_run(workspace, task, model, executor, tool_names=None):
+        entered["count"] += 1
+        barrier.wait(timeout=5)  # all three workers must arrive
+        key = json.loads(
+            (workspace / "evidence" / "catalog.json").read_text(encoding="utf-8")
+        )["titles"][0].split()[-1]
+        (workspace / "out" / "checklist.json").write_text(
+            json.dumps(_checklist(), ensure_ascii=False), encoding="utf-8"
+        )
+        return agent_cell.AgentRun(
+            session_id="s",
+            tokens=10,
+            log_path=workspace / "out" / "run.log",
+            cost_usd=0.1,
+        )
+
+    def fake_stage(root, *, skill, evidence, images):
+        (root / "evidence").mkdir(parents=True)
+        (root / "images").mkdir()
+        (root / "out").mkdir()
+        for name, payload in evidence.items():
+            (root / "evidence" / f"{name}.json").write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+        return root
+
+    def fake_sample(_record, _count, samples_dir):
+        samples_dir.mkdir(parents=True, exist_ok=True)
+        (samples_dir / "page_01.jpg").write_bytes(b"fake-jpeg")
+        return (
+            [{"page_id": "p", "order": 1, "label": "1", "url": "https://x/1.jpg"}],
+            [samples_dir / "page_01.jpg"],
+        )
+
+    monkeypatch.setattr(survey_module.agent_cell, "stage_workspace", fake_stage)
+    monkeypatch.setattr(survey_module.agent_cell, "run", slow_run)
+    monkeypatch.setattr(survey_module, "_sample_record", fake_sample)
+    monkeypatch.setattr(
+        survey_module.agent_cell,
+        "read_artifact",
+        lambda workspace, name: json.loads(
+            (workspace / "out" / name).read_text(encoding="utf-8")
+        ),
+    )
+
+    report = survey_module.survey_catalog(
+        source_id="archive-a",
+        catalog_db=database_path,
+        survey_db=tmp_path / "survey.db",
+        library_root=tmp_path,
+        record_limit=4,
+        page_samples=3,
+        workers=3,
+        after=None,
+        reset_cursor=False,
+        max_cost_usd=10.0,
+        output=tmp_path / "survey.json",
+    )
+    # The barrier released only when three workers were live simultaneously.
+    assert entered["count"] == 3
+    assert len(report["evaluations"]) == 3
+    # Report is ordered by source key, not completion order.
+    assert [e["source_key"] for e in report["evaluations"]] == [
+        "MS-1",
+        "MS-2",
+        "MS-3",
+    ]
+
+
+def test_survey_cost_gate_stops_dispatch_before_spending_past_ceiling(
+    tmp_path, monkeypatch
+):
+    database_path = _seed_catalog(tmp_path, "MS-1", "MS-2", "MS-3", "MS-4")
+
+    def expensive_run(workspace, task, model, executor, tool_names=None):
+        key = json.loads(
+            (workspace / "evidence" / "catalog.json").read_text(encoding="utf-8")
+        )["titles"][0].split()[-1]
+        (workspace / "out" / "checklist.json").write_text(
+            json.dumps(_checklist(), ensure_ascii=False), encoding="utf-8"
+        )
+        return agent_cell.AgentRun(
+            session_id="s",
+            tokens=10,
+            log_path=workspace / "out" / "run.log",
+            cost_usd=0.1,
+        )
+
+    def fake_stage(root, *, skill, evidence, images):
+        (root / "evidence").mkdir(parents=True)
+        (root / "images").mkdir()
+        (root / "out").mkdir()
+        for name, payload in evidence.items():
+            (root / "evidence" / f"{name}.json").write_text(
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+            )
+        return root
+
+    def fake_sample(_record, _count, samples_dir):
+        samples_dir.mkdir(parents=True, exist_ok=True)
+        (samples_dir / "page_01.jpg").write_bytes(b"fake-jpeg")
+        return (
+            [{"page_id": "p", "order": 1, "label": "1", "url": "https://x/1.jpg"}],
+            [samples_dir / "page_01.jpg"],
+        )
+
+    monkeypatch.setattr(survey_module.agent_cell, "stage_workspace", fake_stage)
+    monkeypatch.setattr(survey_module.agent_cell, "run", expensive_run)
+    monkeypatch.setattr(survey_module, "_sample_record", fake_sample)
+    monkeypatch.setattr(
+        survey_module.agent_cell,
+        "read_artifact",
+        lambda workspace, name: json.loads(
+            (workspace / "out" / name).read_text(encoding="utf-8")
+        ),
+    )
+
+    report = survey_module.survey_catalog(
+        source_id="archive-a",
+        catalog_db=database_path,
+        survey_db=tmp_path / "survey.db",
+        library_root=tmp_path,
+        record_limit=4,
+        page_samples=3,
+        workers=1,
+        after=None,
+        reset_cursor=False,
+        max_cost_usd=0.15,
+        output=tmp_path / "survey.json",
+    )
+    assert [e["source_key"] for e in report["evaluations"]] == ["MS-1", "MS-2"]
+    assert report["stop_reason"] == "the $0.1500 cost ceiling was reached"
+    assert report["cost_usd"] == pytest.approx(0.2)
+    with survey_module.SurveyDB(tmp_path / "survey.db") as survey:
+        assert survey.cursor_for("archive-a") == "MS-2"
 
 
 def test_filter_rules_file_rejects_unknown_fields(tmp_path):
