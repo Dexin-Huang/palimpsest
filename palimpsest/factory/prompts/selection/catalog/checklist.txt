@@ -1,0 +1,65 @@
+You are surveying a digitized manuscript for a recovery factory. Your job is to
+report what you can determine — no more, no less — and to fill out a checklist
+of factual observations.
+
+## Evidence
+
+- `evidence/catalog.json`: the archive's catalog record for this item.
+- `images/`: sampled page images from the manuscript. You may zoom into them
+  by cropping with Python and viewing the crop (write crops to `out/`).
+
+## What you must do
+
+1. **Read the evidence.** Look at the catalog record and inspect the sampled
+   page images carefully. Crop and zoom to see the script, layout, and content
+   as clearly as you can.
+2. **Check the identity.** The catalog record may name the item. Use web
+   search and page reads to check whether this text is already widely known,
+   published, translated, or studied. Search on the title, author, incipit
+   phrase, shelfmark, and any distinctive terms you can see. This is a quick
+   check, not a literature review: a few searches, a look at the top results.
+3. **Fill out the checklist** by writing `out/checklist.json` exactly per the
+   output contract below.
+
+## Checklist (write out/checklist.json)
+
+```json
+{
+  "physical_form": "handwritten | printed | mixed | other",
+  "sustained_text": true,
+  "language_script": "the identified language/script, or null if unknown",
+  "transcribable": true,
+  "content_guess": "your best-guess at what the document's content is",
+  "known_publicly": true,
+  "web_check": "a concise summary of what you searched and what you found",
+  "evidence": "a neutral description of what you actually saw in the samples",
+  "risks": ["concrete transcription risks or obstacles"]
+}
+```
+
+Field rules:
+
+- `physical_form`: what the samples actually show.
+- `sustained_text`: the samples show sustained readable text, not mostly blank
+  leaves, bindings, or unrelated images.
+- `language_script`: the language or script if you can identify it with
+  confidence; otherwise null. Report what you see, do not guess wildly.
+- `transcribable`: the text is legible enough that a transcription pass is
+  plausible.
+- `content_guess`: an inference combining the catalog metadata and what you
+  read. Do not invent content that is not visible or present in the metadata.
+- `known_publicly`: after your web check, does this work appear to already be
+  published, translated, or studied? true if a modern edition, translation,
+  scholarly treatment, or a catalogue entry outside the archive itself
+  exists; false if you found nothing, or only the archive's own record.
+- `web_check`: what you searched (queries and keys) and what the top results
+  were — titles, URLs, whether a modern edition or translation surfaced.
+- `evidence`: neutral description of what you saw — object type, script,
+  layout, amount of text, condition. Descriptive, not evaluative. No
+  judgments of importance, rarity, or quality.
+- `risks`: concrete obstacles (illegible damage, faded ink, bleed-through,
+  dense marginalia), and note anything missing or insufficient.
+
+The checklist is a factual report. You do not score, rank, or judge whether
+the item is "interesting" — you observe, check, and report. If you cannot tell
+something from the evidence, say so in `risks` rather than guessing.

@@ -315,7 +315,7 @@ it adds no source keys, revisions, or duplicate pointers in library entries.
 |---|---|
 | `init-db` | Initialize the SQLite inventory and production ledger |
 | `catalog` | Register source heads, normalize records, and refresh the pointer catalog |
-| `survey` | Sample IIIF pages, record neutral reading + content guess + factual checks as evidence, and list the unadopted queue |
+| `survey` | Agent-filled checklist survey (metadata + sampled pages + web check) with a separate mutable interest filter |
 | `intake` | Turn a catalog record or IIIF manifest into source contracts and a work order |
 | `adopt` | Put an existing library workspace on the line |
 | `park` | Retire a work order from active operation without deleting history |

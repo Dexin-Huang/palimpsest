@@ -67,31 +67,39 @@ Survey a bounded, paid window of records:
 python -m palimpsest survey run SOURCE_ID \
   --limit 12 \
   --pages 3 \
-  --keep 5 \
-  --max-cost 1
+  --max-cost 10
 ```
 
-Each run samples page images from the current catalog window, asks the triage
-model to describe what it read (neutral) and to guess the content, then answer
-independent yes/no checks; the hit score is the number of true checks (0-5),
-computed by us, and every decision is persisted as immutable evidence in
-`library/survey.db` (`survey_evaluations`, `survey_runs`). The window position
-is durable: the next run resumes after the last evaluated record,
-already-surveyed records are never re-paid, and records whose manifest already
-exists in the library are skipped. `--after SOURCE_KEY` overrides the cursor;
-`--reset-cursor` starts the window over.
+Each record is surveyed by an OMP agent (Luna, with web search and page-read
+tools): it reads the catalog metadata, inspects sampled page images (it can
+zoom by cropping), runs a quick web check on the item's identity, and fills
+out a factual checklist — physical form, language/script, whether the text is
+sustained and transcribable, whether the work is already known publicly
+(modern edition, translation, scholarship, or a catalogue entry outside the
+archive), a content guess, and transcription risks. The agent reports
+observations; it never scores or judges "interesting". Every checklist is
+stored verbatim in `library/survey.db` (`survey_evaluations`, `survey_runs`)
+with model identity, session, and cost. The window position is durable: the
+next run resumes after the last evaluated record, already-surveyed records are
+never re-paid, and records whose manifest already exists in the library are
+skipped. `--after SOURCE_KEY` overrides the cursor; `--reset-cursor` starts
+the window over. The cost ceiling is generous by default; the cost structure
+is refined later.
 
-Inspect progress and the derived queue:
+Inspect progress, then apply the current interest rules:
 
 ```bash
 python -m palimpsest survey status SOURCE_ID
-python -m palimpsest survey queue SOURCE_ID
+python -m palimpsest survey filter SOURCE_ID [--rules FILE]
 ```
 
-`status` reports eligible, evaluated, hits, remaining, and last-run cost.
-`queue` lists evaluations with hits > 0 that are not yet adopted by a
-workspace `catalog_record_id`, hit score first, with the true checks, the
-content guess, and the neutral what-was-read description.
+`status` reports eligible, evaluated, remaining, and last-run cost. `filter`
+is the mutable interest knob: it scans stored checklists against a rules file
+(default: transcribable + sustained text, a supported language, not publicly
+known, content guess matching an interest keyword list) and prints the queue
+ordered by how many rules each record satisfies. Changing what we find
+interesting edits the rules and re-runs the filter — the survey evidence is
+recorded once, at cost, and never re-paid.
 
 Catalog presence and a model recommendation do not create a production work
 order. An operator chooses either an active catalog record (by exact record

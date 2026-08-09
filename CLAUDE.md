@@ -22,12 +22,13 @@ python -m palimpsest catalog source add-gallica pelliot-chinois \
 python -m palimpsest catalog sync pelliot-chinois
 ```
 
-Survey a bounded window and persist decisions as evidence (paid):
+Survey a bounded window — an OMP agent fills a factual checklist per record
+(metadata, sampled pages, web check), stored as evidence (paid):
 
 ```
-python -m palimpsest survey run pelliot-chinois --limit 12 --pages 3 --keep 5 --max-cost 1
+python -m palimpsest survey run pelliot-chinois --limit 12 --pages 3 --max-cost 10
 python -m palimpsest survey status pelliot-chinois
-python -m palimpsest survey queue pelliot-chinois
+python -m palimpsest survey filter pelliot-chinois
 ```
 
 Intake from an active catalog record (catalog-backed):

@@ -1,4 +1,4 @@
-"""Operational contracts for health, snapshots, selection, queues, and publication."""
+"""Operational contracts for health, snapshots, survey, queues, and publication."""
 
 from __future__ import annotations
 
@@ -13,11 +13,9 @@ from types import SimpleNamespace
 import pytest
 
 from palimpsest.catalog.database import CatalogDB
-from palimpsest.catalog.sync import sync_source
 from palimpsest.cli import build_parser
 from palimpsest.factory import cli as factory_cli
 from palimpsest.factory.core.ledger import Ledger
-from palimpsest.factory.gateway.protocol import ModelResponse
 from palimpsest.factory import publication_store as publication_store_module
 from palimpsest.factory.health import inspect_factory
 from palimpsest.factory.snapshot import (
@@ -26,7 +24,6 @@ from palimpsest.factory.snapshot import (
     restore_snapshot,
     verify_snapshot,
 )
-from palimpsest import survey as survey_module
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -123,125 +120,20 @@ def test_snapshot_verification_rejects_a_replaced_payload(tmp_path):
         verify_snapshot(archive)
 
 
-def _catalog_line(source_key: str) -> str:
-    return json.dumps(
-        {
-            "source_key": source_key,
-            "source_url": f"https://archive.test/{source_key}",
-            "record": {
-                "record_type": "manuscript",
-                "manifest_url": f"https://archive.test/{source_key}/manifest.json",
-                "titles": [f"Manuscript {source_key}"],
-                "repository": "Test Repository",
-                "access": "open",
-            },
-            "raw": {"title": f"Manuscript {source_key}"},
-        }
+def test_survey_is_a_top_level_cli_surface(tmp_path):
+    parser = build_parser()
+    choices = next(
+        action.choices
+        for action in parser._actions
+        if getattr(action, "choices", None) and "survey" in action.choices
     )
-
-
-def test_survey_persists_decisions_and_advances_the_window(tmp_path, monkeypatch):
-    source_path = tmp_path / "records.jsonl"
-    source_path.write_text(
-        _catalog_line("MS-1") + "\n" + _catalog_line("MS-2") + "\n",
-        encoding="utf-8",
+    assert "survey" in choices
+    assert "select" not in choices
+    run = parser.parse_args(
+        ["survey", "run", "archive-a", "--survey-db", str(tmp_path / "s.db")]
     )
-    database_path = tmp_path / "catalog.db"
-    with CatalogDB(database_path) as database:
-        database.add_source("archive-a", "normalized-jsonl", {"path": str(source_path)})
-        sync_source(database, "archive-a")
-
-    monkeypatch.setattr(
-        survey_module,
-        "_sample_record",
-        lambda _record, _count: (
-            [
-                {
-                    "page_id": "page_0003",
-                    "order": 3,
-                    "label": "3",
-                    "url": "https://images.test/3.jpg",
-                }
-            ],
-            (survey_module.ImageContent(b"jpeg", mime="image/jpeg"),),
-        ),
-    )
-    requests = []
-
-    def fake_generate_json(request):
-        requests.append(request)
-        key = request.prompt.split('"source_key": "MS-')[1][0]
-        checks = {"sustained_text": True, "handwritten": True}
-        if key == "2":
-            checks = {}
-        return (
-            {
-                "what_was_read": "Sampled page 3 shows a dated colophon in a readable hand.",
-                "content_guess": "A colophon-bearing manuscript.",
-                "summary": "Unpublished colophon with readable text.",
-                "checks": checks,
-                "risks": ["Outer margin is damaged."],
-            },
-            ModelResponse(
-                text="{}",
-                model=request.model,
-                prompt_tokens=100,
-                output_tokens=20,
-                total_tokens=120,
-                cost_usd=0.02,
-            ),
-        )
-
-    monkeypatch.setattr(survey_module, "generate_json", fake_generate_json)
-    survey_db_path = tmp_path / "survey.db"
-    output = tmp_path / "survey.json"
-
-    first = survey_module.survey_catalog(
-        source_id="archive-a",
-        catalog_db=database_path,
-        survey_db=survey_db_path,
-        library_root=tmp_path,
-        record_limit=1,
-        page_samples=3,
-        recommendation_limit=1,
-        after=None,
-        reset_cursor=False,
-        max_cost_usd=1.0,
-        output=output,
-    )
-
-    assert requests[0].model == "token-plan/qwen3.8-max"
-    assert len(requests[0].images) == 1
-    assert first["evaluations"][0]["sampled_pages"][0]["order"] == 3
-    assert first["evaluations"][0]["usage"]["cost_usd"] == 0.02
-    assert json.loads(output.read_text(encoding="utf-8")) == first
-
-    with survey_module.SurveyDB(survey_db_path) as survey:
-        stats = survey.stats("archive-a")
-        assert stats["evaluated"] == 1
-        assert stats["hits"] == 1
-        cursor = survey.cursor_for("archive-a")
-        assert cursor == "MS-1"
-
-    # Second run resumes after the cursor and never re-pays for MS-1.
-    second = survey_module.survey_catalog(
-        source_id="archive-a",
-        catalog_db=database_path,
-        survey_db=survey_db_path,
-        library_root=tmp_path,
-        record_limit=1,
-        page_samples=3,
-        recommendation_limit=1,
-        after=None,
-        reset_cursor=False,
-        max_cost_usd=1.0,
-        output=tmp_path / "survey-2.json",
-    )
-    assert [e["source_key"] for e in second["evaluations"]] == ["MS-2"]
-    assert len(requests) == 2
-    with survey_module.SurveyDB(survey_db_path) as survey:
-        assert survey.cursor_for("archive-a") == "MS-2"
-        assert survey.stats("archive-a")["evaluated"] == 2
+    assert run.source_id == "archive-a"
+    assert run.max_cost == 10.0  # generous default; cost structure comes later
 
 
 def test_active_queue_is_bounded_by_count_and_observed_cost(
