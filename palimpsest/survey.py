@@ -57,8 +57,10 @@ TASK = (
     "Perform the survey defined in AGENTS.md: read evidence/catalog.json and "
     "the images in images/ (crop with python and view the crop to zoom), run "
     "web searches to check whether the item is already known, and write "
-    "out/checklist.json exactly per the AGENTS.md output contract, then give "
-    "the short final summary."
+    "out/checklist.json exactly per the AGENTS.md output contract. Prefer "
+    "node_repl filesystem APIs; if node_repl is unavailable or its writes "
+    "fail, use another workspace-write mechanism rather than stopping. Then "
+    "give the short final summary."
 )
 
 _CHECKLIST_SCHEMA: Mapping[str, Any] = {

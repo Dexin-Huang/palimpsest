@@ -19,7 +19,10 @@ of factual observations.
    phrase, shelfmark, and any distinctive terms you can see. This is a quick
    check, not a literature review: a few searches, a look at the top results.
 3. **Fill out the checklist** by writing `out/checklist.json` exactly per the
-   output contract below.
+   output contract below. Prefer node_repl filesystem APIs; if node_repl is
+   unavailable or its writes fail, use another workspace-write mechanism
+   rather than stopping (write the file, then verify it exists before
+   finishing).
 
 ## Checklist (write out/checklist.json)
 
