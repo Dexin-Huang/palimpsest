@@ -45,7 +45,6 @@ from palimpsest.factory.workspace.io import atomic_write_json
 
 SURVEY_MODEL = "gpt-5.6-luna"
 SURVEY_PROMPT = "selection/catalog/checklist"
-SURVEY_TOOLS = ("web_search", "read")
 DEFAULT_RECORD_LIMIT = 12
 DEFAULT_PAGE_SAMPLES = 3
 DEFAULT_MAX_COST_USD = 10.0
@@ -589,7 +588,6 @@ def _survey_record(
         TASK,
         model=SURVEY_MODEL,
         executor="omp",
-        tool_names=SURVEY_TOOLS,
     )
     checklist = agent_cell.read_artifact(workspace, "checklist.json")
     validation = _checklist_errors(checklist)
